@@ -3762,6 +3762,11 @@ const RetryManager = {
    aqui; a fila/retry/lote ficam no SyncQueue, que é quem chama estas
    funções de baixo nível.
    ═══════════════════════════════════════ */
+// SPRINT YALOG-WMS-SUPA-004A: estes dois valores agora são só o SEED
+// inicial de CoreConfig.supabaseUrl/supabaseKey (ver _configPadrao mais
+// abaixo) — o cliente real é sempre criado a partir do CoreConfig, nunca
+// destas constantes diretamente, para que CoreConfig.useSupabase()/
+// disableSupabase() consigam trocar as credenciais em tempo de execução.
 const SUPABASE_URL = 'https://pyckcyaojztixsujbylq.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_iHBh-BZsjisQc0i09QUDoQ_9mZl1vfk';
 // Tabela única (chave/valor) — ver documentação de banco no final do
@@ -3770,12 +3775,16 @@ const SUPABASE_TABLE = 'wms_kv_store';
 let _supabaseClientSingleton = null;
 function _obterClienteSupabase() {
   if (_supabaseClientSingleton) return _supabaseClientSingleton;
+  if (!CoreConfig.supabaseUrl || !CoreConfig.supabaseKey) {
+    console.warn('[SupabaseProvider] supabaseUrl/supabaseKey não configurados — operando apenas com o cache local.');
+    return null;
+  }
   if (typeof window.supabase === 'undefined' || !window.supabase.createClient) {
     console.warn('[SupabaseProvider] biblioteca supabase-js não carregada — operando apenas com o cache local.');
     return null;
   }
   try {
-    _supabaseClientSingleton = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+    _supabaseClientSingleton = window.supabase.createClient(CoreConfig.supabaseUrl, CoreConfig.supabaseKey);
   } catch(e) {
     console.warn('[SupabaseProvider] falha ao criar cliente Supabase:', e);
     _supabaseClientSingleton = null;
@@ -3823,7 +3832,19 @@ const SupabaseProvider = {
       if (error) return { ok:false, dados:[], motivo:error.message };
       return { ok:true, dados:data || [] };
     } catch(e) { return { ok:false, dados:[], motivo:String(e)}; }
-  }
+  },
+
+  // ── SPRINT YALOG-WMS-SUPA-004A — status/cliente acessíveis via console ──
+  status() {
+    return {
+      configurado: !!(CoreConfig.supabaseUrl && CoreConfig.supabaseKey),
+      clienteCriado: !!_supabaseClientSingleton,
+      provider: CoreConfig.storageProvider,
+      url: CoreConfig.supabaseUrl || null,
+      tabela: SUPABASE_TABLE
+    };
+  },
+  get client() { return _obterClienteSupabase(); }
 };
 
 /* ═══════════════════════════════════════
@@ -4034,6 +4055,13 @@ const CORE_CONFIG_KEY = 'wms_core_config';
 function _configPadrao() {
   return {
     storageProvider: 'local',   // 'local' | 'supabase'
+    // SPRINT YALOG-WMS-SUPA-004A — antes viviam só como constantes fixas
+    // (SUPABASE_URL/SUPABASE_PUBLISHABLE_KEY); agora fazem parte do
+    // CoreConfig de verdade, para que useSupabase()/disableSupabase()
+    // consigam trocá-las em tempo de execução e persistir a escolha.
+    supabaseUrl: SUPABASE_URL,
+    supabaseKey: SUPABASE_PUBLISHABLE_KEY,
+    _supabaseAutoDecidido: false, // controla o auto-switch do boot (ver bootWMS) — não confundir com storageProvider
     autoSync: true,
     syncInterval: 30000,        // ms — SUPA-003: agora aciona o Smart Sync de verdade (30s padrão; 0 = desabilitado)
     retryAttempts: 5,
@@ -4075,6 +4103,104 @@ CoreConfig.setStorageProvider = function(nome) {
   CoreConfig.storageProvider = nome; // dispara o Proxy acima, já persiste
   return true;
 };
+// SPRINT YALOG-WMS-SUPA-004A, item obrigatório — grava URL/KEY, ativa o
+// provider Supabase, reinicializa o client (descarta o singleton antigo,
+// se houver) e persiste tudo, sem exigir reload da página.
+CoreConfig.useSupabase = function(url, key) {
+  if (!url || !key) { console.warn('[CoreConfig.useSupabase] URL e KEY são obrigatórios.'); return false; }
+  CoreConfig.supabaseUrl = url;     // persiste via Proxy
+  CoreConfig.supabaseKey = key;     // persiste via Proxy
+  _supabaseClientSingleton = null;  // força recriar o client com as novas credenciais
+  CoreConfig._supabaseAutoDecidido = true;
+  CoreConfig.storageProvider = 'supabase';
+  if (typeof SmartSyncManager !== 'undefined') SmartSyncManager.iniciar();
+  console.log('[CoreConfig] Supabase ativado. URL:', url);
+  return true;
+};
+// Retorna imediatamente para LocalStorage nesta sessão, sem apagar as
+// credenciais salvas. SPRINT HOTFIX-002: como o bootstrap do boot não
+// depende mais de `_supabaseAutoDecidido` para decidir (esse gate foi
+// removido — era a causa do bug desta Sprint), esta desativação vale
+// só para a sessão atual; o próximo carregamento tenta o Supabase de
+// novo automaticamente, contanto que as credenciais continuem válidas
+// — exatamente o comportamento pedido ("iniciar diretamente no
+// Supabase, sem fallback indevido para Local").
+CoreConfig.disableSupabase = function() {
+  CoreConfig._supabaseAutoDecidido = true; // mantido por compatibilidade/observabilidade — não é mais checado no boot
+  CoreConfig.storageProvider = 'local';
+  if (typeof SmartSyncManager !== 'undefined') SmartSyncManager.parar();
+  console.log('[CoreConfig] Supabase desativado — voltando para LocalStorage (só nesta sessão).');
+  return true;
+};
+
+/* ═══════════════════════════════════════
+   SPRINT YALOG-WMS-SUPA-004B — BOOTSTRAP REAL DO SUPABASE
+   ─────────────────────────────────────────────────────────────────
+   A 004A trocava o provider para 'supabase' só por existir uma
+   URL/KEY configurada — sem nunca verificar se a biblioteca
+   supabase-js já tinha carregado, nem se o cliente realmente
+   conseguia ser criado. Isso deixava uma janela real de corrida: se
+   o script do CDN ainda não tivesse terminado de carregar no
+   instante exato em que o boot rodava, o provider ficava "supabase"
+   de nome mas sem cliente nenhum por trás.
+
+   SPRINT HOTFIX-002 — a causa raiz definitiva: a 004B tinha um
+   return antecipado logo no início ("já decidido anteriormente")
+   que checava `CoreConfig._supabaseAutoDecidido` ANTES de sequer
+   tentar criar o cliente. Se essa flag ficasse `true` com
+   `storageProvider` ainda em `'local'` por qualquer motivo em uma
+   sessão anterior (ex.: um disableSupabase() de teste, ou um estado
+   intermediário salvo no localStorage do navegador), TODO boot
+   seguinte desistia na primeira linha — mesmo com credenciais
+   corretas e um cliente perfeitamente válido disponível. Esse
+   return foi removido: agora a função SEMPRE tenta validar o
+   cliente a cada boot, e só então decide.
+
+   Ordem garantida (itens 1-3 desta Sprint): (1) o cliente é
+   validado primeiro; (2) `storageProvider` é trocado para
+   'supabase' IMEDIATAMENTE depois da validação, sem nenhuma outra
+   condição no meio; (3) `_supabaseAutoDecidido` só é definido DEPOIS
+   da troca do provider — nessa ordem exata, nunca antes.
+   ═══════════════════════════════════════ */
+async function inicializarSupabaseNoBoot() {
+  console.log('[Supabase Bootstrap] Verificando configuração de persistência...');
+
+  if (!CoreConfig.supabaseUrl || !CoreConfig.supabaseKey) {
+    console.log('[Supabase Bootstrap] Motivo do fallback: supabaseUrl/supabaseKey não configurados. Provider selecionado: LOCAL.');
+    return;
+  }
+
+  // A lib do CDN normalmente já terminou de carregar antes daqui (a
+  // tag do CDN não é async/defer), mas em conexões lentas ou com
+  // bloqueadores de script isso não é garantido — aguarda até 1.5s
+  // antes de desistir, em pequenos intervalos.
+  let tentativas = 0;
+  while ((typeof window.supabase === 'undefined' || !window.supabase.createClient) && tentativas < 10) {
+    await new Promise(r => setTimeout(r, 150));
+    tentativas++;
+  }
+  if (typeof window.supabase === 'undefined' || !window.supabase.createClient) {
+    console.warn('[Supabase Bootstrap] Motivo do fallback: biblioteca supabase-js não carregou a tempo (', tentativas, 'tentativas). Provider selecionado: LOCAL — tentará de novo no próximo carregamento.');
+    return;
+  }
+
+  // Só promove para 'supabase' depois de CONFIRMAR que o cliente é
+  // criado de verdade — nunca só por existir uma URL/KEY configurada.
+  _supabaseClientSingleton = null; // garante uma tentativa limpa, não reaproveita um singleton de uma sessão anterior
+  let client = null;
+  try { client = _obterClienteSupabase(); } catch(e) { console.warn('[Supabase Bootstrap] erro ao criar cliente:', e); }
+  if (!client) {
+    console.warn('[Supabase Bootstrap] Motivo do fallback: não foi possível criar o cliente Supabase. Provider selecionado: LOCAL — tentará de novo no próximo carregamento.');
+    return;
+  }
+
+  // SPRINT HOTFIX-002, itens 1-2: troca o provider IMEDIATAMENTE após
+  // validar o cliente — sem nenhuma outra condição no meio — e só
+  // DEPOIS marca a decisão como tomada.
+  CoreConfig.storageProvider = 'supabase';
+  CoreConfig._supabaseAutoDecidido = true;
+  console.log('[Supabase Bootstrap] Cliente Supabase criado com sucesso. Provider selecionado: SUPABASE.');
+}
 
 function _providerAtivo() { return CoreConfig.storageProvider === 'supabase' ? SupabaseProvider : LocalStorageProvider; }
 
@@ -7945,6 +8071,13 @@ function injectDemo(){
 // ══════════════════════════════════════════════════════════════
 (function(){const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='flex';})();
 (async function bootWMS(){
+  // SPRINT YALOG-WMS-SUPA-004B: inicializarSupabaseNoBoot() é o ÚNICO
+  // lugar que decide o provider no boot — só promove para 'supabase'
+  // depois de confirmar que o cliente pode mesmo ser criado (ver
+  // documentação completa na própria função). Substitui o auto-switch
+  // simplista da 004A, que trocava o provider só por existir uma
+  // URL/KEY configurada, sem checar se dava para criar o cliente.
+  await inicializarSupabaseNoBoot();
   // SPRINT YALOG-WMS-SUPA-002: CacheManager.sincronizacaoInicial() já
   // verifica sozinho o provider ativo — no-op em modo local (nenhuma
   // mudança de comportamento), e em modo supabase sincroniza o cache
@@ -7994,6 +8127,9 @@ function injectDemo(){
   if(typeof window!=='undefined' && window.addEventListener){
     window.addEventListener('focus', ()=>{ SmartSyncManager.executarCiclo(); });
   }
+  // SPRINT HOTFIX-002 — log final exato pedido, confirmando o provider
+  // com que o boot efetivamente terminou.
+  console.log("Storage:", CoreConfig.storageProvider);
 })();
 
 // ══════════════════════════════════════════════════════════════
