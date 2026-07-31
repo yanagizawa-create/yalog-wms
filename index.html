@@ -3791,6 +3791,46 @@ function _obterClienteSupabase() {
   }
   return _supabaseClientSingleton;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   SPRINT YALOG-WMS-006 — AUTENTICAÇÃO POR INSTALAÇÃO (item 1)
+   ═══════════════════════════════════════════════════════════════
+   Cada instalação (cada navegador/origem) faz um Anonymous Sign-In
+   uma única vez; o Supabase Auth persiste essa sessão sozinho (o
+   client já é criado com persistSession — comportamento padrão do
+   SDK), então nas próximas visitas a MESMA sessão anônima é reusada
+   em vez de criar uma nova — é isso que torna o auth.uid() "exclusivo
+   e permanente" por instalação, sem exigir nenhuma tela de login
+   adicional nem tocar no fluxo de login do WMS (que continua sendo
+   uma autenticação de aplicação, independente desta).
+
+   Chamada apenas de dentro das 4 operações reais do SupabaseProvider
+   (mais abaixo) — nada em Bootstrap/SyncQueue/SmartSync/CacheManager
+   precisou mudar para isso existir; eles continuam chamando as mesmas
+   funções de sempre, que por dentro agora garantem a sessão antes de
+   falar com a tabela.
+   ═══════════════════════════════════════════════════════════════ */
+let _supabaseAuthUid = null;
+async function _garantirAuthAnonima(client) {
+  if (_supabaseAuthUid) return _supabaseAuthUid;
+  try {
+    const { data: sessaoAtual } = await client.auth.getSession();
+    if (sessaoAtual && sessaoAtual.session && sessaoAtual.session.user) {
+      _supabaseAuthUid = sessaoAtual.session.user.id;
+      return _supabaseAuthUid;
+    }
+    const { data, error } = await client.auth.signInAnonymously();
+    if (error || !data || !data.user) {
+      console.warn('[Supabase Auth] falha no anonymous sign-in:', error);
+      return null;
+    }
+    _supabaseAuthUid = data.user.id;
+    return _supabaseAuthUid;
+  } catch(e) {
+    console.warn('[Supabase Auth] exceção no anonymous sign-in:', e);
+    return null;
+  }
+}
 /* ═══════════════════════════════════════════════════════════════
    SPRINT YALOG-WMS-004 — DIAGNÓSTICO TÉCNICO DA INTEGRAÇÃO SUPABASE
    ═══════════════════════════════════════════════════════════════
@@ -3867,7 +3907,8 @@ const SupabaseProvider = {
   async _gravarLote(itens) {
     const client = _obterClienteSupabase();
     if (!client) return { ok:false, motivo:'sem-cliente' };
-    const linhas = itens.map(it => ({ key: it.key, value: it.value, updated_at: new Date().toISOString() }));
+    const authUid = await _garantirAuthAnonima(client);
+    const linhas = itens.map(it => ({ key: it.key, value: it.value, updated_at: new Date().toISOString(), installation_id: authUid }));
     _logSupabaseRequest('UPSERT');
     let resposta;
     try {
@@ -3883,6 +3924,7 @@ const SupabaseProvider = {
   async _removerLote(chaves) {
     const client = _obterClienteSupabase();
     if (!client) return { ok:false, motivo:'sem-cliente' };
+    await _garantirAuthAnonima(client); // RLS de DELETE depende de auth.uid() já resolvido na sessão
     _logSupabaseRequest('DELETE');
     let resposta;
     try {
@@ -3900,6 +3942,7 @@ const SupabaseProvider = {
   async buscarTudo() {
     const client = _obterClienteSupabase();
     if (!client) return { ok:false, dados:[] };
+    await _garantirAuthAnonima(client);
     _logSupabaseRequest('SELECT');
     try {
       const resposta = await client.from(SUPABASE_TABLE).select('key,value,updated_at');
@@ -4514,6 +4557,7 @@ const SmartSyncManager = {
   async _buscarIncremental() {
     const client = _obterClienteSupabase();
     if (!client) return { ok:false, motivo:'sem-cliente', linhas:[] };
+    await _garantirAuthAnonima(client);
     const desde = CacheManager.lastSync();
     _logSupabaseRequest('SELECT (incremental)');
     try {
