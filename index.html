@@ -4589,9 +4589,12 @@ ConnectionMonitor.iniciar();
 // padronização de constantes). Antes era um literal repetido em 6 pontos.
 const SESSAO_KEY = 'wms_user_v2026';
 
-// ── MODO DUAL: standalone (file://) ou servidor (http://) ──────────
-const _SERVER_MODE = window.location.protocol === 'http:' || window.location.protocol === 'https:';
-let _saveTimer = null;
+// SPRINT YALOG-SUPA-HOTFIX-001: removido o antigo "MODO DUAL" (_SERVER_MODE).
+// O WMS agora é oficialmente "Supabase First" — toda persistência passa
+// exclusivamente por Core → StorageProvider → SupabaseProvider, sem
+// nenhuma verificação de protocolo/hostname/origin para decidir entre
+// um backend REST inexistente e o Supabase. Ver documentação completa
+// no final do arquivo.
 
 // ══════════════════════════════════════════════════════════════
 // SPRINT YALOG-WMS-CERT-002 — ARQUITETURA OFICIAL YALOG OS®
@@ -4687,8 +4690,12 @@ const IntegrationEngine = {
 const ApiEngine = { ativo: false, baseUrl: null };
 
 // ── PREPARAÇÃO PARA AMBIENTE DE REDE (item 9) ──
-// _SERVER_MODE (acima) e as rotas /api/save·/api/load já existentes
-// são a base de rede local; nada foi alterado aqui, apenas documentado.
+// SPRINT YALOG-SUPA-HOTFIX-001: o antigo modo servidor local (_SERVER_MODE
+// + rotas /api/save·/api/load) foi removido — não existia backend real
+// por trás dessas rotas em nenhum ambiente publicado (GitHub Pages,
+// domínio próprio), e a tentativa de usá-las só gerava 404/405. A base
+// de rede real do ecossistema agora é exclusivamente Core → StorageProvider
+// → SupabaseProvider → Supabase (ver Core Adapter e documentação final).
 
 // ── RESERVADO — NÃO IMPLEMENTAR AINDA (itens 12 e 13) ──
 // Modo Consulta (Read Only) e Login Inteligente ficam apenas reservados
@@ -4697,23 +4704,7 @@ const YALOG_MODO_CONSULTA_RESERVADO = false;
 const YALOG_LOGIN_INTELIGENTE_RESERVADO = false;
 
 function save(){
-  if(_SERVER_MODE){
-    // Debounce: agrupa chamadas rápidas em 1 única requisição
-    clearTimeout(_saveTimer);
-    _saveTimer = setTimeout(async ()=>{
-      try{
-        await fetch('/api/save',{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify(DB)
-        });
-      }catch(e){
-        console.warn('[WMS] Erro ao salvar no servidor:',e.message);
-      }
-    }, 400);
-  } else {
-    Core.set(DBKEY, DB);
-  }
+  Core.set(DBKEY, DB);
 }
 function _applyLoadedData(parsed){
   if(parsed && Object.keys(parsed).length > 0){
@@ -4887,25 +4878,11 @@ function _applyLoadedData(parsed){
 }
 
 async function load(){
-  if(_SERVER_MODE){
-    try{
-      const res = await fetch('/api/load');
-      if(res.ok){
-        const parsed = await res.json();
-        _applyLoadedData(parsed);
-      }
-    }catch(e){
-      console.warn('[WMS] Servidor offline — usando localStorage como fallback');
-      const d = Core.get(DBKEY);
-      if(d) _applyLoadedData(d);
-    }
+  const d = Core.get(DBKEY);
+  if(d){
+    _applyLoadedData(d);
   } else {
-    const d = Core.get(DBKEY);
-    if(d){
-      _applyLoadedData(d);
-    } else {
-      _applyLoadedData({});
-    }
+    _applyLoadedData({});
   }
 }
 
@@ -7980,12 +7957,19 @@ function injectDemo(){
   renderLogo();updateDate();checkResp();
   const logoEl=document.getElementById('logoN');if(logoEl)logoEl.value=DB.logo.nome;
   const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='none';
-  const modeEl=document.getElementById('serverModeIndicator');
-  if(modeEl){
-    modeEl.textContent=_SERVER_MODE?'🟢 Servidor':'🟡 Local';
-    modeEl.title=_SERVER_MODE?'Modo servidor — dados compartilhados':'Modo standalone — dados locais';
-    modeEl.style.display='inline-block';
-  }
+  // SPRINT YALOG-SUPA-HOTFIX-001, item 7 — log de inicialização limpo.
+  // Reflete o provider REALMENTE ativo (nunca fixo) — nada de "API Mode"/
+  // "Server Mode"/"Legacy Mode", que deixaram de existir nesta Sprint.
+  console.log([
+    '=====================================',
+    'YALOG WMS',
+    'Persistence: '+CoreConfig.storageProvider.toUpperCase(),
+    'Cache: '+((CoreConfig.enableLogger??true)?'ENABLED':'DISABLED'),
+    'Queue: '+((CoreConfig.enableQueue??true)?'ENABLED':'DISABLED'),
+    'Retry: '+((CoreConfig.enableRetry??true)?'ENABLED':'DISABLED'),
+    'Version: SUPA-HOTFIX-001',
+    '====================================='
+  ].join('\n'));
   // SPRINT YALOG-WMS-SUPA-003: liga o timer periódico do Smart Sync
   // (no-op se smartSyncEnabled=false ou syncInterval=0 — sem nenhuma
   // mudança de comportamento para quem não usa Supabase). syncOnStartup
@@ -13544,7 +13528,7 @@ function renderDevolucao(){
         <span>📅 ${d.criadoAt?d.criadoAt.replace('T',' ').substring(0,16):'—'}</span>
         <span>📦 ${d.itens.length} item(ns)</span>
         <span>🎯 ${d.destino==='reintegro'?'Reintegrar ao estoque':d.destino==='bloqueio'?'Manter bloqueado':'Descarte'}</span>
-        ${d.obs?`<span id="serverModeIndicator" title="" style="display:none;font-size:9px;font-family:var(--mono);padding:3px 8px;background:var(--bg3);border:1px solid var(--border);cursor:default;margin-right:4px;"></span><span style="color:#fbbf24;">⚡ ${d.obs}</span>`:''}
+        ${d.obs?`<span style="color:#fbbf24;">⚡ ${d.obs}</span>`:''}
       </div>
     </div>`;
   }).join('');
@@ -13629,17 +13613,6 @@ function processarDevolucao(id){
 }
 
 
-function downloadBackupServidor(){
-  if(!_SERVER_MODE){showT('Somente no modo servidor','err');return;}
-  window.open('/api/backup','_blank');
-}
-async function verStatusServidor(){
-  if(!_SERVER_MODE){showT('Somente no modo servidor','err');return;}
-  try{
-    const s=await(await fetch('/api/status')).json();
-    showT('Servidor online · '+s.stats.produtos+' produtos · BD: '+s.db_size_kb+'KB','ok');
-  }catch(e){showT('Servidor offline: '+e.message,'err');}
-}
 
 
 // ════════════════════════════════════════════════════════════════
@@ -17136,6 +17109,69 @@ function downloadTemplateConciliacao(){
    clientes reais com múltiplos usuários simultâneos. Com essas duas
    exceções documentadas, esta Sprint encerra a arquitetura de
    infraestrutura da versão 1.0 do YALog WMS.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════
+   DOCUMENTAÇÃO TÉCNICA — SPRINT YALOG-SUPA-HOTFIX-001
+   Remoção definitiva do modo API legado — "Supabase First"
+   ═══════════════════════════════════════════════════════════════
+
+   CAUSA RAIZ DO BUG
+   ─────────────────────────────────────────────────────────────────
+   `_SERVER_MODE` era `true` sempre que `window.location.protocol`
+   fosse 'http:' ou 'https:' — o que inclui QUALQUER publicação real
+   (GitHub Pages, domínio próprio), não só um backend de verdade. Como
+   nunca existiu um servidor Express por trás dessas rotas em nenhum
+   ambiente publicado, `save()`/`load()` tentavam `/api/save` e
+   `/api/load` e recebiam 404/405 do servidor estático do GitHub
+   Pages — a persistência real só acontecia no `catch()` de fallback,
+   silenciosamente, com erros poluindo o console a cada gravação.
+
+   O QUE FOI REMOVIDO
+   ─────────────────────────────────────────────────────────────────
+   `_SERVER_MODE`, `_saveTimer` e o debounce que os acompanhava; os
+   dois `if(_SERVER_MODE)` de `save()`/`load()`; as rotas
+   `fetch('/api/save')`, `fetch('/api/load')`, `fetch('/api/backup')`,
+   `fetch('/api/status')`; as funções `downloadBackupServidor()` e
+   `verStatusServidor()` (mortas — nenhuma tela as chamava); o
+   indicador `serverModeIndicator` no boot e seu elemento HTML órfão
+   (duplicado por engano dentro do template de Devolução, sempre
+   `display:none`, nunca visível — removê-lo não altera nenhum pixel
+   renderizado). Nenhum XMLHttpRequest ou axios foi encontrado.
+
+   ARQUITETURA RESULTANTE
+   ─────────────────────────────────────────────────────────────────
+   save() = Core.set(DBKEY, DB). load() = Core.get(DBKEY) direto.
+   Nenhuma verificação de protocolo/hostname/origin decide mais nada:
+   o único fator que escolhe a persistência é
+   `CoreConfig.storageProvider` ('local' ou 'supabase'), exatamente
+   como as Sprints SUPA-001 a SUPA-004 já haviam desenhado. localhost,
+   GitHub Pages e domínio próprio agora se comportam de forma
+   idêntica — não porque passaram a "ignorar" o ambiente, mas porque
+   a lógica que os tratava de forma diferente simplesmente não existe
+   mais.
+
+   LOG DE INICIALIZAÇÃO
+   ─────────────────────────────────────────────────────────────────
+   Substituído o indicador morto por um log único e limpo no console,
+   refletindo o provider REAL ativo (nunca fixo em "SUPABASE"):
+     YALOG WMS / Persistence: LOCAL|SUPABASE / Cache/Queue/Retry:
+     ENABLED|DISABLED conforme CoreConfig / Version: SUPA-HOTFIX-001
+
+   VALIDAÇÃO
+   ─────────────────────────────────────────────────────────────────
+   Testei o cenário exato do bug relatado: simulei
+   `window.location.protocol='https:'` com hostname de GitHub Pages e
+   um `fetch` global que lançaria erro e marcaria uma flag se fosse
+   chamado — zero chamadas a `/api/*` em todo o ciclo de boot,
+   `save()` e `load()`. Confirmei que `_SERVER_MODE` não existe mais
+   (`typeof` retorna `undefined`), que as duas funções mortas foram
+   removidas, e que toda a infraestrutura das Sprints SUPA-002/003/004
+   (SmartSyncManager, TabCoordinator, Watchdog, CleanupService,
+   CacheManager) continua 100% intacta e funcional nos dois modos.
+   Tags HTML idênticas à SUPA-004, exceto por um par de elementos a menos
+   — exatamente o elemento morto e invisível removido, zero mudança
+   de layout renderizado.
    ═══════════════════════════════════════════════════════════════ */
 
 </script>
