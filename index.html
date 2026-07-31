@@ -3087,7 +3087,7 @@ a{color:inherit;text-decoration:none;}
     </div>
     <div class="fg" style="margin-bottom:12px;">
       <label>Login (usuário) <span class="req">*</span></label>
-      <input type="text" id="fa_login" placeholder="Ex: master, carlos, admin..." autocomplete="off" oninput="this.value=this.value.toLowerCase().replace(/\s/g,\'\')">
+      <input type="text" id="fa_login" placeholder="Ex: master, carlos, admin..." autocomplete="off" oninput="this.value=this.value.toLowerCase().replace(/\s/g,'')">
     </div>
     <div class="fg" style="margin-bottom:12px;">
       <label>Senha <span class="req">*</span></label>
@@ -3115,7 +3115,7 @@ a{color:inherit;text-decoration:none;}
     <div style="margin-bottom:16px;">
       <div class="fg" style="margin-bottom:12px;">
         <label>Usuário (login)</label>
-        <input type="text" id="loginUsuario" placeholder="seu.login" autocomplete="username" oninput="this.value=this.value.toLowerCase().replace(/\s/g,\'\')">
+        <input type="text" id="loginUsuario" placeholder="seu.login" autocomplete="username" oninput="this.value=this.value.toLowerCase().replace(/\s/g,'')">
       </div>
       <div class="fg" style="margin-bottom:12px;">
         <label>Senha</label>
@@ -3791,6 +3791,61 @@ function _obterClienteSupabase() {
   }
   return _supabaseClientSingleton;
 }
+/* ═══════════════════════════════════════════════════════════════
+   SPRINT YALOG-WMS-004 — DIAGNÓSTICO TÉCNICO DA INTEGRAÇÃO SUPABASE
+   ═══════════════════════════════════════════════════════════════
+   Puramente instrumentação — nenhuma função abaixo decide nada nem
+   altera o resultado de qualquer operação. _logSupabaseRequest/
+   _logSupabaseResponse/_logSupabaseException só imprimem no Console
+   o que já estava acontecendo, para tornar visível exatamente onde
+   uma chamada ao Supabase falha (401, RLS, erro de rede etc.), sem
+   mexer em login/sessão/boot/fila/SmartSync/layout/regras.
+   ═══════════════════════════════════════════════════════════════ */
+function _mascarar(valor, inicio, fim) {
+  if (!valor || typeof valor !== 'string') return null;
+  if (valor.length <= inicio + fim) return valor;
+  return valor.slice(0, inicio) + '........' + valor.slice(-fim);
+}
+function _projectRefDaUrl(url) {
+  try { return new URL(url).hostname.split('.')[0]; } catch(e) { return null; }
+}
+function _logSupabaseRequest(operacao) {
+  console.log('====================================================');
+  console.log('[SUPABASE REQUEST]');
+  console.log('Operação:', operacao);
+  console.log('Tabela:', SUPABASE_TABLE);
+  console.log('Storage Provider:', CoreConfig.storageProvider);
+  console.log('Project URL:', CoreConfig.supabaseUrl);
+  console.log('Usuário:', CoreConfig.usuarioAtual ? CoreConfig.usuarioAtual.login : null);
+  console.log('Installation:', CoreConfig.instalacaoAtual ? CoreConfig.instalacaoAtual.installationId : null);
+  console.log('Sessão carregada:', typeof _sessaoWmsCarregada !== 'undefined' ? _sessaoWmsCarregada : null);
+  console.log('Timestamp:', new Date().toISOString());
+  console.log('====================================================');
+}
+function _logSupabaseResponse(operacao, resultado) {
+  console.log('====================================================');
+  console.log('[SUPABASE RESPONSE]');
+  console.log('Operação:', operacao);
+  console.log('HTTP Status:', resultado ? resultado.status : null);
+  console.log('StatusCode:', resultado ? resultado.statusText : null);
+  console.log('error.code:', resultado && resultado.error ? resultado.error.code : null);
+  console.log('error.message:', resultado && resultado.error ? resultado.error.message : null);
+  console.log('error.details:', resultado && resultado.error ? resultado.error.details : null);
+  console.log('error.hint:', resultado && resultado.error ? resultado.error.hint : null);
+  console.log('data retornada:', resultado ? JSON.stringify(resultado.data ?? null) : null);
+  console.log('count:', resultado ? (resultado.count ?? null) : null);
+  console.log('====================================================');
+}
+function _logSupabaseException(operacao, erro) {
+  console.error('====================================================');
+  console.error('[SUPABASE EXCEPTION]');
+  console.error('Operação:', operacao);
+  console.error('stack:', erro ? erro.stack : null);
+  console.error('message:', erro ? erro.message : String(erro));
+  console.error('name:', erro ? erro.name : null);
+  console.error('====================================================');
+}
+
 const SupabaseProvider = {
   // get/exists/clear continuam lendo do cache local — ver nota de
   // arquitetura da SUPA-001 (Core.get/set precisam continuar síncronos).
@@ -3813,13 +3868,31 @@ const SupabaseProvider = {
     const client = _obterClienteSupabase();
     if (!client) return { ok:false, motivo:'sem-cliente' };
     const linhas = itens.map(it => ({ key: it.key, value: it.value, updated_at: new Date().toISOString() }));
-    const { error } = await client.from(SUPABASE_TABLE).upsert(linhas, { onConflict: 'key' });
+    _logSupabaseRequest('UPSERT');
+    let resposta;
+    try {
+      resposta = await client.from(SUPABASE_TABLE).upsert(linhas, { onConflict: 'key' });
+    } catch(e) {
+      _logSupabaseException('UPSERT', e);
+      throw e; // preserva o comportamento original (o chamador já trata exceção)
+    }
+    _logSupabaseResponse('UPSERT', resposta);
+    const { error } = resposta;
     return error ? { ok:false, motivo:error.message } : { ok:true };
   },
   async _removerLote(chaves) {
     const client = _obterClienteSupabase();
     if (!client) return { ok:false, motivo:'sem-cliente' };
-    const { error } = await client.from(SUPABASE_TABLE).delete().in('key', chaves);
+    _logSupabaseRequest('DELETE');
+    let resposta;
+    try {
+      resposta = await client.from(SUPABASE_TABLE).delete().in('key', chaves);
+    } catch(e) {
+      _logSupabaseException('DELETE', e);
+      throw e;
+    }
+    _logSupabaseResponse('DELETE', resposta);
+    const { error } = resposta;
     return error ? { ok:false, motivo:error.message } : { ok:true };
   },
   // Puxa o estado completo da tabela — usado pelo CacheManager na
@@ -3827,11 +3900,14 @@ const SupabaseProvider = {
   async buscarTudo() {
     const client = _obterClienteSupabase();
     if (!client) return { ok:false, dados:[] };
+    _logSupabaseRequest('SELECT');
     try {
-      const { data, error } = await client.from(SUPABASE_TABLE).select('key,value,updated_at');
+      const resposta = await client.from(SUPABASE_TABLE).select('key,value,updated_at');
+      _logSupabaseResponse('SELECT', resposta);
+      const { data, error } = resposta;
       if (error) return { ok:false, dados:[], motivo:error.message };
       return { ok:true, dados:data || [] };
-    } catch(e) { return { ok:false, dados:[], motivo:String(e)}; }
+    } catch(e) { _logSupabaseException('SELECT', e); return { ok:false, dados:[], motivo:String(e)}; }
   },
 
   // ── SPRINT YALOG-WMS-SUPA-004A — status/cliente acessíveis via console ──
@@ -4165,6 +4241,15 @@ CoreConfig.disableSupabase = function() {
    ═══════════════════════════════════════ */
 async function inicializarSupabaseNoBoot() {
   console.log('[Supabase Bootstrap] Verificando configuração de persistência...');
+  // SPRINT YALOG-WMS-004 — diagnóstico técnico (puramente aditivo,
+  // não altera nenhuma decisão do bootstrap abaixo).
+  console.log('====================================================');
+  console.log('[SUPABASE BOOTSTRAP DIAGNÓSTICO]');
+  console.log('Supabase URL:', CoreConfig.supabaseUrl || null);
+  console.log('Storage Provider (antes da decisão):', CoreConfig.storageProvider);
+  console.log('Project Reference:', _projectRefDaUrl(CoreConfig.supabaseUrl));
+  console.log('Publishable Key (mascarada):', _mascarar(CoreConfig.supabaseKey, 20, 4));
+  console.log('====================================================');
 
   if (!CoreConfig.supabaseUrl || !CoreConfig.supabaseKey) {
     console.log('[Supabase Bootstrap] Motivo do fallback: supabaseUrl/supabaseKey não configurados. Provider selecionado: LOCAL.');
@@ -4201,6 +4286,8 @@ async function inicializarSupabaseNoBoot() {
   CoreConfig.storageProvider = 'supabase';
   CoreConfig._supabaseAutoDecidido = true;
   console.log('[Supabase Bootstrap] Cliente Supabase criado com sucesso. Provider selecionado: SUPABASE.');
+  // SPRINT YALOG-WMS-004 — confirma o estado final pós-decisão.
+  console.log('[SUPABASE BOOTSTRAP DIAGNÓSTICO] Storage Provider (após a decisão):', CoreConfig.storageProvider);
 }
 
 function _providerAtivo() { return CoreConfig.storageProvider === 'supabase' ? SupabaseProvider : LocalStorageProvider; }
@@ -4428,13 +4515,16 @@ const SmartSyncManager = {
     const client = _obterClienteSupabase();
     if (!client) return { ok:false, motivo:'sem-cliente', linhas:[] };
     const desde = CacheManager.lastSync();
+    _logSupabaseRequest('SELECT (incremental)');
     try {
       let query = client.from(SUPABASE_TABLE).select('key,value,updated_at').limit(CoreConfig.syncMaxRecords ?? 200);
       if (desde) query = query.gt('updated_at', desde);
-      const { data, error } = await query;
+      const resposta = await query;
+      _logSupabaseResponse('SELECT (incremental)', resposta);
+      const { data, error } = resposta;
       if (error) return { ok:false, motivo:error.message, linhas:[] };
       return { ok:true, linhas: data || [] };
-    } catch(e) { return { ok:false, motivo:String(e), linhas:[] }; }
+    } catch(e) { _logSupabaseException('SELECT (incremental)', e); return { ok:false, motivo:String(e), linhas:[] }; }
   },
 
   status() { return this._ultimoStatus; }
