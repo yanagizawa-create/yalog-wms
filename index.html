@@ -3875,6 +3875,7 @@ const SyncQueue = {
   },
 
   async processar() {
+    if (typeof _sessaoWmsCarregada !== 'undefined' && !_sessaoWmsCarregada) return; // HOTFIX-003, item 4 — aguarda a sessão carregar
     if (this._processando) return;              // evita reentrância/loops (item 12)
     if (CoreConfig.storageProvider !== 'supabase') return;
     if (!ConnectionMonitor.estaOnline()) return;  // offline: não tenta rede (item 4)
@@ -4330,6 +4331,7 @@ const SmartSyncManager = {
   },
 
   _deveExecutar() {
+    if (typeof _sessaoWmsCarregada !== 'undefined' && !_sessaoWmsCarregada) return false; // HOTFIX-003 — aguarda a sessão carregar
     if (CoreConfig.storageProvider !== 'supabase') return false;
     if (this._sincronizando) return false;                          // já em andamento (item 9/10)
     if (SyncQueue._processando) return false;                        // fila ocupada (item 9)
@@ -8103,24 +8105,17 @@ function injectDemo(){
     'Version: SUPA-HOTFIX-001',
     '====================================='
   ].join('\n'));
-  // SPRINT YALOG-WMS-SUPA-003: liga o timer periódico do Smart Sync
-  // (no-op se smartSyncEnabled=false ou syncInterval=0 — sem nenhuma
-  // mudança de comportamento para quem não usa Supabase). syncOnStartup
-  // dispara um ciclo extra imediatamente, sem esperar o primeiro tick.
-  // SPRINT YALOG-WMS-SUPA-004: TabCoordinator decide quem é a aba líder
-  // (só ela de fato chama SmartSyncManager.iniciar() a partir de agora —
-  // ver _deveExecutar()); Watchdog e limpeza automática também iniciam
-  // aqui. Nenhum destes é criado mais de uma vez (guardas internas).
-  TabCoordinator.iniciar();
-  SmartSyncManager.iniciar();
-  Watchdog.iniciar();
-  CleanupService.executar();
-  setInterval(()=>CleanupService.executar(), 30*60*1000); // a cada 30min, para sessões longas
-  if(CoreConfig.storageProvider==='supabase' && (CoreConfig.syncOnStartup ?? true)){
-    SmartSyncManager.manual().catch(e=>console.warn('[WMS Boot] falha no ciclo inicial do Smart Sync:',e));
-  }
-  // Item 1, SUPA-004: retoma automaticamente quando a aba volta a ficar
-  // visível/em foco, sem esperar o próximo tick do timer periódico.
+  // SPRINT HOTFIX-003: TabCoordinator/SmartSyncManager/Watchdog/
+  // CleanupService deixaram de iniciar aqui incondicionalmente — isso
+  // era exatamente a causa do bug (SyncQueue tentando gravar no
+  // Supabase antes de existir qualquer usuário autenticado, sem
+  // CoreConfig.usuarioAtual/instalacaoAtual sequer existirem ainda).
+  // Agora só iniciam dentro de _confirmarSessaoCarregada(), chamada
+  // pelos 3 pontos de sucesso de login/auto-login/criação de Master.
+  // Os listeners abaixo continuam registrados cedo (harmless — apenas
+  // registram o handler; SmartSyncManager.executarCiclo() já verifica
+  // sozinho, via _deveExecutar(), se a sessão está carregada antes de
+  // fazer qualquer coisa).
   if(typeof document!=='undefined' && document.addEventListener){
     document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) SmartSyncManager.executarCiclo(); });
   }
@@ -8157,6 +8152,65 @@ let masterSession=false;  // in-memory flag
 let usuarioAtual=null;    // {id,nome,login,perfil}
 let pendingMasterCallback=null; // callback after master auth
 
+// ══════════════════════════════════════════════════════════════
+// SPRINT HOTFIX-003 — INICIALIZAÇÃO CORRETA DA SESSÃO
+// ══════════════════════════════════════════════════════════════
+// Causa do bug relatado: TabCoordinator/SmartSyncManager (e, por
+// consequência, o SyncQueue tentando gravar no Supabase) eram
+// iniciados incondicionalmente em bootWMS(), ANTES de existir
+// qualquer usuário autenticado — ou seja, antes da Home/Dashboard
+// sequer poder abrir de verdade. `_sessaoWmsCarregada` é o portão
+// único: SyncQueue.processar() (toda gravação remota passa por ali)
+// só tenta rede depois que esta flag vira true, e a camada de sync
+// só é iniciada por _confirmarSessaoCarregada() — nunca no boot.
+//
+// IMPORTANTE — leia antes de assumir que isso sozinho resolve o erro
+// de RLS: "row violates row-level security policy" é uma resposta do
+// PRÓPRIO SUPABASE, do lado do servidor, quando a tabela tem Row Level
+// Security habilitado sem uma policy que libere INSERT/UPDATE para a
+// chave anônima/publishable usada aqui. Isso é configuração do projeto
+// Supabase (painel → Authentication/Policies), não uma sequência de
+// boot no navegador — nenhum código cliente consegue contornar uma
+// policy que barra a escrita. Esta Sprint corrige de verdade a
+// sequência (sessão → instalação → dashboard → sync), o que evita
+// tentativas de escrita prematuras; se o erro de RLS persistir mesmo
+// só depois do login, o próximo passo é revisar as policies da tabela
+// wms_kv_store no painel do Supabase.
+let _sessaoWmsCarregada = false;
+function _confirmarSessaoCarregada(usuario){
+  console.log('Sessão carregada');
+  CoreConfig.usuarioAtual = { id:usuario.id, nome:usuario.nome, login:usuario.login, perfil:usuario.perfil };
+  console.log('Usuário carregado');
+  CoreConfig.instalacaoAtual = { installationId: YALOG_INSTALLATION_ID, productId: YALOG_PRODUCT_ID };
+  console.log('Instalação carregada');
+  _sessaoWmsCarregada = true;
+  // Libera imediatamente o que ficou acumulado na fila durante o boot
+  // (antes do login) — nada é perdido, só esperava a sessão existir.
+  SyncQueue.processar().catch(e=>console.warn('[Sessão] falha ao processar fila pendente:',e));
+  if(CoreConfig.storageProvider==='supabase'){
+    TabCoordinator.iniciar();
+    SmartSyncManager.iniciar();
+    Watchdog.iniciar();
+    CleanupService.executar();
+    if(!window._wmsCleanupIntervalIniciado){
+      window._wmsCleanupIntervalIniciado=true;
+      setInterval(()=>CleanupService.executar(), 30*60*1000);
+    }
+    if(CoreConfig.syncOnStartup ?? true){
+      SmartSyncManager.manual().catch(e=>console.warn('[Sessão] falha no ciclo inicial do Smart Sync:',e));
+    }
+  }
+  console.log('Sync iniciado');
+}
+function _limparSessaoCarregada(){
+  _sessaoWmsCarregada = false;
+  CoreConfig.usuarioAtual = null;
+  CoreConfig.instalacaoAtual = null;
+  TabCoordinator.parar?.();
+  SmartSyncManager.parar();
+  Watchdog.parar();
+}
+
 // ensureMaster removido — primeiro acesso cria o master via tela de cadastro
 
 // ════════════════════════════════════════
@@ -8187,7 +8241,7 @@ function initLogin(){
   if(u){
     try{
       const still=DB.usuarios.find(x=>x.id===u.id&&x.ativo!==false);
-      if(still){usuarioAtual=still;overlay.style.display='none';updateUserPill();updateNavByPerfil();requestAnimationFrame(()=>requestAnimationFrame(()=>renderHome()));return;}
+      if(still){usuarioAtual=still;overlay.style.display='none';updateUserPill();updateNavByPerfil();_confirmarSessaoCarregada(still);requestAnimationFrame(()=>requestAnimationFrame(()=>{renderHome();console.log('Dashboard iniciado');}));return;}
     }catch(e){}
   }
   // render user chips
@@ -8230,7 +8284,8 @@ function cadastrarMasterInicial(){
   document.getElementById('loginOverlay').style.display='none';
   updateUserPill();
   updateNavByPerfil();
-  requestAnimationFrame(()=>requestAnimationFrame(()=>renderHome()));
+  _confirmarSessaoCarregada(master);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{renderHome();console.log('Dashboard iniciado');}));
   showT('Bem-vindo, '+nome+'! Conta Master criada.','ok');
 }
 let loginSelectedUserId=null;
@@ -8276,7 +8331,8 @@ function fazerLogin(){
   loginSelectedUserId=null;
   updateUserPill();
   updateNavByPerfil();
-  requestAnimationFrame(()=>requestAnimationFrame(()=>renderHome()));
+  _confirmarSessaoCarregada(user);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{renderHome();console.log('Dashboard iniciado');}));
   showT('Bem-vindo, '+user.nome+'! ('+user.perfil+')','ok');
 }
 function updateUserPill(){
@@ -10031,6 +10087,7 @@ async function fazerLogoff(){
   usuarioAtual=null;
   masterSession=false;
   Core.sessionRemove(SESSAO_KEY);
+  _limparSessaoCarregada();
   updateNavByPerfil();
   initLogin();
   showT('Sessão encerrada.','ok');
