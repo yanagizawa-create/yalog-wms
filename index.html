@@ -3157,13 +3157,41 @@ a{color:inherit;text-decoration:none;}
   <div class="fg" style="margin-bottom:20px;"><label>Perfil <span class="req">*</span></label>
     <select id="uPerfil">
       <option value="">Selecione o perfil...</option>
-      <option value="conferente">Conferente / Auxiliar</option>
-      <option value="estoquista">Estoquista</option>
-      <option value="supervisor">Supervisor / Encarregado</option>
+      <option value="Conferente">Conferente</option>
+      <option value="Inventário">Inventário</option>
+      <option value="Operador">Operador</option>
+      <option value="Administrativo">Administrativo</option>
+      <option value="Supervisor">Supervisor</option>
+      <option value="Líder">Líder</option>
     </select>
     <div id="perfilDesc" style="font-size:10px;color:var(--w40);font-family:var(--mono);margin-top:6px;padding:8px 10px;background:var(--bg3);border-left:2px solid var(--orange);display:none;"></div>
   </div>
   <button class="btn btn-p" style="width:100%;" onclick="criarUsuario()">✓ Criar Usuário</button>
+</div></div>
+
+<!-- Sprint YALOG-WMS-011 -->
+<div class="mo" id="mEditarUsuarioWMS"><div class="md">
+  <button class="mc" onclick="closeM('mEditarUsuarioWMS')">✕</button>
+  <div class="mt">Editar Usuário</div>
+  <div class="ms">Dados e credenciais do usuário operacional</div>
+  <input type="hidden" id="ueId">
+  <div class="fg" style="margin-bottom:12px;"><label>Nome Completo <span class="req">*</span></label><input type="text" id="ueNome"></div>
+  <div class="fg" style="margin-bottom:12px;"><label>Login (usuário) <span class="req">*</span></label><input type="text" id="ueLogin" style="text-transform:lowercase;" oninput="this.value=this.value.toLowerCase()"></div>
+  <div class="fg" style="margin-bottom:12px;"><label>Perfil <span class="req">*</span></label>
+    <select id="uePerfil">
+      <option value="Conferente">Conferente</option>
+      <option value="Inventário">Inventário</option>
+      <option value="Operador">Operador</option>
+      <option value="Administrativo">Administrativo</option>
+      <option value="Supervisor">Supervisor</option>
+      <option value="Líder">Líder</option>
+    </select>
+  </div>
+  <div class="fg" style="margin-bottom:12px;"><label>Status</label>
+    <select id="ueStatus"><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select>
+  </div>
+  <div class="fg" style="margin-bottom:20px;"><label>Nova Senha</label><input type="password" id="ueSenha" placeholder="Deixe em branco para manter a atual"></div>
+  <button class="btn btn-p" style="width:100%;" onclick="salvarEdicaoUsuarioWMS()">✓ Salvar Alterações</button>
 </div></div>
 
 <!-- MODAL NOVO ENDEREÇO -->
@@ -8758,42 +8786,84 @@ async function fazerLogin(){
       return;
     }
 
-    // Item 3: usuário existente/ativo, senha válida, perfil autorizado.
-    const auth=await _autenticarUsuarioNaPlatform(companyId, login, senha);
-    if(!auth.ok){
-      const mensagens={
-        'usuario-nao-encontrado':'Usuário não encontrado.',
-        'usuario-inativo':'Usuário inativo.',
-        'senha-invalida':'Senha incorreta.',
-        'perfil-nao-autorizado':'Perfil não autorizado.',
-        'sem-conexao-sem-cache':'Sem conexão e sem dados salvos localmente. Tente novamente com internet.',
-        'erro-autenticacao':'Não foi possível validar o usuário agora. Tente novamente.',
+    // Sprint YALOG-WMS-011, itens 2/8: usuários operacionais moram
+    // exclusivamente no WMS — jamais na Platform. Tenta achar o login
+    // localmente (filtrado por company_id — item 9) ANTES de qualquer
+    // consulta de usuário à Platform.
+    const usuariosDaEmpresa=DB.usuarios.filter(u=>u.company_id===companyId);
+    const localUser=usuariosDaEmpresa.find(u=>u.login===login && u.ativo!==false);
+    let usuario=null;
+
+    if(localUser){
+      // Item 8: valida senha 100% local — nunca consulta a Platform
+      // para usuário operacional.
+      const senhaHash=await hashSenha(senha);
+      if(localUser.senha_hash!==senhaHash){
+        errEl.textContent='Senha incorreta.';
+        errEl.style.display='block';
+        document.getElementById('loginSenha').value='';
+        document.getElementById('loginSenha').focus();
+        return;
+      }
+      usuario={
+        id: localUser.id, nome: localUser.nome, login: localUser.login,
+        perfil: localUser.perfil, company_id: companyId, platformRole: null, ativo: true,
       };
-      errEl.textContent=mensagens[auth.motivo]||'Não foi possível entrar.';
-      errEl.style.display='block';
-      document.getElementById('loginSenha').value='';
-      document.getElementById('loginSenha').focus();
-      return;
+    }else{
+      // Item 2/7: não é usuário operacional local — só resta a
+      // hipótese de ser o Usuário Master (ou um administrador YALog),
+      // que sempre vem da Platform.
+      const auth=await _autenticarUsuarioNaPlatform(companyId, login, senha);
+      if(!auth.ok){
+        const mensagens={
+          'usuario-nao-encontrado':'Usuário não encontrado.',
+          'usuario-inativo':'Usuário inativo.',
+          'senha-invalida':'Senha incorreta.',
+          'perfil-nao-autorizado':'Perfil não autorizado.',
+          'sem-conexao-sem-cache':'Sem conexão e sem dados salvos localmente. Tente novamente com internet.',
+          'erro-autenticacao':'Não foi possível validar o usuário agora. Tente novamente.',
+        };
+        errEl.textContent=mensagens[auth.motivo]||'Não foi possível entrar.';
+        errEl.style.display='block';
+        document.getElementById('loginSenha').value='';
+        document.getElementById('loginSenha').focus();
+        return;
+      }
+      // Item 6 (WMS-010): mapeamento intocado. Só perfis que mapeiam
+      // para 'master' são aceitos vindos da Platform — um usuário
+      // operacional da Platform (USUARIO/CONFERENTE/OPERACIONAL) sem
+      // cadastro local não tem acesso (item 2/8: jamais buscar
+      // operacional na Platform).
+      const perfilInterno=YALOG_PLATFORM_PERFIL_MAP[auth.usuario.role]||'conferente';
+      if(perfilInterno!=='master'){
+        errEl.textContent='Usuário não encontrado.';
+        errEl.style.display='block';
+        return;
+      }
+      usuario={
+        id: companyId+':'+login, nome: auth.usuario.nome, login,
+        perfil: 'master', company_id: companyId, platformRole: auth.usuario.role, ativo: true,
+      };
+      // Item 7: o Master é espelhado localmente — é assim que aparece
+      // (protegido, sem editar/excluir) na tela de Usuários do WMS.
+      const masterLocal=DB.usuarios.find(u=>u.company_id===companyId && u.perfil==='master');
+      if(masterLocal){ masterLocal.nome=usuario.nome; masterLocal.login=login; masterLocal.updatedAt=now(); }
+      else DB.usuarios.push({
+        id:'master-'+companyId, company_id:companyId, login, nome:usuario.nome,
+        perfil:'master', perfilExibicao:'Master', platformSourced:true,
+        ativo:true, createdAt:now(), updatedAt:now(),
+      });
+      save();
     }
 
-    // Item 6: mapeamento interno permanece exatamente igual.
-    const perfilInterno=YALOG_PLATFORM_PERFIL_MAP[auth.usuario.role]||'conferente';
-    const usuario={
-      id: companyId+':'+login,
-      nome: auth.usuario.nome,
-      login,
-      perfil: perfilInterno,
-      company_id: companyId,
-      platformRole: auth.usuario.role,
-      ativo: true,
-    };
     usuarioAtual=usuario;
     // Item 4: sessão LOCAL do WMS — não a sessão compartilhada da
-    // Platform (o SSO foi removido nesta Sprint). Grava exatamente os
-    // 5 campos pedidos; o restante do objeto acima (perfil interno,
-    // id etc.) é reconstruído em tempo de execução, nunca persistido.
+    // Platform (o SSO foi removido na Sprint YALOG-WMS-009). Grava
+    // exatamente os 5 campos pedidos; o restante do objeto acima
+    // (perfil interno, id etc.) é reconstruído em tempo de execução,
+    // nunca persistido.
     Core.sessionSet(SESSAO_KEY, {
-      company_id: companyId, login, nome: usuario.nome, role: auth.usuario.role, timestamp: Date.now(),
+      company_id: companyId, login, nome: usuario.nome, role: usuario.platformRole||usuario.perfil, timestamp: Date.now(),
     });
 
     const empresaNome=(validacaoEmpresa.empresa && (validacaoEmpresa.empresa.nome_fantasia||validacaoEmpresa.empresa.razao_social))||null;
@@ -8861,11 +8931,29 @@ const PERFIS = {
   estoquista: {label:'Estoquista',     color:'#0891b2',       desc:'Gestão operacional completa, sem ajustes'},
   conferente: {label:'Conferente',     color:'#16a34a',       desc:'Separação, conferências, consulta e inventário'},
 };
-function perfilBadge(perfil){
+// Sprint YALOG-WMS-011: rótulos de cadastro para usuários operacionais
+// do WMS, mapeados para os 4 níveis internos ACIMA — canAccess/
+// canAdjust/PERFIS/a hierarquia de permissões não mudam nesta Sprint,
+// só ganham novos nomes de entrada. 'master' nunca é atribuível por
+// aqui (item 7 — Master só vem da Platform). Mapeamento fundamentado
+// nas descrições já existentes acima: Conferente/Inventário → mesmo
+// nível de "conferências...consulta e inventário"; Operador/
+// Administrativo → "gestão operacional completa, sem ajustes";
+// Supervisor/Líder → "acesso completo incluindo ajustes de estoque".
+const WMS_PERFIL_OPERACIONAL_MAP = {
+  'Conferente':     'conferente',
+  'Inventário':     'conferente',
+  'Operador':       'estoquista',
+  'Administrativo': 'estoquista',
+  'Supervisor':     'supervisor',
+  'Líder':          'supervisor',
+};
+function perfilBadge(perfil, rotulo){
   const p=PERFIS[perfil];
   if(!p)return`<span class="bg bg-wh">${perfil}</span>`;
   if(perfil==='master')return'<span class="master-badge">MASTER</span>';
-  return`<span style="background:${p.color}22;color:${p.color};font-size:8px;font-family:var(--mono);padding:2px 7px;font-weight:700;letter-spacing:.08em;">${p.label.toUpperCase()}</span>`;
+  const texto=(rotulo||p.label).toUpperCase();
+  return`<span style="background:${p.color}22;color:${p.color};font-size:8px;font-family:var(--mono);padding:2px 7px;font-weight:700;letter-spacing:.08em;">${texto}</span>`;
 }
 // Verifica se o usuário atual pode acessar determinada funcionalidade
 // nivel: 'conferente' | 'estoquista' | 'supervisor' | 'master'
@@ -8881,57 +8969,129 @@ function canAdjust(){
   return usuarioAtual&&(usuarioAtual.perfil==='supervisor'||usuarioAtual.perfil==='master');
 }
 
-function criarUsuario(){
-  // Sprint YALOG-WMS-007, item 1: usuários locais foram eliminados —
-  // toda a gestão de usuários passou a ser feita na YALog Platform.
-  showT('Gestão de usuários agora é feita na YALog Platform','info');
-  return;
-  // eslint-disable-next-line no-unreachable
-  // Aceita: logado diretamente como master OU com masterSession ativado
+async function criarUsuario(){
+  // Sprint YALOG-WMS-011: usuários operacionais voltaram a ser geridos
+  // 100% pelo WMS — a Platform só cuida do Usuário Master (ver
+  // fazerLogin()). Item 3: só o Master gerencia usuários.
   if(!masterSession&&!isMaster()){showT('Acesso restrito ao Master','err');return;}
   const nome=document.getElementById('uNome').value.trim();
   const login=document.getElementById('uLogin').value.trim();
   const senha=document.getElementById('uSenha').value;
-  const perfil=document.getElementById('uPerfil').value;
+  const rotulo=document.getElementById('uPerfil').value;
+  const perfil=WMS_PERFIL_OPERACIONAL_MAP[rotulo];
   if(!nome||!login||!senha||!perfil){showT('Preencha todos os campos','err');return;}
-  if(DB.usuarios.find(u=>u.login===login)){showT('Login já existe','err');return;}
+  const companyId=usuarioAtual.company_id;
+  // Item 9: toda consulta filtrada por company_id da sessão.
+  if(DB.usuarios.find(u=>u.company_id===companyId&&u.login===login)){showT('Login já existe','err');return;}
   if(senha.length<4){showT('Senha mínima: 4 caracteres','err');return;}
-  DB.usuarios.push({id:Date.now().toString(),nome,login,senha,perfil,createdAt:now(),ativo:true});
-  logAuditoria('Usuário criado', nome, {perfil});
+  // Item 5: company_id, login, senha (hash — nunca texto puro), nome,
+  // perfil, status, created_at/updated_at.
+  const agora=now();
+  DB.usuarios.push({
+    id:Date.now().toString(), company_id:companyId, login,
+    senha_hash:await hashSenha(senha), nome, perfil, perfilExibicao:rotulo,
+    ativo:true, createdAt:agora, updatedAt:agora,
+  });
+  logAuditoria('Usuário criado', nome, {perfil:rotulo, company_id:companyId});
   save();['uNome','uLogin','uSenha'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('uPerfil').value='';
   closeM('mNovoUsuario');renderUsuarios();showT(`Usuário "${nome}" criado!`,'ok');
 }
 function renderUsuarios(){
   const isMasterMode=isMaster()||masterSession;
   document.getElementById('usuariosMasterBlock').style.display=isMasterMode?'none':'block';
   document.getElementById('usuariosMasterPanel').style.display=isMasterMode?'block':'none';
-  // public list (anyone can see, no actions)
+  // Item 9: nunca listar usuários de outra empresa — tudo filtrado pelo
+  // company_id da sessão atual.
+  const companyId=usuarioAtual?usuarioAtual.company_id:null;
+  const usuariosDaEmpresa=companyId?DB.usuarios.filter(u=>u.company_id===companyId):[];
   document.getElementById('usuariosListPublic').innerHTML=`
     <table class="dt"><thead><tr><th>Nome</th><th>Login</th><th>Perfil</th></tr></thead>
-    <tbody>${DB.usuarios.filter(u=>u.ativo!==false).map(u=>`<tr>
+    <tbody>${usuariosDaEmpresa.filter(u=>u.ativo!==false).map(u=>`<tr>
       <td class="bd">${u.nome}</td><td class="mn">${u.login}</td>
-      <td>${perfilBadge(u.perfil)}</td>
+      <td>${perfilBadge(u.perfil,u.perfilExibicao)}</td>
     </tr>`).join('')}</tbody></table>`;
   if(!isMasterMode)return;
-  document.getElementById('tbUsuarios').innerHTML=DB.usuarios.map(u=>`<tr>
+  document.getElementById('tbUsuarios').innerHTML=usuariosDaEmpresa.map(u=>`<tr>
     <td class="bd">${u.nome}</td>
     <td class="mn">${u.login}</td>
-    <td>${perfilBadge(u.perfil)}</td>
+    <td>${perfilBadge(u.perfil,u.perfilExibicao)}</td>
     <td class="mn">${fD(u.createdAt?u.createdAt.split('T')[0]:'—')}</td>
     <td>${u.ativo!==false?'<span class="bg bg-gr">Ativo</span>':'<span class="bg bg-re">Inativo</span>'}</td>
     <td>
-      ${u.perfil!=='master'?`<button class="btn btn-r btn-xs" onclick="desativarUsuario('${u.id}')">Desativar</button>`:'<span style="font-size:10px;color:var(--w40);">—</span>'}
+      ${u.perfil!=='master'?`<button class="btn btn-o btn-xs" onclick="editarUsuario('${u.id}')">Editar</button> <button class="btn btn-r btn-xs" onclick="desativarUsuario('${u.id}')">${u.ativo!==false?'Desativar':'Ativar'}</button> <button class="btn btn-r btn-xs" onclick="excluirUsuario('${u.id}')">Excluir</button>`:'<span style="font-size:10px;color:var(--w40);">— vem da YALog Platform</span>'}
     </td>
   </tr>`).join('');
-  document.getElementById('masterNomeDisplay').textContent=DB.usuarios.find(u=>u.perfil==='master')?.nome||'Master';
+  document.getElementById('masterNomeDisplay').textContent=usuariosDaEmpresa.find(u=>u.perfil==='master')?.nome||'Master';
 }
 async function desativarUsuario(id){
   if(!masterSession&&!isMaster()){showT('Ação requer Master','err');return;}
-  const u=DB.usuarios.find(x=>x.id===id);if(!u)return;
+  const u=DB.usuarios.find(x=>x.id===id&&x.company_id===usuarioAtual.company_id);if(!u)return;
   if(u.perfil==='master'){showT('Não é possível desativar o Master','err');return;}
-  if(!await wmsConfirm(`Desativar usuário "${u.nome}"?\n\nO usuário não conseguirá mais acessar o sistema.`,'Desativar Usuário','🔒','🔒 Desativar'))return;
-  u.ativo=false;save();renderUsuarios();showT('Usuário desativado','ok');
+  const vaiAtivar=u.ativo===false;
+  if(!vaiAtivar&&!await wmsConfirm(`Desativar usuário "${u.nome}"?\n\nO usuário não conseguirá mais acessar o sistema.`,'Desativar Usuário','🔒','🔒 Desativar'))return;
+  u.ativo=vaiAtivar; u.updatedAt=now();
+  logAuditoria(vaiAtivar?'Usuário ativado':'Usuário desativado', u.nome, {perfil:u.perfilExibicao||u.perfil, company_id:u.company_id});
+  save();renderUsuarios();showT(vaiAtivar?'Usuário ativado':'Usuário desativado','ok');
 }
+// Sprint YALOG-WMS-011 — Alterações 04-07: editar e excluir usuário
+// operacional, sempre restrito à empresa da sessão e nunca ao Master.
+function editarUsuario(id){
+  if(!masterSession&&!isMaster()){showT('Acesso restrito ao Master','err');return;}
+  const u=DB.usuarios.find(x=>x.id===id&&x.company_id===usuarioAtual.company_id);
+  if(!u){showT('Usuário não encontrado','err');return;}
+  if(u.perfil==='master'){showT('O usuário Master é gerenciado pela YALog Platform','err');return;}
+  document.getElementById('ueId').value=u.id;
+  document.getElementById('ueNome').value=u.nome;
+  document.getElementById('ueLogin').value=u.login;
+  document.getElementById('uePerfil').value=u.perfilExibicao||Object.keys(WMS_PERFIL_OPERACIONAL_MAP).find(k=>WMS_PERFIL_OPERACIONAL_MAP[k]===u.perfil)||'Conferente';
+  document.getElementById('ueStatus').value=u.ativo!==false?'ativo':'inativo';
+  document.getElementById('ueSenha').value='';
+  openM('mEditarUsuarioWMS');
+}
+async function salvarEdicaoUsuarioWMS(){
+  if(!masterSession&&!isMaster()){showT('Acesso restrito ao Master','err');return;}
+  const id=document.getElementById('ueId').value;
+  const companyId=usuarioAtual.company_id;
+  const u=DB.usuarios.find(x=>x.id===id&&x.company_id===companyId);
+  if(!u){showT('Usuário não encontrado','err');return;}
+  if(u.perfil==='master'){showT('O usuário Master é gerenciado pela YALog Platform','err');return;}
+
+  const nome=document.getElementById('ueNome').value.trim();
+  const login=document.getElementById('ueLogin').value.trim();
+  const rotulo=document.getElementById('uePerfil').value;
+  const perfil=WMS_PERFIL_OPERACIONAL_MAP[rotulo];
+  const status=document.getElementById('ueStatus').value;
+  const senha=document.getElementById('ueSenha').value;
+  if(!nome||!login||!perfil){showT('Preencha todos os campos obrigatórios','err');return;}
+  if(login!==u.login && DB.usuarios.find(x=>x.company_id===companyId&&x.login===login)){showT('Login já existe','err');return;}
+  if(senha && senha.length<4){showT('Senha mínima: 4 caracteres','err');return;}
+
+  const camposAlterados=[];
+  if(nome!==u.nome){u.nome=nome;camposAlterados.push('Nome');}
+  if(login!==u.login){u.login=login;camposAlterados.push('Login');}
+  if(rotulo!==u.perfilExibicao){u.perfil=perfil;u.perfilExibicao=rotulo;camposAlterados.push('Perfil');}
+  const ativoNovo=(status==='ativo');
+  if(ativoNovo!==(u.ativo!==false)){u.ativo=ativoNovo;camposAlterados.push('Status');}
+  if(senha){u.senha_hash=await hashSenha(senha);camposAlterados.push('Senha');}
+
+  if(!camposAlterados.length){showT('Nenhuma alteração para salvar','info');closeM('mEditarUsuarioWMS');return;}
+  u.updatedAt=now();
+  logAuditoria('Usuário editado', u.nome, {campos:camposAlterados.join(', '), company_id:companyId});
+  save();closeM('mEditarUsuarioWMS');renderUsuarios();showT('Usuário atualizado','ok');
+}
+async function excluirUsuario(id){
+  if(!masterSession&&!isMaster()){showT('Acesso restrito ao Master','err');return;}
+  const companyId=usuarioAtual.company_id;
+  const u=DB.usuarios.find(x=>x.id===id&&x.company_id===companyId);
+  if(!u){showT('Usuário não encontrado','err');return;}
+  if(u.perfil==='master'){showT('Não é possível excluir o Master','err');return;}
+  if(!await wmsConfirm(`Excluir definitivamente o usuário "${u.nome}"?\n\nEsta ação não pode ser desfeita.`,'Excluir Usuário','🗑️','🗑️ Excluir'))return;
+  DB.usuarios=DB.usuarios.filter(x=>!(x.id===id&&x.company_id===companyId));
+  logAuditoria('Usuário excluído', u.nome, {perfil:u.perfilExibicao||u.perfil, company_id:companyId});
+  save();renderUsuarios();showT('Usuário excluído','ok');
+}
+
 
 // ════════════════════════════════════════
 // CONFIGURAÇÕES GERAIS (SPRINT YALOG-WMS-CERT-002)
