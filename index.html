@@ -3837,8 +3837,9 @@ async function _garantirAuthAnonima(client) {
    A partir desta Sprint o WMS não tem mais login, usuários nem
    licença próprios: tudo passa a vir da YALog Platform, via:
      (a) sessão compartilhada — mesma origem GitHub Pages, chave
-         sessionStorage 'yalog_admin_session', gravada pela própria
-         Platform no login (Sprints YALOG-PLATFORM-002/003);
+         localStorage 'yalog_admin_session', gravada pela própria
+         Platform no login (Sprint YALOG-PLATFORM-005: objeto plano,
+         sem wrapper `user:{...}`, sobrevive a nova aba/favorito);
      (b) empresa/licença/módulo, lidas diretamente das tabelas
          `empresas`/`licencas`/`modulos` do MESMO projeto Supabase
          (pyckcyaojztixsujbylq) que o WMS já usa para o wms_kv_store
@@ -3887,12 +3888,13 @@ const YALOG_PLATFORM_PERFIL_MAP = {
 
 function _lerSessaoPlatform() {
   try {
-    const raw = sessionStorage.getItem(YALOG_PLATFORM_SESSION_KEY);
+    // Sprint YALOG-WMS-008: a Platform passou a gravar em localStorage
+    // (Sprint YALOG-PLATFORM-005), objeto PLANO — sem mais `user:{...}`.
+    const raw = localStorage.getItem(YALOG_PLATFORM_SESSION_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    const u = parsed && parsed.user;
-    if (!u || !u.company_id || !u.login || !u.role) return null;
-    return u;
+    const sessao = JSON.parse(raw);
+    if (!sessao || !sessao.company_id || !sessao.login || !sessao.role) return null;
+    return sessao;
   } catch(e) { return null; }
 }
 
@@ -10443,10 +10445,11 @@ async function fazerLogoff(){
   usuarioAtual=null;
   masterSession=false;
   Core.sessionRemove(SESSAO_KEY);
-  // Sprint YALOG-WMS-007, item 8: encerra a sessão COMPARTILHADA da
-  // Platform (mesma origem GitHub Pages) — não só a cópia local do
-  // WMS — e volta para a Platform, de onde um novo login recomeça.
-  try{ sessionStorage.removeItem(YALOG_PLATFORM_SESSION_KEY); }catch(e){}
+  // Sprint YALOG-WMS-007/008: encerra a sessão COMPARTILHADA da
+  // Platform (localStorage, mesma origem GitHub Pages) — não só a
+  // cópia local do WMS — e volta para a Platform, de onde um novo
+  // login recomeça.
+  try{ localStorage.removeItem(YALOG_PLATFORM_SESSION_KEY); }catch(e){}
   _limparSessaoCarregada();
   _redirecionarParaPlatform();
 }
