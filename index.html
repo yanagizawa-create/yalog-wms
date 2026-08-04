@@ -3912,14 +3912,30 @@ function _hashFallbackSenha(str){
 // nesta Sprint — só a origem de quem recebe cada perfil passa a ser
 // a Platform. Mesma decisão já tomada na Sprint YALOG-WMS-CERT-002
 // (reaproveitar a arquitetura de perfis existente, não recriar).
-// USUARIO (Platform) é mapeado para o nível interno mais baixo
+//
+// Sprint YALOG-WMS-010: a Platform grava de fato os códigos curtos
+// SUPER_ADMIN/GESTOR/MASTER/USUARIO (confirmado direto no código da
+// Platform na Sprint YALOG-PLATFORM-006 — ROLES/can()/salvarUsuario()),
+// não os nomes longos GESTOR_YALOG/MASTER_CLIENTE assumidos desde a
+// Sprint YALOG-WMS-007. Corrigido adicionando os códigos reais; os
+// antigos permanecem no mapa (retrocompatibilidade — nunca remover,
+// só ampliar) para instalações de Platform mais antigas que ainda
+// gravem esses valores. CONFERENTE/OPERACIONAL também aceitos como
+// sinônimos de USUARIO por retrocompatibilidade adicional.
+// USUARIO (e sinônimos) são mapeados para o nível interno mais baixo
 // (conferente — "somente operação"), por ser o único mapeamento
 // seguro sem uma granularidade equivalente do lado da Platform.
 const YALOG_PLATFORM_PERFIL_MAP = {
-  SUPER_ADMIN:    'master',
+  // Códigos reais gravados pela Platform hoje.
+  SUPER_ADMIN: 'master',
+  GESTOR:      'master',
+  MASTER:      'master',
+  USUARIO:     'conferente',
+  // Retrocompatibilidade — nomes antigos/alternativos. Nunca remover.
   GESTOR_YALOG:   'master',
   MASTER_CLIENTE: 'master',
-  USUARIO:        'conferente',
+  CONFERENTE:     'conferente',
+  OPERACIONAL:    'conferente',
 };
 
 function _lerSessaoPlatform() {
