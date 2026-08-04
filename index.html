@@ -2589,7 +2589,7 @@ a{color:inherit;text-decoration:none;}
 <div id="loadingOverlay" style="display:none;position:fixed;inset:0;background:#111;z-index:99999;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
   <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:36px;color:#FB923C;font-style:italic;">WMS</div>
   <div style="width:120px;height:3px;background:#1a1a1a;border-radius:2px;overflow:hidden;"><div style="width:40%;height:100%;background:#FB923C;border-radius:2px;animation:wmsLoadBar 1.2s ease-in-out infinite alternate;"></div></div>
-  <div style="font-size:11px;color:#555;font-family:monospace;letter-spacing:.1em;">CARREGANDO DADOS...</div>
+  <div id="loadingMsg" style="font-size:11px;color:#555;font-family:monospace;letter-spacing:.1em;">CARREGANDO DADOS...</div>
 </div>
 <div class="toast" id="toast"></div>
 
@@ -3832,6 +3832,179 @@ async function _garantirAuthAnonima(client) {
   }
 }
 /* ═══════════════════════════════════════════════════════════════
+   SPRINT YALOG-WMS-007 — INTEGRAÇÃO COM A YALOG PLATFORM
+   ───────────────────────────────────────────────────────────────
+   A partir desta Sprint o WMS não tem mais login, usuários nem
+   licença próprios: tudo passa a vir da YALog Platform, via:
+     (a) sessão compartilhada — mesma origem GitHub Pages, chave
+         sessionStorage 'yalog_admin_session', gravada pela própria
+         Platform no login (Sprints YALOG-PLATFORM-002/003);
+     (b) empresa/licença/módulo, lidas diretamente das tabelas
+         `empresas`/`licencas`/`modulos` do MESMO projeto Supabase
+         (pyckcyaojztixsujbylq) que o WMS já usa para o wms_kv_store
+         — schema e RLS (liberado para a role anon) criados por
+         platform-schema.sql na Sprint YALOG-PLATFORM-003.
+
+   Client Supabase DEDICADO: o singleton de _obterClienteSupabase()
+   é o mesmo que faz Anonymous Sign-In (WMS-006) para o wms_kv_store
+   — depois desse sign-in ele passa a falar com o Supabase como role
+   `authenticated`, não `anon`, e as policies da Platform (empresas/
+   licencas/modulos) foram escritas para `anon`. Por isso a leitura
+   do contrato da Platform usa um client próprio, que nunca faz
+   sign-in, permanecendo sempre `anon` — evita um 0-resultados
+   silencioso por RLS que seria muito difícil de diagnosticar depois.
+   ═══════════════════════════════════════════════════════════════ */
+const YALOG_PLATFORM_URL = 'https://yanagizawa-create.github.io/yalog-platform/';
+const YALOG_PLATFORM_SESSION_KEY = 'yalog_admin_session';
+// true quando a validação de licença/módulo bloqueia o acesso (item 3) —
+// impede que o hide incondicional do loadingOverlay em bootWMS() reabra
+// a tela por baixo da barreira de bloqueio.
+let _yalogAcessoBloqueado = false;
+
+let _platformClientSingleton = null;
+function _obterClientePlatform() {
+  if (_platformClientSingleton) return _platformClientSingleton;
+  if (typeof window === 'undefined' || !window.supabase || !window.supabase.createClient) return null;
+  try { _platformClientSingleton = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY); }
+  catch(e) { console.warn('[Platform] falha ao criar client dedicado:', e); _platformClientSingleton = null; }
+  return _platformClientSingleton;
+}
+
+// Perfis da Platform → perfil interno do WMS. A hierarquia de
+// permissões do WMS (canAccess/canAdjust/isMaster/PERFIS) NÃO muda
+// nesta Sprint — só a origem de quem recebe cada perfil passa a ser
+// a Platform. Mesma decisão já tomada na Sprint YALOG-WMS-CERT-002
+// (reaproveitar a arquitetura de perfis existente, não recriar).
+// USUARIO (Platform) é mapeado para o nível interno mais baixo
+// (conferente — "somente operação"), por ser o único mapeamento
+// seguro sem uma granularidade equivalente do lado da Platform.
+const YALOG_PLATFORM_PERFIL_MAP = {
+  SUPER_ADMIN:    'master',
+  GESTOR_YALOG:   'master',
+  MASTER_CLIENTE: 'master',
+  USUARIO:        'conferente',
+};
+
+function _lerSessaoPlatform() {
+  try {
+    const raw = sessionStorage.getItem(YALOG_PLATFORM_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const u = parsed && parsed.user;
+    if (!u || !u.company_id || !u.login || !u.role) return null;
+    return u;
+  } catch(e) { return null; }
+}
+
+function _redirecionarParaPlatform() {
+  try { window.location.href = YALOG_PLATFORM_URL; } catch(e) {}
+}
+
+// Cache local da última validação de licença/módulo bem-sucedida —
+// usada quando o Supabase está indisponível (item 9 da Sprint),
+// no mesmo espírito do fallback automático já existente na Platform:
+// nunca bloqueia quem já tinha acesso válido só porque a rede caiu.
+const YALOG_LICENCA_PLATFORM_CACHE_KEY = 'wms_platform_licenca_cache';
+function _salvarValidacaoCache(resultado) {
+  try { Core.set(YALOG_LICENCA_PLATFORM_CACHE_KEY, {...resultado, validadoEm: new Date().toISOString()}); }
+  catch(e) {}
+}
+function _lerValidacaoCache(companyId) {
+  try {
+    const c = Core.get(YALOG_LICENCA_PLATFORM_CACHE_KEY);
+    return (c && c.companyId === companyId && c.ok) ? c : null;
+  } catch(e) { return null; }
+}
+
+// Consulta empresas/licencas/modulos na Platform e decide se o WMS
+// pode abrir para esta empresa. Nunca lança — sempre devolve
+// {ok:boolean, motivo?, empresa?, licenca?, offline?}.
+async function _validarLicencaNaPlatform(companyId) {
+  const client = _obterClientePlatform();
+  if (!client) {
+    const cache = _lerValidacaoCache(companyId);
+    return cache ? {...cache, offline:true} : {ok:false, motivo:'sem-conexao-sem-cache'};
+  }
+  try {
+    const [rEmpresa, rLicenca, rModulo] = await Promise.all([
+      client.from('empresas').select('*').eq('company_id', companyId).single(),
+      client.from('licencas').select('*').eq('company_id', companyId).single(),
+      client.from('modulos').select('*').eq('company_id', companyId).eq('modulo','wms').single(),
+    ]);
+    // Erro de CONSULTA (instabilidade de rede, RLS, timeout etc.) não é
+    // uma resposta autoritativa "não" da Platform — cai para o cache
+    // antes de bloquear (item 9). PGRST116 ("no rows") é tratado como
+    // resposta autoritativa de verdade (empresa/licença/módulo realmente
+    // não encontrados), não como falha de conexão.
+    const falhaConsulta = [rEmpresa, rLicenca, rModulo].some(r => r.error && r.error.code !== 'PGRST116');
+    if (falhaConsulta) {
+      const cache = _lerValidacaoCache(companyId);
+      if (cache) return {...cache, offline:true};
+      throw new Error('falha ao consultar empresas/licencas/modulos na Platform');
+    }
+    const empresa=rEmpresa.data, licenca=rLicenca.data, modulo=rModulo.data;
+    if (!empresa || empresa.ativo === false) return {ok:false, motivo:'empresa-inativa'};
+    if (!licenca || licenca.status !== 'ATIVA') return {ok:false, motivo:'licenca-inativa'};
+    if (licenca.validade && new Date(licenca.validade) < new Date()) return {ok:false, motivo:'licenca-vencida'};
+    if (!modulo || modulo.status !== 'LIBERADO') return {ok:false, motivo:'modulo-bloqueado'};
+    const resultado = {ok:true, companyId, empresa, licenca, offline:false};
+    _salvarValidacaoCache(resultado);
+    return resultado;
+  } catch(err) {
+    console.warn('[Platform] falha ao validar licença — tentando cache local:', err);
+    const cache = _lerValidacaoCache(companyId);
+    return cache ? {...cache, offline:true} : {ok:false, motivo:'erro-validacao'};
+  }
+}
+
+// Fila de auditoria pendente p/ a Platform (item 7 + item 9): se a
+// gravação direta falhar, o evento entra aqui e é reenviado assim
+// que o ConnectionMonitor detectar reconexão — mesmo mecanismo
+// conceitual de fila+retomada automática já usado pela Platform.
+const YALOG_AUDITORIA_PLATFORM_FILA_KEY = 'wms_platform_auditoria_fila';
+function _filaAuditoriaPlatform() { try { return Core.get(YALOG_AUDITORIA_PLATFORM_FILA_KEY) || []; } catch(e) { return []; } }
+function _salvarFilaAuditoriaPlatform(f) { try { Core.set(YALOG_AUDITORIA_PLATFORM_FILA_KEY, f); } catch(e) {} }
+
+async function _gravarAuditoriaPlatform(entry) {
+  const client = _obterClientePlatform();
+  if (!client) return false;
+  try {
+    const { error } = await client.from('logs').insert([entry]);
+    if (error) throw error;
+    return true;
+  } catch(e) { return false; }
+}
+async function registrarAuditoriaNaPlatform(acao, detalheExtra) {
+  if (!usuarioAtual || !usuarioAtual.company_id) return; // sem sessão da Platform, nada a registrar lá
+  const entry = {
+    tipo: 'AUDITORIA_WMS',
+    detalhe: '[WMS] ' + acao + ' — usuário: ' + usuarioAtual.nome + ' (' + usuarioAtual.login + ')' + (detalheExtra ? ' · ' + detalheExtra : ''),
+    company_id: usuarioAtual.company_id,
+  };
+  const ok = await _gravarAuditoriaPlatform(entry);
+  if (!ok) {
+    const fila = _filaAuditoriaPlatform();
+    fila.push(entry);
+    _salvarFilaAuditoriaPlatform(fila.slice(-200)); // limite de retenção local
+  }
+}
+async function _processarFilaAuditoriaPlatform() {
+  let fila = _filaAuditoriaPlatform();
+  if (!fila.length) return;
+  for (const entry of fila.slice()) {
+    const ok = await _gravarAuditoriaPlatform(entry);
+    if (!ok) break; // preserva ordem — para no primeiro erro, tenta o resto depois
+    fila = fila.filter(f => f !== entry);
+    _salvarFilaAuditoriaPlatform(fila);
+  }
+}
+// Reaproveita o ConnectionMonitor já existente (item 9) — nenhum
+// timer novo, nenhuma lógica de detecção de rede duplicada.
+if (typeof ConnectionMonitor !== 'undefined') {
+  ConnectionMonitor.aoMudar((status) => { if (status === 'online') _processarFilaAuditoriaPlatform(); });
+}
+
+/* ═══════════════════════════════════════════════════════════════
    SPRINT YALOG-WMS-004 — DIAGNÓSTICO TÉCNICO DA INTEGRAÇÃO SUPABASE
    ═══════════════════════════════════════════════════════════════
    Puramente instrumentação — nenhuma função abaixo decide nada nem
@@ -4929,6 +5102,14 @@ function logAuditoria(acao, detalhe, extra) {
     acao, detalhe: detalhe || '', ...extra
   });
   if (DB.auditoria.length > 500) DB.auditoria.length = 500; // limite de retenção
+  // Sprint YALOG-WMS-007, item 7: além do registro local de sempre
+  // (inalterado acima), toda gravação também tenta ir para a tabela
+  // `logs` da Platform, com company_id/user_id/nome/ação — best
+  // effort, nunca bloqueia a ação que está sendo auditada; se falhar,
+  // entra na fila e é reenviada quando a conexão voltar (item 9).
+  if (typeof registrarAuditoriaNaPlatform === 'function') {
+    registrarAuditoriaNaPlatform(acao, detalhe).catch(()=>{});
+  }
 }
 
 // ── CAMADA DE IDENTIFICAÇÃO PARA A TORRE DE CONTROLE (item 14) ──
@@ -5015,12 +5196,14 @@ function _applyLoadedData(parsed){
   if(!DB.logo)        DB.logo={nome:'Seu Armazém',emoji:'🏭',img:null};
   // Remove masters sem _userCreated, exceto o usuário técnico de desenvolvimento (segurança)
   DB.usuarios=DB.usuarios.filter(u=>u.perfil!=='master'||u._userCreated===true||u._devTecnico===true);
-  // SPRINT YALOG-WMS-CERT-001, item 8 — usuário técnico permanente para
-  // homologação/testes/debug durante o desenvolvimento. Perfil Master.
-  // Não conta como "master criado pelo cliente" (_userCreated fica false),
-  // então a tela de Primeiro Acesso do cliente continua funcionando normalmente.
-  // Será removido apenas na Industrialização via YALog Universal Licenser.
-  if(!DB.usuarios.some(u=>u._devTecnico===true)){
+  // SPRINT YALOG-WMS-CERT-001, item 8 (histórico) — usuário técnico
+  // permanente para homologação/debug. Sprint YALOG-WMS-007, item 1:
+  // autenticação local foi eliminada por completo, então este seed
+  // PARA de criar novos registros (não há mais fluxo de login local
+  // que o utilize). Se já existia de uma instalação anterior, o
+  // registro permanece intacto (item 10 — nenhum dado é removido),
+  // apenas inerte, já que não há mais como autenticar localmente.
+  if(false && !DB.usuarios.some(u=>u._devTecnico===true)){
     DB.usuarios.push({id:'dev-admin-yalog',nome:'Admin (Técnico)',login:'admin',senha:'admin',perfil:'master',_userCreated:false,_devTecnico:true,ativo:true,createdAt:now()});
   }
   // Migração silenciosa: normaliza tipos de produtos vindos de carga anterior
@@ -5248,8 +5431,15 @@ function updateBadges(){
 // ══════════════════════════════════════════════════════════════
 // LOGO
 // ══════════════════════════════════════════════════════════════
+// Sprint YALOG-WMS-007: bootWMS() e initLogin() rodam de forma
+// assíncrona e independente — a ordem entre renderLogo() (que exibe
+// DB.logo.nome) e a validação de licença na Platform (que descobre o
+// nome real da empresa) não é garantida. Em vez de torcer pela ordem,
+// renderLogo() sempre prioriza o nome vindo da Platform quando existe,
+// então o resultado final é correto não importa qual roda por último.
+let _yalogEmpresaNomePlatform = null;
 function renderLogo(){
-  document.getElementById('sbName').textContent=DB.logo.nome;
+  document.getElementById('sbName').textContent=_yalogEmpresaNomePlatform||DB.logo.nome;
   const el=document.getElementById('sbLogo');
   el.innerHTML=DB.logo.img?`<img src="${DB.logo.img}">`:`<span>${DB.logo.emoji}</span>`;
 }
@@ -8225,7 +8415,11 @@ function injectDemo(){
   garantirLicencaDemoPadrao();
   renderLogo();updateDate();checkResp();
   const logoEl=document.getElementById('logoN');if(logoEl)logoEl.value=DB.logo.nome;
-  const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='none';
+  // Sprint YALOG-WMS-007: se a validação de licença/módulo na Platform
+  // já bloqueou o acesso (ver initLogin/_yalogAcessoBloqueado), este
+  // overlay de carregamento é a própria barreira visual — não deve ser
+  // escondido só porque o boot interno (dados locais, cache) terminou.
+  const ov=document.getElementById('loadingOverlay');if(ov&&!_yalogAcessoBloqueado)ov.style.display='none';
   // SPRINT YALOG-SUPA-HOTFIX-001, item 7 — log de inicialização limpo.
   // Reflete o provider REALMENTE ativo (nunca fixo) — nada de "API Mode"/
   // "Server Mode"/"Legacy Mode", que deixaram de existir nesta Sprint.
@@ -8350,36 +8544,58 @@ function _limparSessaoCarregada(){
 // ════════════════════════════════════════
 // LOGIN / SESSION
 // ════════════════════════════════════════
-function initLogin(){
-  const overlay=document.getElementById('loginOverlay');
-  overlay.style.display='flex';
+// ════════════════════════════════════════
+// SPRINT YALOG-WMS-007 — LOGIN / SESSÃO
+// O WMS não tem mais tela de login própria: initLogin() (mesmo nome,
+// mesmo único ponto de chamada de sempre — ver INIT v2 mais abaixo)
+// agora só verifica a sessão compartilhada da Platform, valida a
+// licença/módulo e entra automaticamente, ou redireciona.
+// ════════════════════════════════════════
+async function initLogin(){
+  const overlay=document.getElementById('loadingOverlay');
+  const msgEl=document.getElementById('loadingMsg');
+  if(overlay) overlay.style.display='flex';
+  if(msgEl){ msgEl.style.color='#555'; msgEl.textContent='VERIFICANDO SESSÃO...'; }
 
-  // Verifica se já tem master criado pelo usuário
-  const hasMaster=DB.usuarios.some(u=>u.perfil==='master'&&u._userCreated===true);
-
-  if(!hasMaster){
-    // PRIMEIRO ACESSO — mostra cadastro do master
-    document.getElementById('loginBoxFirstAccess').style.display='block';
-    document.getElementById('loginBoxNormal').style.display='none';
-    Core.sessionRemove(SESSAO_KEY);
-    usuarioAtual=null;
+  const sessaoPlatform=_lerSessaoPlatform();
+  if(!sessaoPlatform){
+    if(msgEl) msgEl.textContent='REDIRECIONANDO PARA A YALOG PLATFORM...';
+    _redirecionarParaPlatform();
     return;
   }
 
-  // LOGIN NORMAL
-  document.getElementById('loginBoxFirstAccess').style.display='none';
-  document.getElementById('loginBoxNormal').style.display='block';
-
-  // auto-login se sessão ainda válida
-  const u=Core.sessionGet(SESSAO_KEY);
-  if(u){
-    try{
-      const still=DB.usuarios.find(x=>x.id===u.id&&x.ativo!==false);
-      if(still){usuarioAtual=still;overlay.style.display='none';updateUserPill();updateNavByPerfil();_confirmarSessaoCarregada(still);requestAnimationFrame(()=>requestAnimationFrame(()=>{renderHome();console.log('Dashboard iniciado');}));return;}
-    }catch(e){}
+  if(msgEl) msgEl.textContent='VALIDANDO LICENÇA E MÓDULO...';
+  const validacao=await _validarLicencaNaPlatform(sessaoPlatform.company_id);
+  if(!validacao.ok){
+    _yalogAcessoBloqueado=true;
+    if(overlay) overlay.style.display='flex';
+    if(msgEl){ msgEl.style.color='#f87171'; msgEl.textContent='Módulo WMS indisponível para esta empresa.'; }
+    console.warn('[Platform] acesso bloqueado:', validacao.motivo);
+    return; // bloqueia definitivamente — o WMS nunca chega a carregar
   }
-  // render user chips
-  renderLoginUsers();
+
+  const perfilInterno = YALOG_PLATFORM_PERFIL_MAP[sessaoPlatform.role] || 'conferente';
+  const usuario = {
+    id: sessaoPlatform.company_id+':'+sessaoPlatform.login,
+    nome: sessaoPlatform.nome,
+    login: sessaoPlatform.login,
+    perfil: perfilInterno,
+    company_id: sessaoPlatform.company_id,
+    platformRole: sessaoPlatform.role,
+    ativo: true,
+  };
+  usuarioAtual=usuario;
+  Core.sessionSet(SESSAO_KEY, usuario);
+
+  const empresaNome=(validacao.empresa && (validacao.empresa.nome_fantasia||validacao.empresa.razao_social))||null;
+  if(empresaNome){ _yalogEmpresaNomePlatform=empresaNome; renderLogo(); }
+
+  if(overlay) overlay.style.display='none';
+  updateUserPill();
+  updateNavByPerfil();
+  _confirmarSessaoCarregada(usuario);
+  logAuditoria('Login via YALog Platform', usuario.nome, {perfil:usuario.perfil});
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{renderHome();console.log('Dashboard iniciado');}));
 }
 
 function renderLoginUsers(){
@@ -8535,6 +8751,11 @@ function canAdjust(){
 }
 
 function criarUsuario(){
+  // Sprint YALOG-WMS-007, item 1: usuários locais foram eliminados —
+  // toda a gestão de usuários passou a ser feita na YALog Platform.
+  showT('Gestão de usuários agora é feita na YALog Platform','info');
+  return;
+  // eslint-disable-next-line no-unreachable
   // Aceita: logado diretamente como master OU com masterSession ativado
   if(!masterSession&&!isMaster()){showT('Acesso restrito ao Master','err');return;}
   const nome=document.getElementById('uNome').value.trim();
@@ -10218,13 +10439,16 @@ function confirmarArmazenagem(){
 
 async function fazerLogoff(){
   if(!await wmsConfirm('Deseja realmente sair do sistema?','Sair do Sistema','🚪','🚪 Sair'))return;
+  logAuditoria('Logout realizado', usuarioAtual?usuarioAtual.nome:'—', {perfil:usuarioAtual?usuarioAtual.perfil:null});
   usuarioAtual=null;
   masterSession=false;
   Core.sessionRemove(SESSAO_KEY);
+  // Sprint YALOG-WMS-007, item 8: encerra a sessão COMPARTILHADA da
+  // Platform (mesma origem GitHub Pages) — não só a cópia local do
+  // WMS — e volta para a Platform, de onde um novo login recomeça.
+  try{ sessionStorage.removeItem(YALOG_PLATFORM_SESSION_KEY); }catch(e){}
   _limparSessaoCarregada();
-  updateNavByPerfil();
-  initLogin();
-  showT('Sessão encerrada.','ok');
+  _redirecionarParaPlatform();
 }
 
 function updateNavByPerfil(){
@@ -11625,6 +11849,13 @@ function abrirExcluirTarefa(id){
   document.getElementById('mExcluirSenha').value='';
   document.getElementById('mExcluirErro').style.display='none';
   document.getElementById('mExcluirErro').textContent='';
+  // Sprint YALOG-WMS-007: não existe mais senha local para reautenticar
+  // aqui — quem já está logado (via Platform) é quem autoriza. Os campos
+  // continuam no DOM (não alteramos o modal), só ficam ocultos.
+  ['mExcluirUser','mExcluirSenha'].forEach(id=>{
+    const el=document.getElementById(id); const wrap=el&&el.closest('.fg');
+    if(wrap) wrap.style.display='none'; else if(el) el.style.display='none';
+  });
   document.getElementById('mExcluirTarefaBody').innerHTML=
     '<div style="margin-bottom:6px;font-weight:700;font-size:13px;color:#f87171;">Tarefa: '+t.id+'</div>'+
     '<div style="font-size:11px;color:var(--w70);line-height:1.8;">'+
@@ -11639,25 +11870,20 @@ function abrirExcluirTarefa(id){
 function confirmarExclusaoTarefa(){
   const id     =document.getElementById('mExcluirTarefaId').value;
   const motivo =document.getElementById('mExcluirMotivo').value.trim();
-  const login  =document.getElementById('mExcluirUser').value.trim().toLowerCase();
-  const senha  =document.getElementById('mExcluirSenha').value;
   const erroEl =document.getElementById('mExcluirErro');
 
   function showErro(msg){erroEl.textContent=msg;erroEl.style.display='block';}
 
   if(!motivo){showErro('Informe o motivo da exclusão.');return;}
-  if(!login||!senha){showErro('Informe o usuário e senha do autorizador.');return;}
 
-  // Valida credenciais e perfil
-  const auth=DB.usuarios.find(u=>
-    u.login.toLowerCase()===login &&
-    u.senha===senha &&
-    u.ativo!==false &&
-    (u.perfil==='master'||u.perfil==='supervisor'||u.perfil==='encarregado')
-  );
+  // Sprint YALOG-WMS-007: a autorização de quem pode excluir passou a
+  // ser a sessão ativa (vinda da Platform), não mais uma senha local
+  // reintroduzida aqui — mesma regra de perfil de sempre (Master,
+  // Supervisor ou Encarregado), fonte diferente.
+  const auth=(usuarioAtual&&(usuarioAtual.perfil==='master'||usuarioAtual.perfil==='supervisor'||usuarioAtual.perfil==='encarregado'))
+    ? usuarioAtual : null;
   if(!auth){
-    showErro('Credenciais inválidas ou perfil sem permissão (requer Master, Supervisor ou Encarregado).');
-    document.getElementById('mExcluirSenha').value='';
+    showErro('Perfil sem permissão (requer Master, Supervisor ou Encarregado).');
     return;
   }
 
