@@ -3114,6 +3114,10 @@ a{color:inherit;text-decoration:none;}
     <!-- lista de usuários -->
     <div style="margin-bottom:16px;">
       <div class="fg" style="margin-bottom:12px;">
+        <label>Company ID</label>
+        <input type="text" id="loginCompanyId" placeholder="Ex: YLG-A1B2C3" autocomplete="off" oninput="this.value=this.value.toUpperCase().replace(/\s/g,'')" onkeydown="if(event.key==='Enter')document.getElementById('loginUsuario').focus()">
+      </div>
+      <div class="fg" style="margin-bottom:12px;">
         <label>Usuário (login)</label>
         <input type="text" id="loginUsuario" placeholder="seu.login" autocomplete="username" oninput="this.value=this.value.toLowerCase().replace(/\s/g,'')">
       </div>
@@ -3121,7 +3125,7 @@ a{color:inherit;text-decoration:none;}
         <label>Senha</label>
         <input type="password" id="loginSenha" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')fazerLogin()">
       </div>
-      <button class="btn btn-p" style="width:100%;padding:13px;" onclick="fazerLogin()">Entrar →</button>
+      <button class="btn btn-p" style="width:100%;padding:13px;" onclick="fazerLogin()" id="btnLoginWms">Entrar →</button>
       <div id="loginErro" style="color:#f87171;font-size:10px;font-family:var(--mono);margin-top:10px;display:none;text-align:center;padding:8px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);"></div>
     </div>
     <div style="margin-top:12px;text-align:center;">
@@ -3832,30 +3836,34 @@ async function _garantirAuthAnonima(client) {
   }
 }
 /* ═══════════════════════════════════════════════════════════════
-   SPRINT YALOG-WMS-007 — INTEGRAÇÃO COM A YALOG PLATFORM
+   SPRINT YALOG-WMS-007 (revisado na 009) — AUTENTICAÇÃO CONTRA A
+   YALOG PLATFORM
    ───────────────────────────────────────────────────────────────
-   A partir desta Sprint o WMS não tem mais login, usuários nem
-   licença próprios: tudo passa a vir da YALog Platform, via:
-     (a) sessão compartilhada — mesma origem GitHub Pages, chave
-         localStorage 'yalog_admin_session', gravada pela própria
-         Platform no login (Sprint YALOG-PLATFORM-005: objeto plano,
-         sem wrapper `user:{...}`, sobrevive a nova aba/favorito);
-     (b) empresa/licença/módulo, lidas diretamente das tabelas
-         `empresas`/`licencas`/`modulos` do MESMO projeto Supabase
-         (pyckcyaojztixsujbylq) que o WMS já usa para o wms_kv_store
-         — schema e RLS (liberado para a role anon) criados por
-         platform-schema.sql na Sprint YALOG-PLATFORM-003.
+   O WMS não tem login, usuários nem licença PRÓPRIOS: as credenciais
+   (usuarios) e a validação de empresa/licença/módulo vêm sempre das
+   tabelas `empresas`/`usuarios`/`licencas`/`modulos` do MESMO projeto
+   Supabase (pyckcyaojztixsujbylq) que a Platform usa — schema e RLS
+   (liberado para a role anon) criados por platform-schema.sql na
+   Sprint YALOG-PLATFORM-003.
+
+   Sprint YALOG-WMS-009: o SSO via sessão compartilhada (SPRINT
+   YALOG-WMS-007/008, localStorage 'yalog_admin_session') foi
+   REMOVIDO. O WMS voltou a ter tela de login própria (Company ID +
+   Login + Senha, ver fazerLogin()), autenticando DIRETO contra a
+   tabela usuarios da Platform a cada acesso — nunca lê nem grava a
+   sessão compartilhada da Platform, nunca faz login automático. A
+   sessão criada é local ao WMS (Core.sessionSet(SESSAO_KEY,...)).
 
    Client Supabase DEDICADO: o singleton de _obterClienteSupabase()
    é o mesmo que faz Anonymous Sign-In (WMS-006) para o wms_kv_store
    — depois desse sign-in ele passa a falar com o Supabase como role
    `authenticated`, não `anon`, e as policies da Platform (empresas/
-   licencas/modulos) foram escritas para `anon`. Por isso a leitura
-   do contrato da Platform usa um client próprio, que nunca faz
-   sign-in, permanecendo sempre `anon` — evita um 0-resultados
+   usuarios/licencas/modulos) foram escritas para `anon`. Por isso a
+   leitura do contrato da Platform usa um client próprio, que nunca
+   faz sign-in, permanecendo sempre `anon` — evita um 0-resultados
    silencioso por RLS que seria muito difícil de diagnosticar depois.
    ═══════════════════════════════════════════════════════════════ */
-const YALOG_PLATFORM_URL = 'https://yanagizawa-create.github.io/yalog-platform/';
+const YALOG_PLATFORM_URL = 'https://yanagizawa-create.github.io/yalog-platform/'; // não usado mais — SSO removido na 009, mantido por segurança/histórico
 const YALOG_PLATFORM_SESSION_KEY = 'yalog_admin_session';
 // true quando a validação de licença/módulo bloqueia o acesso (item 3) —
 // impede que o hide incondicional do loadingOverlay em bootWMS() reabra
@@ -3869,6 +3877,34 @@ function _obterClientePlatform() {
   try { _platformClientSingleton = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY); }
   catch(e) { console.warn('[Platform] falha ao criar client dedicado:', e); _platformClientSingleton = null; }
   return _platformClientSingleton;
+}
+
+// Sprint YALOG-WMS-009: hash de senha — PORTADO EXATAMENTE da Platform
+// (mesmo material "senha::yalog", mesmo SHA-256 hex, mesmo fallback sem
+// crypto.subtle), porque o WMS agora autentica direto contra o
+// senha_hash gravado pela Platform em usuarios — precisa produzir
+// byte a byte o mesmo hash, senão login nunca bateria.
+async function hashSenha(senha){
+  const material = senha + '::yalog';
+  try{
+    if(typeof crypto!=='undefined' && crypto.subtle && crypto.subtle.digest){
+      const enc=new TextEncoder().encode(material);
+      const buf=await crypto.subtle.digest('SHA-256',enc);
+      return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    }
+  }catch(e){
+    console.warn('[WMS] crypto.subtle indisponível, usando fallback:', e.message);
+  }
+  return _hashFallbackSenha(material);
+}
+function _hashFallbackSenha(str){
+  let h1=0x811c9dc5, h2=5381;
+  for(let i=0;i<str.length;i++){
+    const c=str.charCodeAt(i);
+    h1=Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2=((h2<<5)+h2+c) >>> 0;
+  }
+  return ('00000000'+h1.toString(16)).slice(-8) + ('00000000'+h2.toString(16)).slice(-8);
 }
 
 // Perfis da Platform → perfil interno do WMS. A hierarquia de
@@ -3916,6 +3952,59 @@ function _lerValidacaoCache(companyId) {
     const c = Core.get(YALOG_LICENCA_PLATFORM_CACHE_KEY);
     return (c && c.companyId === companyId && c.ok) ? c : null;
   } catch(e) { return null; }
+}
+
+// Sprint YALOG-WMS-009: cache local do último usuário autenticado com
+// sucesso por company_id+login — mesmo espírito do cache de licença
+// acima (nunca bloqueia offline quem já validou antes), só que aqui
+// pode haver mais de uma combinação empresa+login usando o mesmo WMS,
+// então o cache é um mapa, não um único slot.
+const YALOG_USUARIO_PLATFORM_CACHE_KEY = 'wms_platform_usuario_cache';
+function _salvarUsuarioCache(usuario) {
+  try {
+    const todos = Core.get(YALOG_USUARIO_PLATFORM_CACHE_KEY) || {};
+    todos[usuario.company_id+':'+usuario.login] = usuario;
+    Core.set(YALOG_USUARIO_PLATFORM_CACHE_KEY, todos);
+  } catch(e) {}
+}
+function _lerUsuarioCache(companyId, login) {
+  try {
+    const todos = Core.get(YALOG_USUARIO_PLATFORM_CACHE_KEY) || {};
+    return todos[companyId+':'+login] || null;
+  } catch(e) { return null; }
+}
+
+// Autentica direto contra a tabela usuarios da Platform: existe, está
+// ativo, senha bate (hash) e o perfil é um dos 4 conhecidos. Mesmo
+// padrão de _validarLicencaNaPlatform: erro de CONSULTA cai para o
+// cache; resposta autoritativa "não" nunca usa cache.
+async function _autenticarUsuarioNaPlatform(companyId, login, senha) {
+  const senhaHash = await hashSenha(senha);
+  const client = _obterClientePlatform();
+  if (!client) {
+    const cache = _lerUsuarioCache(companyId, login);
+    if (cache && cache.senha_hash===senhaHash) return {ok:true, usuario:cache, offline:true};
+    return {ok:false, motivo: cache ? 'senha-invalida' : 'sem-conexao-sem-cache'};
+  }
+  try {
+    const { data:usuario, error } = await client.from('usuarios').select('*').eq('company_id', companyId).eq('login', login).single();
+    if (error && error.code !== 'PGRST116') {
+      const cache = _lerUsuarioCache(companyId, login);
+      if (cache && cache.senha_hash===senhaHash) return {ok:true, usuario:cache, offline:true};
+      throw new Error('falha ao consultar usuarios na Platform');
+    }
+    if (!usuario) return {ok:false, motivo:'usuario-nao-encontrado'};
+    if (usuario.ativo === false) return {ok:false, motivo:'usuario-inativo'};
+    if (usuario.senha_hash !== senhaHash) return {ok:false, motivo:'senha-invalida'};
+    if (!YALOG_PLATFORM_PERFIL_MAP[usuario.role]) return {ok:false, motivo:'perfil-nao-autorizado'};
+    _salvarUsuarioCache(usuario);
+    return {ok:true, usuario, offline:false};
+  } catch(err) {
+    console.warn('[Platform] falha ao autenticar usuário — tentando cache local:', err);
+    const cache = _lerUsuarioCache(companyId, login);
+    if (cache && cache.senha_hash===senhaHash) return {ok:true, usuario:cache, offline:true};
+    return {ok:false, motivo:'erro-autenticacao'};
+  }
 }
 
 // Consulta empresas/licencas/modulos na Platform e decide se o WMS
@@ -8554,50 +8643,18 @@ function _limparSessaoCarregada(){
 // licença/módulo e entra automaticamente, ou redireciona.
 // ════════════════════════════════════════
 async function initLogin(){
+  // Sprint YALOG-WMS-009, item 1: sempre exibe a tela de login própria
+  // do WMS — nunca login automático, nem via sessão local antiga, nem
+  // via sessão da Platform (o SSO foi removido; ver fazerLogin() para
+  // a validação de empresa/licença/módulo/usuário/senha, feita direto
+  // no Supabase quando o usuário efetivamente submete o formulário).
   const overlay=document.getElementById('loadingOverlay');
-  const msgEl=document.getElementById('loadingMsg');
-  if(overlay) overlay.style.display='flex';
-  if(msgEl){ msgEl.style.color='#555'; msgEl.textContent='VERIFICANDO SESSÃO...'; }
-
-  const sessaoPlatform=_lerSessaoPlatform();
-  if(!sessaoPlatform){
-    if(msgEl) msgEl.textContent='REDIRECIONANDO PARA A YALOG PLATFORM...';
-    _redirecionarParaPlatform();
-    return;
-  }
-
-  if(msgEl) msgEl.textContent='VALIDANDO LICENÇA E MÓDULO...';
-  const validacao=await _validarLicencaNaPlatform(sessaoPlatform.company_id);
-  if(!validacao.ok){
-    _yalogAcessoBloqueado=true;
-    if(overlay) overlay.style.display='flex';
-    if(msgEl){ msgEl.style.color='#f87171'; msgEl.textContent='Módulo WMS indisponível para esta empresa.'; }
-    console.warn('[Platform] acesso bloqueado:', validacao.motivo);
-    return; // bloqueia definitivamente — o WMS nunca chega a carregar
-  }
-
-  const perfilInterno = YALOG_PLATFORM_PERFIL_MAP[sessaoPlatform.role] || 'conferente';
-  const usuario = {
-    id: sessaoPlatform.company_id+':'+sessaoPlatform.login,
-    nome: sessaoPlatform.nome,
-    login: sessaoPlatform.login,
-    perfil: perfilInterno,
-    company_id: sessaoPlatform.company_id,
-    platformRole: sessaoPlatform.role,
-    ativo: true,
-  };
-  usuarioAtual=usuario;
-  Core.sessionSet(SESSAO_KEY, usuario);
-
-  const empresaNome=(validacao.empresa && (validacao.empresa.nome_fantasia||validacao.empresa.razao_social))||null;
-  if(empresaNome){ _yalogEmpresaNomePlatform=empresaNome; renderLogo(); }
-
   if(overlay) overlay.style.display='none';
-  updateUserPill();
-  updateNavByPerfil();
-  _confirmarSessaoCarregada(usuario);
-  logAuditoria('Login via YALog Platform', usuario.nome, {perfil:usuario.perfil});
-  requestAnimationFrame(()=>requestAnimationFrame(()=>{renderHome();console.log('Dashboard iniciado');}));
+  usuarioAtual=null;
+  Core.sessionRemove(SESSAO_KEY);
+  document.getElementById('loginBoxFirstAccess').style.display='none';
+  document.getElementById('loginBoxNormal').style.display='block';
+  document.getElementById('loginOverlay').style.display='flex';
 }
 
 function renderLoginUsers(){
@@ -8651,41 +8708,97 @@ function selectUser(id){
   if(chip){chip.style.border='1px solid var(--orange)';chip.style.background='rgba(251,146,60,.08)';}
   document.getElementById('loginSenha').focus();
 }
-function fazerLogin(){
+async function fazerLogin(){
   const errEl=document.getElementById('loginErro');
-  const loginInput=document.getElementById('loginUsuario');
-  const loginVal=(loginInput?loginInput.value.trim():'');
+  const companyId=document.getElementById('loginCompanyId').value.trim().toUpperCase();
+  const login=document.getElementById('loginUsuario').value.trim().toLowerCase();
   const senha=document.getElementById('loginSenha').value;
-  // Busca por login digitado
-  const user=loginVal
-    ? DB.usuarios.find(u=>u.login===loginVal&&u.ativo!==false)
-    : (loginSelectedUserId ? DB.usuarios.find(u=>u.id===loginSelectedUserId&&u.ativo!==false) : null);
-  if(!user){
-    errEl.textContent='Usuário "'+loginVal+'" não encontrado ou inativo.';
-    errEl.style.display='block';
-    return;
-  }
-  if(user.senha!==senha){
-    errEl.textContent='Senha incorreta. Tente novamente.';
-    errEl.style.display='block';
-    document.getElementById('loginSenha').value='';
-    document.getElementById('loginSenha').focus();
-    return;
-  }
-  usuarioAtual=user;
-  Core.sessionSet(SESSAO_KEY, user);
-  logAuditoria('Login realizado', user.nome, {perfil:user.perfil});
-  save();
-  document.getElementById('loginOverlay').style.display='none';
   errEl.style.display='none';
-  document.getElementById('loginSenha').value='';
-  if(loginInput)loginInput.value='';
-  loginSelectedUserId=null;
-  updateUserPill();
-  updateNavByPerfil();
-  _confirmarSessaoCarregada(user);
-  requestAnimationFrame(()=>requestAnimationFrame(()=>{renderHome();console.log('Dashboard iniciado');}));
-  showT('Bem-vindo, '+user.nome+'! ('+user.perfil+')','ok');
+
+  if(!companyId||!login||!senha){
+    errEl.textContent='Preencha Company ID, usuário e senha.';
+    errEl.style.display='block';
+    return;
+  }
+
+  const btn=document.getElementById('btnLoginWms');
+  if(btn){ btn.disabled=true; btn.textContent='Entrando...'; }
+
+  try{
+    // Item 3: empresa existente/ativa, licença ativa, módulo WMS liberado
+    // (mesma função já usada e testada, intocada — item 8/offline junto).
+    const validacaoEmpresa=await _validarLicencaNaPlatform(companyId);
+    if(!validacaoEmpresa.ok){
+      const mensagens={
+        'empresa-inativa':'Empresa não encontrada ou inativa.',
+        'licenca-inativa':'Licença inativa para esta empresa.',
+        'licenca-vencida':'Licença vencida para esta empresa.',
+        'modulo-bloqueado':'Módulo WMS não liberado para esta empresa.',
+        'sem-conexao-sem-cache':'Sem conexão e sem dados salvos localmente. Tente novamente com internet.',
+        'erro-validacao':'Não foi possível validar a empresa agora. Tente novamente.',
+      };
+      errEl.textContent=mensagens[validacaoEmpresa.motivo]||'Módulo WMS indisponível para esta empresa.';
+      errEl.style.display='block';
+      return;
+    }
+
+    // Item 3: usuário existente/ativo, senha válida, perfil autorizado.
+    const auth=await _autenticarUsuarioNaPlatform(companyId, login, senha);
+    if(!auth.ok){
+      const mensagens={
+        'usuario-nao-encontrado':'Usuário não encontrado.',
+        'usuario-inativo':'Usuário inativo.',
+        'senha-invalida':'Senha incorreta.',
+        'perfil-nao-autorizado':'Perfil não autorizado.',
+        'sem-conexao-sem-cache':'Sem conexão e sem dados salvos localmente. Tente novamente com internet.',
+        'erro-autenticacao':'Não foi possível validar o usuário agora. Tente novamente.',
+      };
+      errEl.textContent=mensagens[auth.motivo]||'Não foi possível entrar.';
+      errEl.style.display='block';
+      document.getElementById('loginSenha').value='';
+      document.getElementById('loginSenha').focus();
+      return;
+    }
+
+    // Item 6: mapeamento interno permanece exatamente igual.
+    const perfilInterno=YALOG_PLATFORM_PERFIL_MAP[auth.usuario.role]||'conferente';
+    const usuario={
+      id: companyId+':'+login,
+      nome: auth.usuario.nome,
+      login,
+      perfil: perfilInterno,
+      company_id: companyId,
+      platformRole: auth.usuario.role,
+      ativo: true,
+    };
+    usuarioAtual=usuario;
+    // Item 4: sessão LOCAL do WMS — não a sessão compartilhada da
+    // Platform (o SSO foi removido nesta Sprint). Grava exatamente os
+    // 5 campos pedidos; o restante do objeto acima (perfil interno,
+    // id etc.) é reconstruído em tempo de execução, nunca persistido.
+    Core.sessionSet(SESSAO_KEY, {
+      company_id: companyId, login, nome: usuario.nome, role: auth.usuario.role, timestamp: Date.now(),
+    });
+
+    const empresaNome=(validacaoEmpresa.empresa && (validacaoEmpresa.empresa.nome_fantasia||validacaoEmpresa.empresa.razao_social))||null;
+    if(empresaNome){ _yalogEmpresaNomePlatform=empresaNome; renderLogo(); }
+
+    document.getElementById('loginOverlay').style.display='none';
+    errEl.style.display='none';
+    document.getElementById('loginSenha').value='';
+    updateUserPill();
+    updateNavByPerfil();
+    _confirmarSessaoCarregada(usuario);
+    logAuditoria('Login realizado', usuario.nome, {perfil:usuario.perfil, company_id:companyId});
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{renderHome();console.log('Dashboard iniciado');}));
+    showT('Bem-vindo, '+usuario.nome+'!','ok');
+  }catch(e){
+    console.error('[WMS] Erro no login:',e);
+    errEl.textContent='Erro inesperado ao entrar. Tente novamente.';
+    errEl.style.display='block';
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='Entrar →'; }
+  }
 }
 function updateUserPill(){
   if(!usuarioAtual)return;
@@ -10444,14 +10557,21 @@ async function fazerLogoff(){
   logAuditoria('Logout realizado', usuarioAtual?usuarioAtual.nome:'—', {perfil:usuarioAtual?usuarioAtual.perfil:null});
   usuarioAtual=null;
   masterSession=false;
+  // Sprint YALOG-WMS-009, item 5: limpa SOMENTE a sessão local do WMS.
+  // A sessão da Platform (localStorage 'yalog_admin_session'), se
+  // existir, não é tocada — o WMS não depende mais dela e não deve
+  // interferir nela.
   Core.sessionRemove(SESSAO_KEY);
-  // Sprint YALOG-WMS-007/008: encerra a sessão COMPARTILHADA da
-  // Platform (localStorage, mesma origem GitHub Pages) — não só a
-  // cópia local do WMS — e volta para a Platform, de onde um novo
-  // login recomeça.
-  try{ localStorage.removeItem(YALOG_PLATFORM_SESSION_KEY); }catch(e){}
   _limparSessaoCarregada();
-  _redirecionarParaPlatform();
+  updateNavByPerfil();
+  document.getElementById('loginCompanyId').value='';
+  document.getElementById('loginUsuario').value='';
+  document.getElementById('loginSenha').value='';
+  document.getElementById('loginErro').style.display='none';
+  document.getElementById('loginBoxFirstAccess').style.display='none';
+  document.getElementById('loginBoxNormal').style.display='block';
+  document.getElementById('loginOverlay').style.display='flex';
+  showT('Sessão encerrada.','ok');
 }
 
 function updateNavByPerfil(){
