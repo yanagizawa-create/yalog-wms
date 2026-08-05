@@ -1624,7 +1624,7 @@ a{color:inherit;text-decoration:none;}
   </div>
 
   <div id="usuariosMasterPanel" style="display:none;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
       <div style="display:flex;align-items:center;gap:10px;">
         <span class="master-badge">MASTER</span>
         <span style="font-size:13px;font-weight:700;">Gerenciamento de Usuários</span>
@@ -1634,8 +1634,35 @@ a{color:inherit;text-decoration:none;}
         <button class="btn btn-o btn-sm" onclick="sairMaster()">Sair do modo Master</button>
       </div>
     </div>
+    <!-- SPRINT YALOG-WMS-014, item 1: pesquisa/filtros em tempo real,
+         só sobre a lista já carregada (item 14 — sem nova consulta ao
+         Supabase a cada tecla). Mesmo padrão visual de filtEstBusca. -->
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+      <div style="position:relative;display:flex;align-items:center;">
+        <span style="position:absolute;left:10px;color:var(--w40);font-size:13px;pointer-events:none;">🔍</span>
+        <input type="text" id="uFiltroNome" placeholder="Buscar por nome..." oninput="renderUsuarios()" style="padding:8px 12px 8px 32px;background:var(--bg3);border:1px solid var(--border2);color:var(--w);font-family:var(--sans);font-size:11px;width:200px;outline:none;" onfocus="this.style.borderColor='var(--orange)'" onblur="this.style.borderColor='var(--border2)'">
+      </div>
+      <div style="position:relative;display:flex;align-items:center;">
+        <span style="position:absolute;left:10px;color:var(--w40);font-size:13px;pointer-events:none;">🔍</span>
+        <input type="text" id="uFiltroLogin" placeholder="Buscar por login..." oninput="renderUsuarios()" style="padding:8px 12px 8px 32px;background:var(--bg3);border:1px solid var(--border2);color:var(--w);font-family:var(--sans);font-size:11px;width:200px;outline:none;" onfocus="this.style.borderColor='var(--orange)'" onblur="this.style.borderColor='var(--border2)'">
+      </div>
+      <select id="uFiltroPerfil" onchange="renderUsuarios()" class="btn btn-o" style="font-size:10px;cursor:pointer;padding:9px 14px;">
+        <option value="">Todos os Perfis</option>
+        <option value="Master">Master</option>
+        <option value="Líder">Líder</option>
+        <option value="Analista">Analista</option>
+        <option value="Administrativo">Administrativo</option>
+        <option value="Conferente">Conferente</option>
+        <option value="Operador">Operador</option>
+      </select>
+      <select id="uFiltroStatus" onchange="renderUsuarios()" class="btn btn-o" style="font-size:10px;cursor:pointer;padding:9px 14px;">
+        <option value="">Todos os Status</option>
+        <option value="ativo">Ativo</option>
+        <option value="inativo">Inativo</option>
+      </select>
+    </div>
     <div class="tw"><table class="dt">
-      <thead><tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Criado em</th><th>Status</th><th>Ações</th></tr></thead>
+      <thead><tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Criado em</th><th>Último Acesso</th><th>Última Troca de Senha</th><th>Status</th><th>Ações</th></tr></thead>
       <tbody id="tbUsuarios"></tbody>
     </table></div>
   </div>
@@ -1882,16 +1909,22 @@ a{color:inherit;text-decoration:none;}
   <div class="ph">
     <div><div class="ph-eye">Conta</div><div class="ph-title">Minha <em>Conta</em></div></div>
   </div>
+
+  <div class="fsec" style="margin-bottom:16px;">
+    <div class="fsec-t">👤 Dados do Usuário</div>
+    <div class="kpi-grid" id="mcDadosGrid" style="margin-bottom:4px;"></div>
+  </div>
+
   <div class="fsec" style="max-width:420px;">
     <div class="fsec-t">🔑 Alterar Senha</div>
-    <p style="font-size:12px;color:var(--w70);margin-bottom:16px;">Disponível apenas para o usuário logado: <strong id="mcNomeUsuario">—</strong></p>
+    <p style="font-size:12px;color:var(--w70);margin-bottom:16px;">Disponível apenas para o usuário logado — ninguém altera a senha de outra pessoa por aqui.</p>
     <div id="mcFormSenha">
-      <div class="fg" style="margin-bottom:12px;"><label>Nova Senha <span class="req">*</span></label><input type="password" id="mcNovaSenha" placeholder="Mínimo 4 caracteres"></div>
-      <div class="fg" style="margin-bottom:16px;"><label>Confirmar Senha <span class="req">*</span></label><input type="password" id="mcConfirmaSenha" placeholder="Repita a nova senha"></div>
+      <div class="fg" style="margin-bottom:12px;"><label>Senha Atual <span class="req">*</span></label><input type="password" id="mcSenhaAtual" placeholder="Sua senha atual"></div>
+      <div class="fg" style="margin-bottom:12px;"><label>Nova Senha <span class="req">*</span></label><input type="password" id="mcNovaSenha" placeholder="Mínimo 8 caracteres"></div>
+      <div class="fg" style="margin-bottom:16px;"><label>Confirmar Nova Senha <span class="req">*</span></label><input type="password" id="mcConfirmaSenha" placeholder="Repita a nova senha"></div>
       <div id="mcErro" style="display:none;color:#f87171;font-size:11px;margin-bottom:12px;"></div>
-      <button class="btn btn-p" onclick="salvarMinhaConta()">✓ Salvar</button>
+      <button class="btn btn-p" onclick="salvarMinhaConta()">ALTERAR SENHA</button>
     </div>
-    <div id="mcMasterAviso" style="display:none;font-size:12px;color:var(--w40);background:var(--bg3);padding:12px;border-left:2px solid var(--orange);">A senha do usuário Master é gerenciada pela YALog Platform e não pode ser alterada por aqui.</div>
   </div>
 </div>
 
@@ -3172,8 +3205,8 @@ a{color:inherit;text-decoration:none;}
   <div class="mt">Novo Usuário</div>
   <div class="ms">Preencha os dados do novo usuário</div>
   <div class="fg" style="margin-bottom:12px;"><label>Nome Completo <span class="req">*</span></label><input type="text" id="uNome" placeholder="Nome do usuário"></div>
-  <div class="fg" style="margin-bottom:12px;"><label>Login (usuário) <span class="req">*</span></label><input type="text" id="uLogin" placeholder="login.usuario" style="text-transform:lowercase;" oninput="this.value=this.value.toLowerCase()"></div>
-  <div class="fg" style="margin-bottom:12px;"><label>Senha <span class="req">*</span></label><input type="password" id="uSenha" placeholder="Mínimo 4 caracteres"></div>
+  <div class="fg" style="margin-bottom:12px;"><label>Login (usuário) <span class="req">*</span></label><input type="text" id="uLogin" placeholder="login.usuario" style="text-transform:lowercase;" oninput="this.value=this.value.toLowerCase().replace(/\s/g,'')"></div>
+  <div class="fg" style="margin-bottom:12px;"><label>Senha <span class="req">*</span></label><input type="password" id="uSenha" placeholder="Mínimo 8 caracteres"></div>
   <div class="fg" style="margin-bottom:20px;"><label>Perfil <span class="req">*</span></label>
     <select id="uPerfil">
       <option value="">Selecione o perfil...</option>
@@ -3188,14 +3221,16 @@ a{color:inherit;text-decoration:none;}
   <button class="btn btn-p" style="width:100%;" onclick="criarUsuario()">✓ Criar Usuário</button>
 </div></div>
 
-<!-- Sprint YALOG-WMS-011 -->
+<!-- Sprint YALOG-WMS-011. Sprint YALOG-WMS-014: edição restrita a
+     Nome/Perfil/Status — login nunca muda (fora de escopo desta
+     Sprint) e senha passa a ser gerida só via "Resetar Senha". -->
 <div class="mo" id="mEditarUsuarioWMS"><div class="md">
   <button class="mc" onclick="closeM('mEditarUsuarioWMS')">✕</button>
   <div class="mt">Editar Usuário</div>
-  <div class="ms">Dados e credenciais do usuário operacional</div>
+  <div class="ms">Nome, perfil e status do usuário operacional</div>
   <input type="hidden" id="ueId">
+  <div class="fg" style="margin-bottom:12px;"><label>Login</label><input type="text" id="ueLoginSomenteLeitura" disabled style="opacity:.55;cursor:not-allowed;"></div>
   <div class="fg" style="margin-bottom:12px;"><label>Nome Completo <span class="req">*</span></label><input type="text" id="ueNome"></div>
-  <div class="fg" style="margin-bottom:12px;"><label>Login (usuário) <span class="req">*</span></label><input type="text" id="ueLogin" style="text-transform:lowercase;" oninput="this.value=this.value.toLowerCase()"></div>
   <div class="fg" style="margin-bottom:12px;"><label>Perfil <span class="req">*</span></label>
     <select id="uePerfil">
       <option value="Líder">Líder</option>
@@ -3205,11 +3240,36 @@ a{color:inherit;text-decoration:none;}
       <option value="Operador">Operador</option>
     </select>
   </div>
-  <div class="fg" style="margin-bottom:12px;"><label>Status</label>
+  <div class="fg" style="margin-bottom:20px;"><label>Status</label>
     <select id="ueStatus"><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select>
   </div>
-  <div class="fg" style="margin-bottom:20px;"><label>Nova Senha</label><input type="password" id="ueSenha" placeholder="Deixe em branco para manter a atual"></div>
   <button class="btn btn-p" style="width:100%;" onclick="salvarEdicaoUsuarioWMS()">✓ Salvar Alterações</button>
+</div></div>
+
+<!-- MODAL RESETAR SENHA (SPRINT YALOG-WMS-014, item 4) -->
+<!-- Mostra a senha temporária uma única vez; ao fechar, limpa o valor
+     da tela e da memória (item 12 — segurança). -->
+<div class="mo" id="mResetSenha"><div class="md" style="max-width:420px;">
+  <button class="mc" onclick="fecharResetSenha()">✕</button>
+  <div class="mt">Senha Redefinida</div>
+  <div class="ms">Copie agora — esta senha não será mostrada de novo. O usuário deverá trocá-la no próximo login.</div>
+  <div class="fg" style="margin-bottom:16px;">
+    <label>Nova Senha Temporária</label>
+    <input type="text" id="resetSenhaValor" readonly style="font-family:var(--mono);font-weight:700;letter-spacing:.05em;font-size:15px;">
+  </div>
+  <button class="btn btn-p" style="width:100%;" onclick="copiarSenhaReset()">📋 Copiar Senha</button>
+</div></div>
+
+<!-- MODAL TROCA OBRIGATÓRIA DE SENHA (SPRINT YALOG-WMS-013, item 4) -->
+<!-- Sem botão "✕" nem Cancelar de propósito: é bloqueante — só fecha
+     depois que salvarTrocaObrigatoria() tiver sucesso. -->
+<div class="mo" id="mTrocaObrigatoria"><div class="md">
+  <div class="mt">Troca Obrigatória de Senha</div>
+  <div class="ms">Por segurança, defina uma nova senha antes de continuar.</div>
+  <div class="fg" style="margin-bottom:12px;"><label>Nova Senha <span class="req">*</span></label><input type="password" id="tobNovaSenha" placeholder="Mínimo 8 caracteres"></div>
+  <div class="fg" style="margin-bottom:16px;"><label>Confirmar Senha <span class="req">*</span></label><input type="password" id="tobConfirmaSenha" placeholder="Repita a nova senha"></div>
+  <div id="tobErro" style="display:none;color:#f87171;font-size:11px;margin-bottom:12px;"></div>
+  <button class="btn btn-p" style="width:100%;" onclick="salvarTrocaObrigatoria()">ALTERAR SENHA</button>
 </div></div>
 
 <!-- MODAL NOVO ENDEREÇO -->
@@ -8845,13 +8905,25 @@ async function fazerLogin(){
     // consulta de usuário à Platform.
     const usuariosDaEmpresa=DB.usuarios.filter(u=>u.company_id===companyId);
     const localUser=usuariosDaEmpresa.find(u=>u.login===login && u.ativo!==false);
+    // Sprint YALOG-WMS-014, item 7: usuário existe mas está inativo —
+    // mensagem específica, sem cair no fallback de Platform (que
+    // resultaria num genérico "Usuário não encontrado.").
+    const usuarioInativo=usuariosDaEmpresa.find(u=>u.login===login && u.ativo===false && u.perfil!=='master');
+    if(!localUser && usuarioInativo){
+      errEl.textContent='Usuário desativado. Contate o administrador da empresa.';
+      errEl.style.display='block';
+      document.getElementById('loginSenha').value='';
+      document.getElementById('loginSenha').focus();
+      return;
+    }
+    const senhaHashDigitada=await hashSenha(senha);
+    const localBate=!!(localUser && localUser.senha_hash && localUser.senha_hash===senhaHashDigitada);
     let usuario=null;
 
-    if(localUser){
-      // Item 8: valida senha 100% local — nunca consulta a Platform
-      // para usuário operacional.
-      const senhaHash=await hashSenha(senha);
-      if(localUser.senha_hash!==senhaHash){
+    if(localUser && localUser.perfil!=='master'){
+      // Item 8: usuário operacional — valida senha 100% local, nunca
+      // consulta a Platform.
+      if(!localBate){
         errEl.textContent='Senha incorreta.';
         errEl.style.display='block';
         document.getElementById('loginSenha').value='';
@@ -8862,10 +8934,19 @@ async function fazerLogin(){
         id: localUser.id, nome: localUser.nome, login: localUser.login,
         perfil: localUser.perfil, company_id: companyId, platformRole: null, ativo: true,
       };
+    }else if(localUser && localUser.perfil==='master' && localBate){
+      // Sprint YALOG-WMS-013: Master com hash local já configurado (via
+      // "Minha Conta", ou de um login anterior confirmado pela
+      // Platform) — autentica 100% local, sem depender da Platform.
+      usuario={
+        id: localUser.id, nome: localUser.nome, login: localUser.login,
+        perfil: 'master', company_id: companyId, platformRole: localUser.platformRole||null, ativo: true,
+      };
     }else{
-      // Item 2/7: não é usuário operacional local — só resta a
-      // hipótese de ser o Usuário Master (ou um administrador YALog),
-      // que sempre vem da Platform.
+      // Sem cadastro local (primeiro acesso) OU é o Master com hash
+      // local ausente/desatualizado (ex.: senha redefinida pela
+      // Platform — item 3, compatibilidade com Reset da Platform) —
+      // só resta tentar a Platform.
       const auth=await _autenticarUsuarioNaPlatform(companyId, login, senha);
       if(!auth.ok){
         const mensagens={
@@ -8893,23 +8974,39 @@ async function fazerLogin(){
         errEl.style.display='block';
         return;
       }
-      usuario={
-        id: companyId+':'+login, nome: auth.usuario.nome, login,
-        perfil: 'master', company_id: companyId, platformRole: auth.usuario.role, ativo: true,
-      };
       // Item 7: o Master é espelhado localmente — é assim que aparece
       // (protegido, sem editar/excluir) na tela de Usuários do WMS.
-      const masterLocal=DB.usuarios.find(u=>u.company_id===companyId && u.perfil==='master');
-      if(masterLocal){ masterLocal.nome=usuario.nome; masterLocal.login=login; masterLocal.updatedAt=now(); }
-      else DB.usuarios.push({
-        id:'master-'+companyId, company_id:companyId, login, nome:usuario.nome,
-        perfil:'master', perfilExibicao:'Master', platformSourced:true,
-        ativo:true, createdAt:now(), updatedAt:now(),
-      });
+      // Sprint YALOG-WMS-013: a Platform acabou de confirmar que esta
+      // senha está correta — cacheia o hash local (mesma hashSenha() de
+      // sempre) pra os próximos logins do Master funcionarem 100% pelo
+      // WMS, sem depender mais da Platform (item 3/objetivo da Sprint).
+      let masterLocal=DB.usuarios.find(u=>u.company_id===companyId && u.perfil==='master');
+      if(masterLocal){
+        masterLocal.nome=auth.usuario.nome; masterLocal.login=login;
+        masterLocal.senha_hash=senhaHashDigitada; masterLocal.updatedAt=now();
+      }else{
+        masterLocal={
+          id:'master-'+companyId, company_id:companyId, login, nome:auth.usuario.nome,
+          perfil:'master', perfilExibicao:'Master', platformSourced:true,
+          senha_hash:senhaHashDigitada, obrigar_troca_senha:false,
+          ativo:true, createdAt:now(), updatedAt:now(),
+        };
+        DB.usuarios.push(masterLocal);
+      }
       save();
+      // Sprint YALOG-WMS-013: usa o id do registro espelhado local (não
+      // mais o sintético "companyId:login") — é o mesmo id usado por
+      // "Minha Conta"/troca obrigatória de senha para achar o registro.
+      usuario={
+        id: masterLocal.id, nome: auth.usuario.nome, login,
+        perfil: 'master', company_id: companyId, platformRole: auth.usuario.role, ativo: true,
+      };
     }
 
     usuarioAtual=usuario;
+    // Sprint YALOG-WMS-013, item 5: função independente, chamada só
+    // depois do login concluído — nunca interfere na autenticação.
+    registrarUltimoLogin(usuario);
     // Item 4: sessão LOCAL do WMS — não a sessão compartilhada da
     // Platform (o SSO foi removido na Sprint YALOG-WMS-009). Grava
     // exatamente os 5 campos pedidos; o restante do objeto acima
@@ -8928,9 +9025,25 @@ async function fazerLogin(){
     updateUserPill();
     updateNavByPerfil();
     _confirmarSessaoCarregada(usuario);
-    logAuditoria('Login realizado', usuario.nome, {perfil:usuario.perfil, company_id:companyId});
-    requestAnimationFrame(()=>requestAnimationFrame(()=>{renderHome();console.log('Dashboard iniciado');}));
-    showT('Bem-vindo, '+usuario.nome+'!','ok');
+    // Sprint YALOG-WMS-013, item 6: identificador exato pedido, com
+    // Company ID/Login/Perfil/Data/Hora.
+    {
+      const _agoraLogin=now();
+      logAuditoria('LOGIN_REALIZADO', usuario.nome, {
+        company_id:companyId, login:usuario.login, perfil:usuario.perfil,
+        data:_agoraLogin.split('T')[0], hora:(_agoraLogin.split('T')[1]||'').slice(0,8),
+      });
+    }
+    // Sprint YALOG-WMS-013, item 4: se o usuário está marcado para
+    // trocar a senha, não abre o Dashboard — abre o modal obrigatório
+    // primeiro, e só libera o WMS normalmente depois da troca.
+    const _uParaTroca=DB.usuarios.find(x=>x.id===usuario.id);
+    if(_uParaTroca && _uParaTroca.obrigar_troca_senha===true){
+      abrirTrocaObrigatoria(usuario);
+    }else{
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{renderHome();console.log('Dashboard iniciado');}));
+      showT('Bem-vindo, '+usuario.nome+'!','ok');
+    }
   }catch(e){
     console.error('[WMS] Erro no login:',e);
     errEl.textContent='Erro inesperado ao entrar. Tente novamente.';
@@ -8938,6 +9051,67 @@ async function fazerLogin(){
   }finally{
     if(btn){ btn.disabled=false; btn.textContent='Entrar →'; }
   }
+}
+// Sprint YALOG-WMS-013, item 5: função independente — só registra o
+// carimbo de último login, chamada depois que o login já terminou.
+// Nunca interfere na autenticação (não decide quem entra, não valida
+// nada, só grava um dado exibido em "Minha Conta").
+function registrarUltimoLogin(usuario){
+  const u=DB.usuarios.find(x=>x.id===usuario.id);
+  if(u){ u.ultimo_login=now(); save(); }
+}
+// Sprint YALOG-WMS-013, item 4: abre o modal de troca obrigatória de
+// senha (obrigar_troca_senha=true) em vez do Dashboard. Só fecha e
+// libera o WMS depois que salvarTrocaObrigatoria() tiver sucesso.
+let _usuarioTrocaObrigatoria=null;
+function abrirTrocaObrigatoria(usuario){
+  _usuarioTrocaObrigatoria=usuario;
+  const erroEl=document.getElementById('tobErro');if(erroEl)erroEl.style.display='none';
+  ['tobNovaSenha','tobConfirmaSenha'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  openM('mTrocaObrigatoria');
+}
+async function salvarTrocaObrigatoria(){
+  const erroEl=document.getElementById('tobErro');
+  erroEl.style.display='none';
+  function erro(msg){erroEl.textContent=msg;erroEl.style.display='block';}
+
+  const nova=document.getElementById('tobNovaSenha').value;
+  const confirma=document.getElementById('tobConfirmaSenha').value;
+  if(!nova){erro('Informe a nova senha.');return;}
+  if(!confirma){erro('Confirme a nova senha.');return;}
+  if(nova.length<8){erro('A nova senha deve ter no mínimo 8 caracteres.');return;}
+  if(nova!==confirma){erro('A confirmação não coincide com a nova senha.');return;}
+
+  const alvo=_usuarioTrocaObrigatoria||usuarioAtual;
+  const u=alvo&&DB.usuarios.find(x=>x.id===alvo.id);
+  if(!u){erro('Usuário não encontrado.');return;}
+
+  const hashNova=await hashSenha(nova);
+  if(u.senha_hash&&hashNova===u.senha_hash){erro('A nova senha deve ser diferente da senha atual.');return;}
+
+  // Mesma função de hash usada pelo login — nunca grava senha em
+  // texto puro. Mantém demais campos intactos: id/login/perfil/
+  // empresa não mudam.
+  const agora=now();
+  u.senha_hash=hashNova;
+  u.data_alteracao_senha=agora;
+  u.obrigar_troca_senha=false; // item 4 — limpa o indicador após sucesso
+  u.updatedAt=agora;
+  save(); // item 8: sessão atual não é derrubada, sem reload/redirect
+
+  logAuditoria('USUARIO_ALTEROU_PROPRIA_SENHA', u.nome, {
+    company_id:u.company_id, login:u.login, perfil:u.perfil,
+    data:agora.split('T')[0], hora:(agora.split('T')[1]||'').slice(0,8),
+  });
+
+  // Item 7: nunca guarda a senha em memória depois de salvar.
+  document.getElementById('tobNovaSenha').value='';
+  document.getElementById('tobConfirmaSenha').value='';
+  _usuarioTrocaObrigatoria=null;
+  closeM('mTrocaObrigatoria');
+  // Só agora libera o WMS normalmente (item 4).
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{renderHome();console.log('Dashboard iniciado');}));
+  showT('Senha alterada com sucesso. Bem-vindo, '+u.nome+'!','ok');
 }
 function updateUserPill(){
   if(!usuarioAtual)return;
@@ -9058,6 +9232,20 @@ function podeCadastrarUsuarios(){
   return usuarioAtual&&(usuarioAtual.perfil==='master'||usuarioAtual.perfil==='lider'||usuarioAtual.perfil==='analista');
 }
 
+// Sprint YALOG-WMS-014, item 11: helper único para montar a auditoria
+// de usuário sempre com os 6 campos pedidos (Company ID/Usuário
+// responsável/Usuário afetado/Perfil/Data/Hora), sem duplicar isso em
+// cada função. Nunca inclui senha/hash.
+function _auditoriaUsuario(acao, alvo){
+  const agora=now();
+  logAuditoria(acao, alvo.nome, {
+    company_id: alvo.company_id,
+    responsavel: usuarioAtual?(usuarioAtual.nome+' ('+usuarioAtual.login+')'):'—',
+    afetado: alvo.nome+' ('+alvo.login+')',
+    perfil: alvo.perfilExibicao||alvo.perfil,
+    data: agora.split('T')[0], hora: agora.split('T')[1].slice(0,8),
+  });
+}
 async function criarUsuario(){
   // Sprint YALOG-WMS-011: usuários operacionais geridos 100% pelo WMS.
   // Sprint YALOG-WMS-012: matriz oficial de perfis — cadastro de
@@ -9069,20 +9257,24 @@ async function criarUsuario(){
   const senha=document.getElementById('uSenha').value;
   const rotulo=document.getElementById('uPerfil').value;
   const perfil=WMS_PERFIL_OPERACIONAL_MAP[rotulo];
-  if(!nome||!login||!senha||!perfil){showT('Preencha todos os campos','err');return;}
+  // Sprint YALOG-WMS-014, item 2: validações de cadastro.
+  if(!nome){showT('Nome é obrigatório','err');return;}
+  if(!login){showT('Login é obrigatório','err');return;}
+  if(/\s/.test(login)){showT('Login não pode conter espaços','err');return;}
+  if(!perfil){showT('Perfil é obrigatório','err');return;}
+  if(!senha||senha.length<8){showT('Senha mínima: 8 caracteres','err');return;}
   const companyId=usuarioAtual.company_id;
-  // Item 9: toda consulta filtrada por company_id da sessão.
+  // Item 13: toda consulta filtrada por company_id da sessão — login
+  // único dentro da empresa.
   if(DB.usuarios.find(u=>u.company_id===companyId&&u.login===login)){showT('Login já existe','err');return;}
-  if(senha.length<4){showT('Senha mínima: 4 caracteres','err');return;}
-  // Item 5: company_id, login, senha (hash — nunca texto puro), nome,
-  // perfil, status, created_at/updated_at.
   const agora=now();
-  DB.usuarios.push({
+  const novoUsuario={
     id:Date.now().toString(), company_id:companyId, login,
     senha_hash:await hashSenha(senha), nome, perfil, perfilExibicao:rotulo,
-    ativo:true, createdAt:agora, updatedAt:agora,
-  });
-  logAuditoria('Usuário criado', nome, {perfil:rotulo, company_id:companyId});
+    ativo:true, obrigar_troca_senha:false, createdAt:agora, updatedAt:agora,
+  };
+  DB.usuarios.push(novoUsuario);
+  _auditoriaUsuario('USUARIO_CRIADO', novoUsuario);
   save();['uNome','uLogin','uSenha'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('uPerfil').value='';
   closeM('mNovoUsuario');renderUsuarios();showT(`Usuário "${nome}" criado!`,'ok');
@@ -9092,10 +9284,10 @@ function renderUsuarios(){
   const podeGerir=podeGerirUsuarios()||masterSession;
   document.getElementById('usuariosMasterBlock').style.display=isMasterMode?'none':'block';
   document.getElementById('usuariosMasterPanel').style.display=isMasterMode?'block':'none';
-  // Item 9: nunca listar usuários de outra empresa — tudo filtrado pelo
-  // company_id da sessão atual.
+  // Item 13: nunca listar usuários de outra empresa — tudo filtrado
+  // pelo company_id da sessão atual.
   const companyId=usuarioAtual?usuarioAtual.company_id:null;
-  const usuariosDaEmpresa=companyId?DB.usuarios.filter(u=>u.company_id===companyId):[];
+  let usuariosDaEmpresa=companyId?DB.usuarios.filter(u=>u.company_id===companyId):[];
   document.getElementById('usuariosListPublic').innerHTML=`
     <table class="dt"><thead><tr><th>Nome</th><th>Login</th><th>Perfil</th></tr></thead>
     <tbody>${usuariosDaEmpresa.filter(u=>u.ativo!==false).map(u=>`<tr>
@@ -9103,14 +9295,35 @@ function renderUsuarios(){
       <td>${perfilBadge(u.perfil,u.perfilExibicao)}</td>
     </tr>`).join('')}</tbody></table>`;
   if(!isMasterMode)return;
-  document.getElementById('tbUsuarios').innerHTML=usuariosDaEmpresa.map(u=>`<tr>
+
+  // Sprint YALOG-WMS-014, item 1/14: pesquisa e filtros em tempo real,
+  // 100% sobre a lista já carregada em memória — nenhuma nova consulta
+  // ao Supabase é disparada por tecla digitada.
+  const elNome=document.getElementById('uFiltroNome'), elLogin=document.getElementById('uFiltroLogin');
+  const elPerfil=document.getElementById('uFiltroPerfil'), elStatus=document.getElementById('uFiltroStatus');
+  const fNome=(elNome?.value||'').trim().toLowerCase();
+  const fLogin=(elLogin?.value||'').trim().toLowerCase();
+  const fPerfil=elPerfil?.value||'';
+  const fStatus=elStatus?.value||'';
+  let listaFiltrada=usuariosDaEmpresa;
+  if(fNome)listaFiltrada=listaFiltrada.filter(u=>(u.nome||'').toLowerCase().includes(fNome));
+  if(fLogin)listaFiltrada=listaFiltrada.filter(u=>(u.login||'').toLowerCase().includes(fLogin));
+  if(fPerfil)listaFiltrada=listaFiltrada.filter(u=>(u.perfilExibicao||'')===fPerfil);
+  if(fStatus)listaFiltrada=listaFiltrada.filter(u=>fStatus==='ativo'?u.ativo!==false:u.ativo===false);
+
+  const fmtAcesso=(iso)=> iso ? (fD(iso.split('T')[0])+' '+(iso.split('T')[1]||'').slice(0,5)) : 'Nunca acessou';
+  const fmtTroca=(iso)=> iso ? (fD(iso.split('T')[0])+' '+(iso.split('T')[1]||'').slice(0,5)) : 'Nunca alterada';
+
+  document.getElementById('tbUsuarios').innerHTML=listaFiltrada.map(u=>`<tr>
     <td class="bd">${u.nome}</td>
     <td class="mn">${u.login}</td>
     <td>${perfilBadge(u.perfil,u.perfilExibicao)}</td>
     <td class="mn">${fD(u.createdAt?u.createdAt.split('T')[0]:'—')}</td>
+    <td class="mn" style="font-size:10px;">${fmtAcesso(u.ultimo_login)}</td>
+    <td class="mn" style="font-size:10px;">${fmtTroca(u.data_alteracao_senha)}</td>
     <td>${u.ativo!==false?'<span class="bg bg-gr">Ativo</span>':'<span class="bg bg-re">Inativo</span>'}</td>
     <td>
-      ${u.perfil==='master'?'<span style="font-size:10px;color:var(--w40);">— vem da YALog Platform</span>':(podeGerir?`<button class="btn btn-o btn-xs" onclick="editarUsuario('${u.id}')">Editar</button> <button class="btn btn-r btn-xs" onclick="desativarUsuario('${u.id}')">${u.ativo!==false?'Desativar':'Ativar'}</button> <button class="btn btn-r btn-xs" onclick="excluirUsuario('${u.id}')">Excluir</button>`:'<span style="font-size:10px;color:var(--w40);">— cadastro (Analista)</span>')}
+      ${u.perfil==='master'?'<span style="font-size:10px;color:var(--w40);">— vem da YALog Platform</span>':(podeGerir?`<button class="btn btn-o btn-xs" onclick="editarUsuario('${u.id}')">Editar</button> <button class="btn btn-b btn-xs" onclick="resetarSenhaUsuario('${u.id}')">Resetar Senha</button> <button class="btn btn-r btn-xs" onclick="desativarUsuario('${u.id}')">${u.ativo!==false?'Desativar':'Ativar'}</button>`:'<span style="font-size:10px;color:var(--w40);">— cadastro (Analista)</span>')}
     </td>
   </tr>`).join('');
   document.getElementById('masterNomeDisplay').textContent=usuariosDaEmpresa.find(u=>u.perfil==='master')?.nome||'Master';
@@ -9118,28 +9331,31 @@ function renderUsuarios(){
 async function desativarUsuario(id){
   if(!masterSession&&!podeGerirUsuarios()){showT('Ação requer Master ou Líder','err');return;}
   const u=DB.usuarios.find(x=>x.id===id&&x.company_id===usuarioAtual.company_id);if(!u)return;
+  // Item 9/10: Master nunca pode ser desativado, nem pelo próprio Master.
   if(u.perfil==='master'){showT('Não é possível desativar o Master','err');return;}
   const vaiAtivar=u.ativo===false;
   if(!vaiAtivar&&!await wmsConfirm(`Desativar usuário "${u.nome}"?\n\nO usuário não conseguirá mais acessar o sistema.`,'Desativar Usuário','🔒','🔒 Desativar'))return;
   u.ativo=vaiAtivar; u.updatedAt=now();
-  logAuditoria(vaiAtivar?'Usuário ativado':'Usuário desativado', u.nome, {perfil:u.perfilExibicao||u.perfil, company_id:u.company_id});
+  // Sprint YALOG-WMS-014, item 11: identificadores exatos pedidos.
+  _auditoriaUsuario(vaiAtivar?'USUARIO_ATIVADO':'USUARIO_DESATIVADO', u);
   save();renderUsuarios();showT(vaiAtivar?'Usuário ativado':'Usuário desativado','ok');
 }
-// Sprint YALOG-WMS-011 — Alterações 04-07: editar e excluir usuário
-// operacional, sempre restrito à empresa da sessão e nunca ao Master.
-// Sprint YALOG-WMS-012: gestão (editar/desativar/excluir) passa a ser
+// Sprint YALOG-WMS-011 — Alterações 04-07: editar usuário operacional,
+// sempre restrito à empresa da sessão e nunca ao Master.
+// Sprint YALOG-WMS-012: gestão (editar/desativar) passa a ser
 // Master+Líder — Analista só cadastra (ver criarUsuario/podeCadastrarUsuarios).
+// Sprint YALOG-WMS-014, item 3: edição restrita a Nome/Perfil/Status —
+// login, company_id, empresa e id interno nunca mudam por aqui.
 function editarUsuario(id){
   if(!masterSession&&!podeGerirUsuarios()){showT('Ação requer Master ou Líder','err');return;}
   const u=DB.usuarios.find(x=>x.id===id&&x.company_id===usuarioAtual.company_id);
   if(!u){showT('Usuário não encontrado','err');return;}
   if(u.perfil==='master'){showT('O usuário Master é gerenciado pela YALog Platform','err');return;}
   document.getElementById('ueId').value=u.id;
+  document.getElementById('ueLoginSomenteLeitura').value=u.login;
   document.getElementById('ueNome').value=u.nome;
-  document.getElementById('ueLogin').value=u.login;
   document.getElementById('uePerfil').value=u.perfilExibicao||Object.keys(WMS_PERFIL_OPERACIONAL_MAP).find(k=>WMS_PERFIL_OPERACIONAL_MAP[k]===u.perfil)||'Conferente';
   document.getElementById('ueStatus').value=u.ativo!==false?'ativo':'inativo';
-  document.getElementById('ueSenha').value='';
   openM('mEditarUsuarioWMS');
 }
 async function salvarEdicaoUsuarioWMS(){
@@ -9151,91 +9367,158 @@ async function salvarEdicaoUsuarioWMS(){
   if(u.perfil==='master'){showT('O usuário Master é gerenciado pela YALog Platform','err');return;}
 
   const nome=document.getElementById('ueNome').value.trim();
-  const login=document.getElementById('ueLogin').value.trim();
   const rotulo=document.getElementById('uePerfil').value;
   const perfil=WMS_PERFIL_OPERACIONAL_MAP[rotulo];
   const status=document.getElementById('ueStatus').value;
-  const senha=document.getElementById('ueSenha').value;
-  if(!nome||!login||!perfil){showT('Preencha todos os campos obrigatórios','err');return;}
-  if(login!==u.login && DB.usuarios.find(x=>x.company_id===companyId&&x.login===login)){showT('Login já existe','err');return;}
-  if(senha && senha.length<4){showT('Senha mínima: 4 caracteres','err');return;}
+  if(!nome){showT('Nome é obrigatório','err');return;}
+  if(!perfil){showT('Perfil é obrigatório','err');return;}
 
   const camposAlterados=[];
-  const perfilAntigo=u.perfilExibicao||u.perfil;
-  let perfilMudou=false, senhaMudou=false;
   if(nome!==u.nome){u.nome=nome;camposAlterados.push('Nome');}
-  if(login!==u.login){u.login=login;camposAlterados.push('Login');}
-  if(rotulo!==u.perfilExibicao){u.perfil=perfil;u.perfilExibicao=rotulo;camposAlterados.push('Perfil');perfilMudou=true;}
+  if(rotulo!==u.perfilExibicao){u.perfil=perfil;u.perfilExibicao=rotulo;camposAlterados.push('Perfil');}
   const ativoNovo=(status==='ativo');
   if(ativoNovo!==(u.ativo!==false)){u.ativo=ativoNovo;camposAlterados.push('Status');}
-  if(senha){u.senha_hash=await hashSenha(senha);camposAlterados.push('Senha');senhaMudou=true;}
 
   if(!camposAlterados.length){showT('Nenhuma alteração para salvar','info');closeM('mEditarUsuarioWMS');return;}
   u.updatedAt=now();
-  // Sprint YALOG-WMS-012, item Auditoria: eventos dedicados além do
-  // registro geral, mesmo padrão de logAuditoria já usado no resto do
-  // sistema.
-  logAuditoria('ALTERAÇÃO_DE_USUÁRIO', u.nome, {campos:camposAlterados.join(', '), company_id:companyId});
-  if(perfilMudou)logAuditoria('ALTERAÇÃO_DE_PERFIL', u.nome, {de:perfilAntigo, para:rotulo, company_id:companyId});
-  if(senhaMudou)logAuditoria('ALTERAÇÃO_DE_SENHA', u.nome, {company_id:companyId});
+  // Sprint YALOG-WMS-014, item 11: identificador exato pedido.
+  _auditoriaUsuario('USUARIO_EDITADO', u);
   save();closeM('mEditarUsuarioWMS');renderUsuarios();showT('Usuário atualizado','ok');
 }
-async function excluirUsuario(id){
+// Sprint YALOG-WMS-014, item 4: reset de senha — disponível só a
+// Master/Líder (podeGerirUsuarios), nunca para o Master, gera uma
+// senha temporária YLG-XXXXXX e marca obrigar_troca_senha=true.
+let _senhaResetVisivel=false;
+function _gerarSenhaTemporaria(){
+  // Sem caracteres ambíguos (0/O, 1/I).
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s='';
+  for(let i=0;i<6;i++)s+=chars[Math.floor(Math.random()*chars.length)];
+  return 'YLG-'+s;
+}
+async function resetarSenhaUsuario(id){
   if(!masterSession&&!podeGerirUsuarios()){showT('Ação requer Master ou Líder','err');return;}
-  const companyId=usuarioAtual.company_id;
-  const u=DB.usuarios.find(x=>x.id===id&&x.company_id===companyId);
+  const u=DB.usuarios.find(x=>x.id===id&&x.company_id===usuarioAtual.company_id);
   if(!u){showT('Usuário não encontrado','err');return;}
-  if(u.perfil==='master'){showT('Não é possível excluir o Master','err');return;}
-  if(!await wmsConfirm(`Excluir definitivamente o usuário "${u.nome}"?\n\nEsta ação não pode ser desfeita.`,'Excluir Usuário','🗑️','🗑️ Excluir'))return;
-  DB.usuarios=DB.usuarios.filter(x=>!(x.id===id&&x.company_id===companyId));
-  logAuditoria('Usuário excluído', u.nome, {perfil:u.perfilExibicao||u.perfil, company_id:companyId});
-  save();renderUsuarios();showT('Usuário excluído','ok');
+  // Item 10: Líder nunca reseta a senha do Master (e nem o próprio
+  // Master usa este botão — a senha dele se troca por "Minha Conta").
+  if(u.perfil==='master'){showT('A senha do Master não é redefinida por aqui — use Minha Conta','err');return;}
+  if(!await wmsConfirm(`Gerar uma nova senha temporária para "${u.nome}"?\n\nA senha atual deixará de funcionar e o usuário precisará trocá-la no próximo login.`,'Resetar Senha','🔑','🔑 Gerar Nova Senha'))return;
+  const temp=_gerarSenhaTemporaria();
+  u.senha_hash=await hashSenha(temp);
+  u.obrigar_troca_senha=true;
+  u.updatedAt=now();
+  save();
+  // Item 11/12: auditoria nunca inclui a senha em si, só o evento.
+  _auditoriaUsuario('USUARIO_RESETADO', u);
+  document.getElementById('resetSenhaValor').value=temp;
+  _senhaResetVisivel=true;
+  openM('mResetSenha');
+  renderUsuarios();
+  showT('Senha redefinida','ok');
+}
+function copiarSenhaReset(){
+  const el=document.getElementById('resetSenhaValor');
+  const valor=el.value;
+  if(!valor)return;
+  const copiar=()=>showT('Senha copiada','ok');
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(valor).then(copiar).catch(()=>{el.select();document.execCommand('copy');copiar();});
+  }else{
+    el.select();document.execCommand('copy');copiar();
+  }
+}
+// Item 12: ao fechar, limpa o valor da tela e a flag — a senha
+// temporária não fica guardada em nenhuma variável depois disso.
+function fecharResetSenha(){
+  _senhaResetVisivel=false;
+  document.getElementById('resetSenhaValor').value='';
+  closeM('mResetSenha');
 }
 
 // ════════════════════════════════════════
-// MINHA CONTA (SPRINT YALOG-WMS-012)
+// MINHA CONTA (SPRINT YALOG-WMS-012, atualizada na YALOG-WMS-013)
 // ════════════════════════════════════════
-// Disponível apenas para o usuário logado, para trocar a própria
-// senha. IMPORTANTE: o Master autentica direto contra a YALog Platform
-// a cada login (Sprint YALOG-WMS-009) — seu senha_hash local é só um
-// espelho, nunca é de fato checado no login. Trocar esse campo local
-// não teria efeito real na senha do Master, então em vez de simular
-// uma troca que não funcionaria, mostramos um aviso direcionando à
-// Platform (mesmo padrão já usado na tela de Usuários para o Master:
-// "vem da YALog Platform"). Para os demais perfis (operacionais), a
-// senha É validada localmente, então a troca funciona de verdade.
+// Permite que o usuário autenticado troque a própria senha sem
+// depender da Platform. Sprint YALOG-WMS-013: o Master agora também
+// autentica localmente (ver fazerLogin) — seu senha_hash é cacheado no
+// primeiro login validado pela Platform e a partir daí "Minha Conta"
+// funciona pra ele exatamente como pra qualquer outro perfil, sem
+// tratamento especial nem bloqueio.
 function renderMinhaConta(){
-  const nomeEl=document.getElementById('mcNomeUsuario');
-  if(nomeEl)nomeEl.textContent=usuarioAtual?usuarioAtual.nome:'—';
-  const form=document.getElementById('mcFormSenha');
-  const aviso=document.getElementById('mcMasterAviso');
-  const ehMaster=isMaster();
-  if(form)form.style.display=ehMaster?'none':'block';
-  if(aviso)aviso.style.display=ehMaster?'block':'none';
+  const u=usuarioAtual&&DB.usuarios.find(x=>x.id===usuarioAtual.id);
+  const grid=document.getElementById('mcDadosGrid');
+  if(grid&&usuarioAtual&&u){
+    const rotuloPerfil=u.perfilExibicao||(PERFIS[usuarioAtual.perfil]&&PERFIS[usuarioAtual.perfil].label)||usuarioAtual.perfil;
+    const empresa=DB.logo?.nome||'—';
+    const fmtData=(iso)=> iso ? (fD(iso.split('T')[0])+' '+(iso.split('T')[1]||'').slice(0,5)) : '—';
+    const linhas=[
+      ['Nome',u.nome||'—'],
+      ['Login',u.login||'—'],
+      ['Perfil',rotuloPerfil],
+      ['Empresa',empresa],
+      ['Company ID',u.company_id||'—'],
+      ['Último Login',fmtData(u.ultimo_login)],
+      ['Última Alteração de Senha',fmtData(u.data_alteracao_senha)],
+    ];
+    grid.innerHTML=linhas.map(([l,v])=>`<div class="kc"><div class="kv" style="font-size:15px;">${v}</div><div class="kl">${l}</div></div>`).join('');
+  }
   const erroEl=document.getElementById('mcErro');if(erroEl)erroEl.style.display='none';
-  const n1=document.getElementById('mcNovaSenha'),n2=document.getElementById('mcConfirmaSenha');
-  if(n1)n1.value='';if(n2)n2.value='';
+  ['mcSenhaAtual','mcNovaSenha','mcConfirmaSenha'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
 }
 async function salvarMinhaConta(){
   if(!usuarioAtual){showT('Sessão inválida','err');return;}
-  if(isMaster()){showT('A senha do Master é gerenciada pela YALog Platform','err');return;}
   const erroEl=document.getElementById('mcErro');
   erroEl.style.display='none';
+  function erro(msg){erroEl.textContent=msg;erroEl.style.display='block';}
+
+  const senhaAtual=document.getElementById('mcSenhaAtual').value;
   const novaSenha=document.getElementById('mcNovaSenha').value;
   const confirmaSenha=document.getElementById('mcConfirmaSenha').value;
-  if(!novaSenha||novaSenha.length<4){erroEl.textContent='A senha deve ter no mínimo 4 caracteres.';erroEl.style.display='block';return;}
-  if(novaSenha!==confirmaSenha){erroEl.textContent='As senhas não coincidem.';erroEl.style.display='block';return;}
+
+  if(!senhaAtual){erro('Informe a senha atual.');return;}
+  if(!novaSenha){erro('Informe a nova senha.');return;}
+  if(!confirmaSenha){erro('Confirme a nova senha.');return;}
+  if(novaSenha.length<8){erro('A nova senha deve ter no mínimo 8 caracteres.');return;}
+  if(novaSenha!==confirmaSenha){erro('A confirmação não coincide com a nova senha.');return;}
+
   const u=DB.usuarios.find(x=>x.id===usuarioAtual.id);
-  if(!u){erroEl.textContent='Usuário não encontrado.';erroEl.style.display='block';return;}
+  if(!u){erro('Usuário não encontrado.');return;}
+
+  if(!u.senha_hash){
+    // Só pode acontecer num registro que nunca fez login local
+    // nenhuma vez ainda (ex.: acabou de ser espelhado). Não há como
+    // validar "senha atual" sem um hash de referência.
+    erro('Não é possível validar a senha atual deste usuário ainda. Faça login novamente e tente de novo.');
+    return;
+  }
+  const hashAtualDigitado=await hashSenha(senhaAtual);
+  if(hashAtualDigitado!==u.senha_hash){erro('Senha atual incorreta.');return;}
+
+  const hashNova=await hashSenha(novaSenha);
+  if(hashNova===u.senha_hash){erro('A nova senha deve ser diferente da senha atual.');return;}
+
   // Mesma função de hash usada pelo login (hashSenha) — nunca grava
-  // senha em texto puro.
-  u.senha_hash=await hashSenha(novaSenha);
-  u.updatedAt=now();
-  save();
-  logAuditoria('ALTERAÇÃO_DE_SENHA', u.nome, {company_id:u.company_id});
-  document.getElementById('mcNovaSenha').value='';
-  document.getElementById('mcConfirmaSenha').value='';
-  showT('Senha alterada com sucesso!','ok');
+  // senha em texto puro. Mantém demais campos intactos: não recria o
+  // usuário, não altera id/perfil/empresa/licença (item 2/5).
+  const agora=now();
+  u.senha_hash=hashNova;
+  u.data_alteracao_senha=agora;
+  u.obrigar_troca_senha=false; // item 3 — limpa automaticamente após a troca
+  u.updatedAt=agora;
+  save(); // item 8: só atualiza dados — sessão atual não é derrubada
+
+  // Auditoria (item 6): Company ID/Login/Perfil/Data/Hora.
+  logAuditoria('USUARIO_ALTEROU_PROPRIA_SENHA', u.nome, {
+    company_id:u.company_id, login:u.login, perfil:u.perfil,
+    data:agora.split('T')[0], hora:(agora.split('T')[1]||'').slice(0,8),
+  });
+
+  // Item 8: nunca guarda a senha em memória depois de salvar — limpa
+  // os 3 campos do formulário.
+  ['mcSenhaAtual','mcNovaSenha','mcConfirmaSenha'].forEach(id=>{document.getElementById(id).value='';});
+  renderMinhaConta(); // atualiza "Última Alteração de Senha" na tela — sem reload, sem redirect
+  showT('Senha alterada com sucesso.','ok');
 }
 
 
@@ -11642,9 +11925,11 @@ function qsExecute(i){
 document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();openQS();}
   if(e.key==='Escape'){
-    // Fecha modal aberto OU search bar
+    // Fecha modal aberto OU search bar — exceto a Troca Obrigatória de
+    // Senha (Sprint YALOG-WMS-013, item 4), que é bloqueante por definição.
     const openMo=document.querySelector('.mo.open');
-    if(openMo){openMo.classList.remove('open');document.body.style.overflow='';return;}
+    if(openMo && openMo.id!=='mTrocaObrigatoria'){openMo.classList.remove('open');document.body.style.overflow='';return;}
+    if(openMo)return;
     closeQS();
   }
 });
