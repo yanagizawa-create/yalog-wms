@@ -8899,6 +8899,15 @@ async function fazerLogin(){
       return;
     }
 
+    // Sprint YALOG-WMS-015, item 6: Company ID validado → Empresa
+    // validada (acima) → busca usuários operacionais no Supabase →
+    // funde no cache local → só então segue pro login (que continua
+    // 100% local a partir daqui, como já era). Só força ignorar o
+    // throttle na PRIMEIRA vez desta empresa nesta sessão (item 11:
+    // "baixar apenas uma vez") — tentativas de login seguintes (ex.:
+    // senha digitada errada) respeitam o throttle normal de 30s.
+    await sincronizarUsuariosOperacionaisDaEmpresa(companyId, !_ultimoSyncUsuariosOperacionais[companyId]);
+
     // Sprint YALOG-WMS-011, itens 2/8: usuários operacionais moram
     // exclusivamente no WMS — jamais na Platform. Tenta achar o login
     // localmente (filtrado por company_id — item 9) ANTES de qualquer
@@ -9246,6 +9255,206 @@ function _auditoriaUsuario(acao, alvo){
     data: agora.split('T')[0], hora: agora.split('T')[1].slice(0,8),
   });
 }
+// ════════════════════════════════════════
+// SINCRONIZAÇÃO DE USUÁRIOS OPERACIONAIS
+// (Sprint YALOG-WMS-015 — versão original — migrada na Sprint
+// YALOG-WMS-016 para tabela própria, ver abaixo)
+// ════════════════════════════════════════
+// Sprint YALOG-WMS-016: usuários operacionais deixam de compartilhar
+// a tabela `usuarios` da Platform (decisão da WMS-015) e passam a ter
+// tabela própria `usuarios_operacionais`, vinculada exclusivamente a
+// Company ID. Reaproveita o MESMO client dedicado
+// _obterClientePlatform() (Sprint YALOG-WMS-009 — sempre `anon`,
+// nunca faz sign-in) — só o nome da tabela e as colunas mudam (agora
+// nomes naturais: perfil/perfil_exibicao/ultimo_login/
+// data_alteracao_senha/obrigar_troca_senha, sem sufixo `_wms`, já que
+// a tabela passa a ser 100% do WMS). A Platform continua responsável
+// só por Empresas/Licenças/Company ID/SUPER_ADMIN/GESTOR/MASTER —
+// nunca mais consultada para usuário operacional depois da migração.
+//
+// A TABELA usuarios_operacionais PRECISA JÁ EXISTIR no Supabase — o
+// HTML nunca tenta criar tabela nenhuma (proibido explicitamente pela
+// Sprint). Se ainda não existir, o código abaixo detecta o erro
+// específico do PostgREST (tabela ausente do schema cache — mesma
+// família de erro já tratada na Sprint YALOG-PLATFORM-008, só que pra
+// tabela em vez de coluna) e degrada com segurança pra local-only
+// (mesmo comportamento de offline já usado e testado em todo o
+// sistema) — nunca quebra a tela, nunca perde dado. O SQL necessário
+// para criar a tabela está na resposta desta Sprint (não é entregue
+// como arquivo, só texto de apoio).
+let _tabelaOperacionaisIndisponivel=false; // true assim que detecta ausência — evita repetir a mesma consulta fadada a falhar
+function _ehErroTabelaAusente(erro){
+  if(!erro)return false;
+  const msg=String((erro&&(erro.message||erro.details))||erro||'').toLowerCase();
+  return erro.code==='PGRST205' || msg.includes('could not find the table') || msg.includes('schema cache');
+}
+
+let _ultimoSyncUsuariosOperacionais={}; // { companyId: timestampMs }
+const _SYNC_USUARIOS_THROTTLE_MS=30000;
+
+async function _auditoriaSincronizacaoUsuario(acao, usuario, extra){
+  const agora=now();
+  logAuditoria(acao, usuario.nome||usuario.login||'—', Object.assign({
+    company_id:usuario.company_id, login:usuario.login,
+    responsavel: usuarioAtual?(usuarioAtual.nome+' ('+usuarioAtual.login+')'):(usuario.nome||usuario.login||'—'),
+    data:agora.split('T')[0], hora:(agora.split('T')[1]||'').slice(0,8),
+  }, extra||{}));
+}
+function _linhaUsuarioOperacional(u){
+  // Nunca inclui `id` — deixa a tabela gerar o próprio (upsert por
+  // company_id+login, não por id).
+  return {
+    company_id:u.company_id, login:u.login, nome:u.nome,
+    perfil:u.perfil, perfil_exibicao:u.perfilExibicao||null,
+    senha_hash:u.senha_hash, ativo:u.ativo!==false,
+    obrigar_troca_senha:!!u.obrigar_troca_senha,
+    ultimo_login:u.ultimo_login||null,
+    data_alteracao_senha:u.data_alteracao_senha||null,
+    updated_at:u.updatedAt||now(),
+  };
+}
+function _usuarioOperacionalParaLocal(row, companyId){
+  return {
+    id: row.id || ('op-'+companyId+'-'+row.login),
+    company_id:companyId, login:row.login, nome:row.nome,
+    perfil:row.perfil||'conferente', perfilExibicao:row.perfil_exibicao||null,
+    senha_hash:row.senha_hash, ativo:row.ativo!==false,
+    obrigar_troca_senha:!!row.obrigar_troca_senha,
+    ultimo_login:row.ultimo_login||null,
+    data_alteracao_senha:row.data_alteracao_senha||null,
+    _migradoOperacionais:true,
+    createdAt:row.created_at||now(), updatedAt:row.updated_at||now(),
+  };
+}
+// item Segurança: nunca loga a senha em si, nem em texto puro nem
+// hash — _linhaUsuarioOperacional só manda o hash já calculado, igual
+// ao que já era salvo localmente.
+// Envia (best-effort) o estado local atual de um usuário operacional
+// pra usuarios_operacionais — chamada depois de criar/editar/resetar
+// senha/ativar/desativar. Nunca lança, nunca bloqueia o fluxo local
+// que já aconteceu antes de cada chamada.
+async function _sincronizarUsuarioNaPlatform(usuario){
+  if(!usuario||usuario.perfil==='master')return; // Master nunca vai pra usuarios_operacionais
+  if(_tabelaOperacionaisIndisponivel)return;
+  try{
+    const client=_obterClientePlatform();
+    if(!client)return; // sem conexão — offline, cache local já é a fonte de verdade
+    const row=_linhaUsuarioOperacional(usuario);
+    const {error}=await client.from('usuarios_operacionais').upsert(row,{onConflict:'company_id,login'});
+    if(error){
+      if(_ehErroTabelaAusente(error)){
+        _tabelaOperacionaisIndisponivel=true;
+        console.warn('[WMS] Tabela usuarios_operacionais ainda não existe no Supabase — operando 100% local até ela ser criada.');
+        return;
+      }
+      console.warn('[WMS→Supabase] Falha ao sincronizar usuário (mantendo local):', error.message||error);
+      return;
+    }
+    usuario._migradoOperacionais=true;
+    await _auditoriaSincronizacaoUsuario('USUARIO_UPLOAD', usuario);
+  }catch(e){ console.warn('[WMS→Supabase] Exceção ao sincronizar usuário (mantendo local):', e); }
+}
+// Migração automática, transparente e idempotente: todo usuário
+// operacional local ainda não marcado como migrado
+// (`_migradoOperacionais`) é enviado pra usuarios_operacionais,
+// preservando id/company_id/nome/login/senha_hash/perfil/ativo/
+// ultimo_login/data_alteracao_senha/obrigar_troca_senha/datas — nunca
+// o Master. Roda uma única vez por empresa de verdade: a flag de
+// conclusão fica gravada no próprio DB (sobrevive a reload — "migrar
+// apenas uma vez"). Reexecutar nunca duplica (upsert por
+// company_id+login) e nunca sobrescreve dado mais recente — mesma
+// regra de última alteração usada no resto da sincronização.
+async function _migrarUsuariosOperacionaisParaTabelaPropria(companyId){
+  if(!DB._migracaoOperacionaisConcluida)DB._migracaoOperacionaisConcluida={};
+  if(DB._migracaoOperacionaisConcluida[companyId])return;
+  const client=_obterClientePlatform();
+  if(!client)return;
+  const candidatos=DB.usuarios.filter(u=>u.company_id===companyId && u.perfil!=='master' && !u._migradoOperacionais);
+  if(!candidatos.length){
+    DB._migracaoOperacionaisConcluida[companyId]=true;
+    save();
+    return;
+  }
+  let algumFalhou=false;
+  for(const u of candidatos){
+    try{
+      const row=_linhaUsuarioOperacional(u);
+      row.created_at=u.createdAt||now();
+      const {error}=await client.from('usuarios_operacionais').upsert(row,{onConflict:'company_id,login'});
+      if(error){
+        if(_ehErroTabelaAusente(error)){ _tabelaOperacionaisIndisponivel=true; return; }
+        console.warn('[Migração] Falha ao migrar usuário (tenta de novo na próxima sincronização):', u.login, error.message||error);
+        algumFalhou=true;
+        continue;
+      }
+      u._migradoOperacionais=true;
+      await _auditoriaSincronizacaoUsuario('USUARIO_MIGRADO', u);
+    }catch(e){
+      console.warn('[Migração] Exceção ao migrar usuário (tenta de novo na próxima sincronização):', u.login, e);
+      algumFalhou=true;
+    }
+  }
+  save();
+  if(!algumFalhou){ DB._migracaoOperacionaisConcluida[companyId]=true; save(); }
+}
+// Busca os usuários operacionais desta empresa em usuarios_operacionais
+// e funde com o cache local, sempre respeitando a alteração mais
+// recente (nunca sobrescreve dado local mais novo que o remoto).
+// Chamada no login e ao abrir Usuários — no máximo 1x a cada 30s por
+// empresa (nunca a cada tecla). Migra ANTES de baixar (idempotente).
+// Retorna true se algo mudou localmente (pra quem chamou decidir se
+// re-renderiza). `forcar` ignora o throttle (usado no boot do login).
+async function sincronizarUsuariosOperacionaisDaEmpresa(companyId, forcar){
+  if(_tabelaOperacionaisIndisponivel)return false;
+  const agora=Date.now();
+  if(!forcar && _ultimoSyncUsuariosOperacionais[companyId] && (agora-_ultimoSyncUsuariosOperacionais[companyId])<_SYNC_USUARIOS_THROTTLE_MS){
+    return false; // já sincronizou recentemente — trabalha só sobre o cache
+  }
+  const client=_obterClientePlatform();
+  if(!client)return false; // offline — continua com o cache local
+  try{
+    await _migrarUsuariosOperacionaisParaTabelaPropria(companyId);
+    if(_tabelaOperacionaisIndisponivel)return false;
+
+    // Toda consulta obrigatoriamente filtrada por Company ID.
+    const {data:linhas,error}=await client.from('usuarios_operacionais').select('*').eq('company_id',companyId);
+    if(error){
+      if(_ehErroTabelaAusente(error)){ _tabelaOperacionaisIndisponivel=true; return false; }
+      console.warn('[Supabase→WMS] Falha ao sincronizar usuários (mantendo cache local):', error.message||error);
+      return false;
+    }
+    _ultimoSyncUsuariosOperacionais[companyId]=agora;
+    let alterouAlgo=false;
+    (linhas||[]).forEach(row=>{
+      if(!row.login)return;
+      const remoto=_usuarioOperacionalParaLocal(row, companyId);
+      const localExistente=DB.usuarios.find(u=>u.company_id===companyId && u.login===row.login && u.perfil!=='master');
+      if(!localExistente){
+        // Usuário criado em outro computador — nunca visto aqui ainda.
+        DB.usuarios.push(remoto);
+        alterouAlgo=true;
+        _auditoriaSincronizacaoUsuario('USUARIO_DOWNLOAD', remoto);
+      }else{
+        localExistente._migradoOperacionais=true;
+        const tsLocal=new Date(localExistente.updatedAt||localExistente.createdAt||0).getTime();
+        const tsRemoto=new Date(remoto.updatedAt||remoto.createdAt||0).getTime();
+        if(tsRemoto>tsLocal){
+          // Só sobrescreve local se o remoto for de fato mais recente
+          // — nunca perde uma edição local ainda não enviada.
+          Object.assign(localExistente, remoto, {id:localExistente.id});
+          alterouAlgo=true;
+          _auditoriaSincronizacaoUsuario('USUARIO_DOWNLOAD', remoto);
+        }
+      }
+    });
+    if(alterouAlgo){
+      save();
+      _auditoriaSincronizacaoUsuario('USUARIO_SINCRONIZADO', {company_id:companyId, login:'(lote)', nome:'Sincronização de usuários operacionais'});
+    }
+    return alterouAlgo;
+  }catch(e){ console.warn('[Supabase→WMS] Exceção ao sincronizar usuários (mantendo cache local):', e); return false; }
+}
+
 async function criarUsuario(){
   // Sprint YALOG-WMS-011: usuários operacionais geridos 100% pelo WMS.
   // Sprint YALOG-WMS-012: matriz oficial de perfis — cadastro de
@@ -9278,12 +9487,22 @@ async function criarUsuario(){
   save();['uNome','uLogin','uSenha'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('uPerfil').value='';
   closeM('mNovoUsuario');renderUsuarios();showT(`Usuário "${nome}" criado!`,'ok');
+  // Sprint YALOG-WMS-015, item 1: grava também no Supabase (best-effort,
+  // nunca bloqueia o cadastro local que já aconteceu acima).
+  _sincronizarUsuarioNaPlatform(novoUsuario);
 }
 function renderUsuarios(){
   const isMasterMode=isMaster()||masterSession||podeCadastrarUsuarios();
   const podeGerir=podeGerirUsuarios()||masterSession;
   document.getElementById('usuariosMasterBlock').style.display=isMasterMode?'none':'block';
   document.getElementById('usuariosMasterPanel').style.display=isMasterMode?'block':'none';
+  // Sprint YALOG-WMS-015, item 8: sempre que houver conexão, sincroniza
+  // automaticamente ao abrir a tela — throttle de 30s (item 11) evita
+  // qualquer consulta excessiva. Fire-and-forget: se trouxer algo novo
+  // de outro computador, a própria função pede um novo render.
+  if(usuarioAtual&&usuarioAtual.company_id){
+    sincronizarUsuariosOperacionaisDaEmpresa(usuarioAtual.company_id).then(mudou=>{ if(mudou)renderUsuarios(); });
+  }
   // Item 13: nunca listar usuários de outra empresa — tudo filtrado
   // pelo company_id da sessão atual.
   const companyId=usuarioAtual?usuarioAtual.company_id:null;
@@ -9339,6 +9558,9 @@ async function desativarUsuario(id){
   // Sprint YALOG-WMS-014, item 11: identificadores exatos pedidos.
   _auditoriaUsuario(vaiAtivar?'USUARIO_ATIVADO':'USUARIO_DESATIVADO', u);
   save();renderUsuarios();showT(vaiAtivar?'Usuário ativado':'Usuário desativado','ok');
+  // Sprint YALOG-WMS-015, itens 4/5: sincroniza ativação/desativação
+  // com o Supabase (best-effort).
+  _sincronizarUsuarioNaPlatform(u);
 }
 // Sprint YALOG-WMS-011 — Alterações 04-07: editar usuário operacional,
 // sempre restrito à empresa da sessão e nunca ao Master.
@@ -9384,6 +9606,9 @@ async function salvarEdicaoUsuarioWMS(){
   // Sprint YALOG-WMS-014, item 11: identificador exato pedido.
   _auditoriaUsuario('USUARIO_EDITADO', u);
   save();closeM('mEditarUsuarioWMS');renderUsuarios();showT('Usuário atualizado','ok');
+  // Sprint YALOG-WMS-015, item 2: sincroniza a edição com o Supabase
+  // (best-effort).
+  _sincronizarUsuarioNaPlatform(u);
 }
 // Sprint YALOG-WMS-014, item 4: reset de senha — disponível só a
 // Master/Líder (podeGerirUsuarios), nunca para o Master, gera uma
@@ -9416,6 +9641,9 @@ async function resetarSenhaUsuario(id){
   openM('mResetSenha');
   renderUsuarios();
   showT('Senha redefinida','ok');
+  // Sprint YALOG-WMS-015, item 3: sincroniza o novo senha_hash (nunca a
+  // senha em si) e obrigar_troca_senha com o Supabase (best-effort).
+  _sincronizarUsuarioNaPlatform(u);
 }
 function copiarSenhaReset(){
   const el=document.getElementById('resetSenhaValor');
