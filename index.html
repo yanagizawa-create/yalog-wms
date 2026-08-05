@@ -3994,9 +3994,14 @@ let _yalogAcessoBloqueado = false;
 let _platformClientSingleton = null;
 function _obterClientePlatform() {
   if (_platformClientSingleton) return _platformClientSingleton;
-  if (typeof window === 'undefined' || !window.supabase || !window.supabase.createClient) return null;
+  if (typeof window === 'undefined' || !window.supabase || !window.supabase.createClient) {
+    // Sprint YALOG-WMS-016B, FASE 4: motivo exato de "cliente Supabase
+    // inexistente" — nunca mais silencioso.
+    console.warn('[SYNC DIAG] _obterClientePlatform: window.supabase indisponível (biblioteca supabase-js ainda não carregada, ou bloqueada). Sincronização de usuarios_operacionais ficará offline até isso resolver.');
+    return null;
+  }
   try { _platformClientSingleton = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY); }
-  catch(e) { console.warn('[Platform] falha ao criar client dedicado:', e); _platformClientSingleton = null; }
+  catch(e) { console.warn('[SYNC DIAG] _obterClientePlatform: exceção ao criar o client:', e); _platformClientSingleton = null; }
   return _platformClientSingleton;
 }
 
@@ -9310,7 +9315,18 @@ let _tabelaOperacionaisIndisponivel=false; // true assim que detecta ausência �
 function _ehErroTabelaAusente(erro){
   if(!erro)return false;
   const msg=String((erro&&(erro.message||erro.details))||erro||'').toLowerCase();
-  return erro.code==='PGRST205' || msg.includes('could not find the table') || msg.includes('schema cache');
+  // Sprint YALOG-WMS-016B — CORREÇÃO DE BUG: a condição antiga também
+  // testava msg.includes('schema cache'), uma substring presente TANTO
+  // no erro de tabela ausente (PGRST205: "Could not find the table 'X'
+  // in the schema cache") QUANTO no erro de COLUNA ausente numa tabela
+  // que existe (PGRST204: "Could not find the 'Y' column of 'X' in the
+  // schema cache"). Isso fazia um simples erro de schema de COLUNA ser
+  // classificado como "tabela ausente", ligando
+  // _tabelaOperacionaisIndisponivel=true e desligando toda gravação
+  // futura em silêncio pelo resto da sessão — a causa raiz real de
+  // "nenhum registro nunca aparece". Corrigido para nunca mais casar
+  // com esse substring genérico.
+  return erro.code==='PGRST205' || msg.includes('could not find the table');
 }
 // Sprint YALOG-WMS-016A, item 2: eliminar falhas silenciosas — todo
 // UPSERT/DELETE em usuarios_operacionais registra no Console, sucesso
@@ -9373,29 +9389,38 @@ function _usuarioOperacionalParaLocal(row, companyId){
 // confirma a gravação com um SELECT logo depois.
 async function _sincronizarUsuarioNaPlatform(usuario){
   if(!usuario||usuario.perfil==='master')return; // Master nunca vai pra usuarios_operacionais
-  if(_tabelaOperacionaisIndisponivel)return;
+  if(_tabelaOperacionaisIndisponivel){
+    console.warn('[SYNC DIAG] Sincronização abortada: _tabelaOperacionaisIndisponivel=true nesta sessão (ver log [SYNC DIAG] anterior para o motivo original).');
+    return;
+  }
   const operacao = usuario._migradoOperacionais ? 'UPDATE' : 'INSERT';
   try{
     const client=_obterClientePlatform();
-    if(!client)return; // sem conexão — offline, cache local já é a fonte de verdade
+    if(!client)return; // sem conexão — offline, cache local já é a fonte de verdade (motivo já logado por _obterClientePlatform)
+    console.log('[SYNC STEP 4] Cliente Supabase encontrado');
     const row=_linhaUsuarioOperacional(usuario);
+    console.log('[SYNC STEP 5] Payload:', row);
+    console.log('[SYNC STEP 6] Executando UPSERT');
     const {error,status}=await client.from('usuarios_operacionais').upsert(row,{onConflict:'company_id,login'});
+    console.log('[SYNC STEP 7] Resposta:', {error,status});
     if(error){
       if(_ehErroTabelaAusente(error)){
         _tabelaOperacionaisIndisponivel=true;
-        console.warn('[WMS] Tabela usuarios_operacionais ainda não existe no Supabase — operando 100% local até ela ser criada.');
+        console.warn('[SYNC DIAG] Tabela usuarios_operacionais ainda não existe no Supabase (ou nome errado) — operando 100% local até ela ser criada. Erro completo:', error);
         return;
       }
       _logSyncErro(usuario.company_id, usuario.login, operacao, error.code||status, error.message||String(error));
       return;
     }
     // item 3: confirma a gravação com um SELECT do registro recém-gravado.
+    console.log('[SYNC STEP 8] SELECT confirmação');
     const {data:conferencia, error:erroConf}=await client.from('usuarios_operacionais').select('id').eq('company_id',usuario.company_id).eq('login',usuario.login);
     if(erroConf || !conferencia || conferencia.length!==1){
       _logSyncErro(usuario.company_id, usuario.login, operacao+' (confirmação)', erroConf&&erroConf.code, erroConf?(erroConf.message||String(erroConf)):('SELECT retornou '+(conferencia?conferencia.length:0)+' registro(s), esperado 1'));
       return;
     }
     usuario._migradoOperacionais=true;
+    console.log('[SYNC STEP 9] Registro confirmado');
     _logSyncSucesso(operacao, usuario.company_id, usuario.login, status||201);
     await _auditoriaSincronizacaoUsuario('USUARIO_UPLOAD', usuario);
   }catch(e){ _logSyncErro(usuario.company_id, usuario.login, operacao, 'exceção', e.message||String(e)); }
@@ -9560,6 +9585,7 @@ async function refreshUsuariosOperacionais(){
 }
 
 async function criarUsuario(){
+  console.log('[SYNC STEP 1] Cadastro iniciado');
   // Sprint YALOG-WMS-011: usuários operacionais geridos 100% pelo WMS.
   // Sprint YALOG-WMS-017: cadastro passa a ser Master e Líder apenas
   // (ver podeCadastrarUsuarios).
@@ -9587,11 +9613,14 @@ async function criarUsuario(){
   };
   DB.usuarios.push(novoUsuario);
   _auditoriaUsuario('USUARIO_CRIADO', novoUsuario);
-  save();['uNome','uLogin','uSenha'].forEach(id=>document.getElementById(id).value='');
+  save();
+  console.log('[SYNC STEP 2] LocalStorage atualizado');
+  ['uNome','uLogin','uSenha'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('uPerfil').value='';
   closeM('mNovoUsuario');renderUsuarios();showT(`Usuário "${nome}" criado!`,'ok');
   // Sprint YALOG-WMS-016, item 1: grava também em usuarios_operacionais
   // (best-effort, nunca bloqueia o cadastro local que já aconteceu acima).
+  console.log('[SYNC STEP 3] Chamando sincronização');
   _sincronizarUsuarioNaPlatform(novoUsuario);
 }
 // Sprint YALOG-WMS-017, itens 4-8: renderiza a tela de Usuários em 3
