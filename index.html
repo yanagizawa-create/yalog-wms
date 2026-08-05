@@ -1609,24 +1609,17 @@ a{color:inherit;text-decoration:none;}
 <div class="screen" id="s-usuarios">
   <div class="ph"><div><div class="ph-eye">Gestão</div><div class="ph-title">Usuários do <em>Sistema</em></div></div></div>
 
+  <!-- SPRINT YALOG-WMS-017, itens 4-7/14: Analista/Administrativo/
+       Conferente/Operador só veem o próprio cadastro, nunca a lista de
+       outros usuários. Troca de senha própria fica em Minha Conta. -->
   <div id="usuariosMasterBlock">
-    <div style="background:rgba(251,146,60,.06);border:1px solid rgba(251,146,60,.3);padding:18px;margin-bottom:20px;display:flex;gap:12px;align-items:flex-start;">
-      <div style="font-size:18px;">🔑</div>
-      <div>
-        <div style="font-size:12px;font-weight:700;color:var(--orange2);margin-bottom:4px;">Somente o Master pode gerenciar usuários</div>
-        <div style="font-size:11px;color:var(--w70);">Para criar, editar ou remover usuários, faça login com sua conta Master.</div>
-      </div>
-    </div>
-    <div id="usuariosListPublic"></div>
-    <div style="margin-top:16px;">
-      <button class="btn btn-p btn-sm" onclick="openM('mMasterLogin')">🔑 Entrar como Master para gerenciar</button>
-    </div>
+    <div id="usuariosAutoVisualizacao"></div>
   </div>
 
   <div id="usuariosMasterPanel" style="display:none;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
       <div style="display:flex;align-items:center;gap:10px;">
-        <span class="master-badge">MASTER</span>
+        <span class="master-badge">GESTÃO</span>
         <span style="font-size:13px;font-weight:700;">Gerenciamento de Usuários</span>
       </div>
       <div style="display:flex;gap:8px;">
@@ -1634,9 +1627,14 @@ a{color:inherit;text-decoration:none;}
         <button class="btn btn-o btn-sm" onclick="sairMaster()">Sair do modo Master</button>
       </div>
     </div>
-    <!-- SPRINT YALOG-WMS-014, item 1: pesquisa/filtros em tempo real,
-         só sobre a lista já carregada (item 14 — sem nova consulta ao
-         Supabase a cada tecla). Mesmo padrão visual de filtEstBusca. -->
+
+    <!-- item 8: Master separado visualmente, nunca misturado na tabela. -->
+    <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--w40);margin-bottom:8px;">USUÁRIO MASTER</div>
+    <div id="usuarioMasterCard" style="margin-bottom:24px;"></div>
+
+    <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--w40);margin-bottom:8px;">USUÁRIOS OPERACIONAIS</div>
+    <!-- item 1 (WMS-014): pesquisa/filtros em tempo real, só sobre a
+         lista já carregada — sem nova consulta ao Supabase a cada tecla. -->
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
       <div style="position:relative;display:flex;align-items:center;">
         <span style="position:absolute;left:10px;color:var(--w40);font-size:13px;pointer-events:none;">🔍</span>
@@ -1648,7 +1646,6 @@ a{color:inherit;text-decoration:none;}
       </div>
       <select id="uFiltroPerfil" onchange="renderUsuarios()" class="btn btn-o" style="font-size:10px;cursor:pointer;padding:9px 14px;">
         <option value="">Todos os Perfis</option>
-        <option value="Master">Master</option>
         <option value="Líder">Líder</option>
         <option value="Analista">Analista</option>
         <option value="Administrativo">Administrativo</option>
@@ -3221,16 +3218,17 @@ a{color:inherit;text-decoration:none;}
   <button class="btn btn-p" style="width:100%;" onclick="criarUsuario()">✓ Criar Usuário</button>
 </div></div>
 
-<!-- Sprint YALOG-WMS-011. Sprint YALOG-WMS-014: edição restrita a
-     Nome/Perfil/Status — login nunca muda (fora de escopo desta
-     Sprint) e senha passa a ser gerida só via "Resetar Senha". -->
+<!-- Sprint YALOG-WMS-011. Sprint YALOG-WMS-017, item 10: edição volta
+     a permitir Nome/Login/Perfil/Status — Company ID, ID interno,
+     datas e histórico nunca são editáveis. Senha passa a ter modal
+     próprio (mSenhaUsuario). -->
 <div class="mo" id="mEditarUsuarioWMS"><div class="md">
   <button class="mc" onclick="closeM('mEditarUsuarioWMS')">✕</button>
   <div class="mt">Editar Usuário</div>
-  <div class="ms">Nome, perfil e status do usuário operacional</div>
+  <div class="ms">Nome, login, perfil e status do usuário operacional</div>
   <input type="hidden" id="ueId">
-  <div class="fg" style="margin-bottom:12px;"><label>Login</label><input type="text" id="ueLoginSomenteLeitura" disabled style="opacity:.55;cursor:not-allowed;"></div>
   <div class="fg" style="margin-bottom:12px;"><label>Nome Completo <span class="req">*</span></label><input type="text" id="ueNome"></div>
+  <div class="fg" style="margin-bottom:12px;"><label>Login (usuário) <span class="req">*</span></label><input type="text" id="ueLogin" style="text-transform:lowercase;" oninput="this.value=this.value.toLowerCase().replace(/\s/g,'')"></div>
   <div class="fg" style="margin-bottom:12px;"><label>Perfil <span class="req">*</span></label>
     <select id="uePerfil">
       <option value="Líder">Líder</option>
@@ -3246,18 +3244,34 @@ a{color:inherit;text-decoration:none;}
   <button class="btn btn-p" style="width:100%;" onclick="salvarEdicaoUsuarioWMS()">✓ Salvar Alterações</button>
 </div></div>
 
-<!-- MODAL RESETAR SENHA (SPRINT YALOG-WMS-014, item 4) -->
-<!-- Mostra a senha temporária uma única vez; ao fechar, limpa o valor
-     da tela e da memória (item 12 — segurança). -->
-<div class="mo" id="mResetSenha"><div class="md" style="max-width:420px;">
-  <button class="mc" onclick="fecharResetSenha()">✕</button>
-  <div class="mt">Senha Redefinida</div>
-  <div class="ms">Copie agora — esta senha não será mostrada de novo. O usuário deverá trocá-la no próximo login.</div>
-  <div class="fg" style="margin-bottom:16px;">
-    <label>Nova Senha Temporária</label>
-    <input type="text" id="resetSenhaValor" readonly style="font-family:var(--mono);font-weight:700;letter-spacing:.05em;font-size:15px;">
+<!-- MODAL SENHA (SPRINT YALOG-WMS-017, itens 11-12) — substitui o
+     antigo "Resetar Senha" (WMS-014). Permite senha manual (Master e
+     Líder podem definir qualquer senha) e, no mesmo modal, gerar uma
+     senha temporária YLG-XXXXXX. Nunca deixa a senha em memória depois
+     de fechar (item Segurança). -->
+<div class="mo" id="mSenhaUsuario"><div class="md" style="max-width:420px;">
+  <button class="mc" onclick="fecharModalSenha()">✕</button>
+  <div class="mt">Alterar Senha</div>
+  <div class="ms">Usuário: <b id="senhaUsuarioNome">—</b></div>
+  <input type="hidden" id="senhaUsuarioId">
+  <div class="fg" style="margin-bottom:12px;"><label>Nova Senha</label><input type="password" id="senhaNovaManual" placeholder="Mínimo 8 caracteres"></div>
+  <div class="fg" style="margin-bottom:10px;"><label>Confirmar Senha</label><input type="password" id="senhaConfirmarManual" placeholder="Repita a senha"></div>
+  <label style="display:flex;align-items:center;gap:8px;font-size:11px;margin-bottom:16px;cursor:pointer;color:var(--w70);">
+    <input type="checkbox" id="senhaObrigarTroca" style="width:auto;"> Obrigar troca no próximo login
+  </label>
+  <div id="senhaErro" style="display:none;color:#f87171;font-size:11px;margin-bottom:12px;"></div>
+  <div style="display:flex;gap:8px;margin-bottom:16px;">
+    <button class="btn btn-o" style="flex:1;justify-content:center;" onclick="fecharModalSenha()">Cancelar</button>
+    <button class="btn btn-p" style="flex:1;justify-content:center;" onclick="salvarSenhaManual()">Salvar</button>
   </div>
-  <button class="btn btn-p" style="width:100%;" onclick="copiarSenhaReset()">📋 Copiar Senha</button>
+  <div style="border-top:1px solid var(--border2);padding-top:16px;">
+    <button class="btn btn-b" style="width:100%;" onclick="gerarESalvarSenhaTemporaria()">🎲 Gerar Senha Temporária</button>
+    <div id="senhaTempResultado" style="display:none;margin-top:14px;">
+      <p style="font-size:11px;color:var(--w70);margin-bottom:10px;">Copie agora — esta senha não será mostrada de novo. O usuário deverá trocá-la no próximo login.</p>
+      <div class="fg" style="margin-bottom:10px;"><label>Senha Temporária Gerada</label><input type="text" id="senhaTempValor" readonly style="font-family:var(--mono);font-weight:700;letter-spacing:.05em;font-size:15px;"></div>
+      <button class="btn btn-p" style="width:100%;" onclick="copiarSenhaTemp()">📋 Copiar</button>
+    </div>
+  </div>
 </div></div>
 
 <!-- MODAL TROCA OBRIGATÓRIA DE SENHA (SPRINT YALOG-WMS-013, item 4) -->
@@ -9235,25 +9249,34 @@ function canAdjust(){
 function podeGerirUsuarios(){
   return usuarioAtual&&(usuarioAtual.perfil==='master'||usuarioAtual.perfil==='lider');
 }
-// Cadastro de usuários operacionais: Master, Líder e Analista (Analista
-// só cadastra — não edita/desativa/exclui, conforme matriz oficial).
+// Sprint YALOG-WMS-017: cadastro de usuários operacionais passa a ser
+// Master e Líder apenas — a matriz oficial desta Sprint redefine
+// Analista/Administrativo/Conferente/Operador como perfis idênticos
+// de "usuário comum" (só visualizam e alteram o próprio cadastro, sem
+// nenhuma capacidade de gestão), substituindo a permissão de cadastro
+// que a Sprint YALOG-WMS-012 tinha dado só ao Analista.
 function podeCadastrarUsuarios(){
-  return usuarioAtual&&(usuarioAtual.perfil==='master'||usuarioAtual.perfil==='lider'||usuarioAtual.perfil==='analista');
+  return podeGerirUsuarios();
+}
+// Exclusão definitiva de usuário operacional: exclusiva do Master
+// (item 13/14 — Líder nunca exclui).
+function podeExcluirUsuarios(){
+  return usuarioAtual&&usuarioAtual.perfil==='master';
 }
 
 // Sprint YALOG-WMS-014, item 11: helper único para montar a auditoria
 // de usuário sempre com os 6 campos pedidos (Company ID/Usuário
 // responsável/Usuário afetado/Perfil/Data/Hora), sem duplicar isso em
 // cada função. Nunca inclui senha/hash.
-function _auditoriaUsuario(acao, alvo){
+function _auditoriaUsuario(acao, alvo, extra){
   const agora=now();
-  logAuditoria(acao, alvo.nome, {
+  logAuditoria(acao, alvo.nome, Object.assign({
     company_id: alvo.company_id,
     responsavel: usuarioAtual?(usuarioAtual.nome+' ('+usuarioAtual.login+')'):'—',
     afetado: alvo.nome+' ('+alvo.login+')',
     perfil: alvo.perfilExibicao||alvo.perfil,
     data: agora.split('T')[0], hora: agora.split('T')[1].slice(0,8),
-  });
+  }, extra||{}));
 }
 // ════════════════════════════════════════
 // SINCRONIZAÇÃO DE USUÁRIOS OPERACIONAIS
@@ -9353,6 +9376,24 @@ async function _sincronizarUsuarioNaPlatform(usuario){
     usuario._migradoOperacionais=true;
     await _auditoriaSincronizacaoUsuario('USUARIO_UPLOAD', usuario);
   }catch(e){ console.warn('[WMS→Supabase] Exceção ao sincronizar usuário (mantendo local):', e); }
+}
+// Sprint YALOG-WMS-017, item 13: contraparte de exclusão — sem isso,
+// um usuário excluído localmente voltaria a "ressuscitar" no próximo
+// download de outro computador (o registro remoto continuaria lá).
+// Mesmo padrão best-effort: nunca lança, nunca bloqueia o fluxo local
+// (a exclusão local já aconteceu antes desta chamada).
+async function _excluirUsuarioNaPlatform(usuario){
+  if(!usuario||usuario.perfil==='master')return;
+  if(_tabelaOperacionaisIndisponivel)return;
+  try{
+    const client=_obterClientePlatform();
+    if(!client)return;
+    const {error}=await client.from('usuarios_operacionais').delete().eq('company_id',usuario.company_id).eq('login',usuario.login);
+    if(error){
+      if(_ehErroTabelaAusente(error)){ _tabelaOperacionaisIndisponivel=true; return; }
+      console.warn('[WMS→Supabase] Falha ao excluir usuário remotamente (removido só localmente por ora):', error.message||error);
+    }
+  }catch(e){ console.warn('[WMS→Supabase] Exceção ao excluir usuário remotamente:', e); }
 }
 // Migração automática, transparente e idempotente: todo usuário
 // operacional local ainda não marcado como migrado
@@ -9457,9 +9498,8 @@ async function sincronizarUsuariosOperacionaisDaEmpresa(companyId, forcar){
 
 async function criarUsuario(){
   // Sprint YALOG-WMS-011: usuários operacionais geridos 100% pelo WMS.
-  // Sprint YALOG-WMS-012: matriz oficial de perfis — cadastro de
-  // usuários operacionais passa a ser permitido também a Líder e
-  // Analista (antes restrito só ao Master).
+  // Sprint YALOG-WMS-017: cadastro passa a ser Master e Líder apenas
+  // (ver podeCadastrarUsuarios).
   if(!masterSession&&!podeCadastrarUsuarios()){showT('Sem permissão para cadastrar usuários','err');return;}
   const nome=document.getElementById('uNome').value.trim();
   const login=document.getElementById('uLogin').value.trim();
@@ -9487,13 +9527,20 @@ async function criarUsuario(){
   save();['uNome','uLogin','uSenha'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('uPerfil').value='';
   closeM('mNovoUsuario');renderUsuarios();showT(`Usuário "${nome}" criado!`,'ok');
-  // Sprint YALOG-WMS-015, item 1: grava também no Supabase (best-effort,
-  // nunca bloqueia o cadastro local que já aconteceu acima).
+  // Sprint YALOG-WMS-016, item 1: grava também em usuarios_operacionais
+  // (best-effort, nunca bloqueia o cadastro local que já aconteceu acima).
   _sincronizarUsuarioNaPlatform(novoUsuario);
 }
+// Sprint YALOG-WMS-017, itens 4-8: renderiza a tela de Usuários em 3
+// modos, conforme o perfil de quem está olhando:
+//  • Master/Líder → painel completo, com o Master em um cartão
+//    separado (nunca misturado na tabela) e os operacionais na tabela.
+//  • Analista/Administrativo/Conferente/Operador → só o próprio
+//    cadastro, somente leitura (troca de senha fica em Minha Conta).
 function renderUsuarios(){
   const isMasterMode=isMaster()||masterSession||podeCadastrarUsuarios();
   const podeGerir=podeGerirUsuarios()||masterSession;
+  const podeExcluir=podeExcluirUsuarios()||masterSession;
   document.getElementById('usuariosMasterBlock').style.display=isMasterMode?'none':'block';
   document.getElementById('usuariosMasterPanel').style.display=isMasterMode?'block':'none';
   // Sprint YALOG-WMS-015, item 8: sempre que houver conexão, sincroniza
@@ -9503,17 +9550,41 @@ function renderUsuarios(){
   if(usuarioAtual&&usuarioAtual.company_id){
     sincronizarUsuariosOperacionaisDaEmpresa(usuarioAtual.company_id).then(mudou=>{ if(mudou)renderUsuarios(); });
   }
-  // Item 13: nunca listar usuários de outra empresa — tudo filtrado
-  // pelo company_id da sessão atual.
+  // Item 13 (WMS-014): nunca listar usuários de outra empresa — tudo
+  // filtrado pelo company_id da sessão atual.
   const companyId=usuarioAtual?usuarioAtual.company_id:null;
   let usuariosDaEmpresa=companyId?DB.usuarios.filter(u=>u.company_id===companyId):[];
-  document.getElementById('usuariosListPublic').innerHTML=`
-    <table class="dt"><thead><tr><th>Nome</th><th>Login</th><th>Perfil</th></tr></thead>
-    <tbody>${usuariosDaEmpresa.filter(u=>u.ativo!==false).map(u=>`<tr>
-      <td class="bd">${u.nome}</td><td class="mn">${u.login}</td>
-      <td>${perfilBadge(u.perfil,u.perfilExibicao)}</td>
-    </tr>`).join('')}</tbody></table>`;
-  if(!isMasterMode)return;
+
+  if(!isMasterMode){
+    // Itens 4-7/14: usuário comum só vê o próprio cadastro.
+    const eu=usuarioAtual&&DB.usuarios.find(u=>u.id===usuarioAtual.id);
+    const alvo=(usuariosDaEmpresa.find(u=>u.id===usuarioAtual?.id))||eu;
+    const rotuloPerfil=alvo?(alvo.perfilExibicao||(PERFIS[alvo.perfil]&&PERFIS[alvo.perfil].label)||alvo.perfil):'—';
+    document.getElementById('usuariosAutoVisualizacao').innerHTML=alvo?`
+      <div class="kpi-grid">
+        <div class="kc"><div class="kv" style="font-size:15px;">${alvo.nome}</div><div class="kl">Nome</div></div>
+        <div class="kc"><div class="kv" style="font-size:15px;">${alvo.login}</div><div class="kl">Login</div></div>
+        <div class="kc"><div class="kv" style="font-size:15px;">${rotuloPerfil}</div><div class="kl">Perfil</div></div>
+        <div class="kc"><div class="kv" style="font-size:15px;">${alvo.ativo!==false?'Ativo':'Inativo'}</div><div class="kl">Status</div></div>
+      </div>
+      <p style="font-size:11px;color:var(--w40);margin-top:16px;">Para trocar sua senha, acesse <a href="#" onclick="go('minhaConta');return false;" style="color:var(--orange2);">Minha Conta</a>.</p>
+    `:'<div class="qs-empty">Cadastro não encontrado.</div>';
+    return;
+  }
+
+  // Sprint YALOG-WMS-017, item 8: Master em cartão próprio, separado
+  // da tabela — nunca aparece misturado com os usuários operacionais.
+  const masterDaEmpresa=usuariosDaEmpresa.find(u=>u.perfil==='master');
+  document.getElementById('usuarioMasterCard').innerHTML=masterDaEmpresa?`
+    <div class="kpi-grid">
+      <div class="kc"><div class="kv" style="font-size:15px;">${masterDaEmpresa.nome}</div><div class="kl">Nome</div></div>
+      <div class="kc"><div class="kv" style="font-size:15px;">MASTER</div><div class="kl">Perfil</div></div>
+      <div class="kc"><div class="kv" style="font-size:13px;color:var(--w40);">Gerenciado pela YALog Platform</div><div class="kl">Origem</div></div>
+    </div>
+  `:'<div class="qs-empty">Master ainda não fez login neste WMS.</div>';
+  document.getElementById('masterNomeDisplay').textContent=masterDaEmpresa?.nome||'Master';
+
+  const operacionais=usuariosDaEmpresa.filter(u=>u.perfil!=='master');
 
   // Sprint YALOG-WMS-014, item 1/14: pesquisa e filtros em tempo real,
   // 100% sobre a lista já carregada em memória — nenhuma nova consulta
@@ -9524,7 +9595,7 @@ function renderUsuarios(){
   const fLogin=(elLogin?.value||'').trim().toLowerCase();
   const fPerfil=elPerfil?.value||'';
   const fStatus=elStatus?.value||'';
-  let listaFiltrada=usuariosDaEmpresa;
+  let listaFiltrada=operacionais;
   if(fNome)listaFiltrada=listaFiltrada.filter(u=>(u.nome||'').toLowerCase().includes(fNome));
   if(fLogin)listaFiltrada=listaFiltrada.filter(u=>(u.login||'').toLowerCase().includes(fLogin));
   if(fPerfil)listaFiltrada=listaFiltrada.filter(u=>(u.perfilExibicao||'')===fPerfil);
@@ -9533,6 +9604,7 @@ function renderUsuarios(){
   const fmtAcesso=(iso)=> iso ? (fD(iso.split('T')[0])+' '+(iso.split('T')[1]||'').slice(0,5)) : 'Nunca acessou';
   const fmtTroca=(iso)=> iso ? (fD(iso.split('T')[0])+' '+(iso.split('T')[1]||'').slice(0,5)) : 'Nunca alterada';
 
+  // Item 9: Editar / Senha / Ativar-Desativar / Excluir.
   document.getElementById('tbUsuarios').innerHTML=listaFiltrada.map(u=>`<tr>
     <td class="bd">${u.nome}</td>
     <td class="mn">${u.login}</td>
@@ -9541,41 +9613,42 @@ function renderUsuarios(){
     <td class="mn" style="font-size:10px;">${fmtAcesso(u.ultimo_login)}</td>
     <td class="mn" style="font-size:10px;">${fmtTroca(u.data_alteracao_senha)}</td>
     <td>${u.ativo!==false?'<span class="bg bg-gr">Ativo</span>':'<span class="bg bg-re">Inativo</span>'}</td>
-    <td>
-      ${u.perfil==='master'?'<span style="font-size:10px;color:var(--w40);">— vem da YALog Platform</span>':(podeGerir?`<button class="btn btn-o btn-xs" onclick="editarUsuario('${u.id}')">Editar</button> <button class="btn btn-b btn-xs" onclick="resetarSenhaUsuario('${u.id}')">Resetar Senha</button> <button class="btn btn-r btn-xs" onclick="desativarUsuario('${u.id}')">${u.ativo!==false?'Desativar':'Ativar'}</button>`:'<span style="font-size:10px;color:var(--w40);">— cadastro (Analista)</span>')}
+    <td style="white-space:nowrap;">
+      ${podeGerir?`<button class="btn btn-o btn-xs" onclick="editarUsuario('${u.id}')">Editar</button> <button class="btn btn-b btn-xs" onclick="abrirModalSenha('${u.id}')">Senha</button> <button class="btn btn-r btn-xs" onclick="desativarUsuario('${u.id}')">${u.ativo!==false?'Desativar':'Ativar'}</button>${podeExcluir?` <button class="btn btn-r btn-xs" onclick="excluirUsuarioDefinitivo('${u.id}')">Excluir</button>`:''}`:'<span style="font-size:10px;color:var(--w40);">— sem permissão</span>'}
     </td>
   </tr>`).join('');
-  document.getElementById('masterNomeDisplay').textContent=usuariosDaEmpresa.find(u=>u.perfil==='master')?.nome||'Master';
 }
 async function desativarUsuario(id){
   if(!masterSession&&!podeGerirUsuarios()){showT('Ação requer Master ou Líder','err');return;}
   const u=DB.usuarios.find(x=>x.id===id&&x.company_id===usuarioAtual.company_id);if(!u)return;
-  // Item 9/10: Master nunca pode ser desativado, nem pelo próprio Master.
+  // Item 2/9/14: Master nunca pode ser desativado, nem pelo próprio Master.
   if(u.perfil==='master'){showT('Não é possível desativar o Master','err');return;}
   const vaiAtivar=u.ativo===false;
   if(!vaiAtivar&&!await wmsConfirm(`Desativar usuário "${u.nome}"?\n\nO usuário não conseguirá mais acessar o sistema.`,'Desativar Usuário','🔒','🔒 Desativar'))return;
+  const statusAntigo=u.ativo!==false?'ativo':'inativo';
   u.ativo=vaiAtivar; u.updatedAt=now();
-  // Sprint YALOG-WMS-014, item 11: identificadores exatos pedidos.
-  _auditoriaUsuario(vaiAtivar?'USUARIO_ATIVADO':'USUARIO_DESATIVADO', u);
+  // Sprint YALOG-WMS-017, item 15: identificador exato STATUS_ALTERADO,
+  // substituindo USUARIO_ATIVADO/USUARIO_DESATIVADO (WMS-014).
+  _auditoriaUsuario('STATUS_ALTERADO', u, {de:statusAntigo, para:vaiAtivar?'ativo':'inativo'});
   save();renderUsuarios();showT(vaiAtivar?'Usuário ativado':'Usuário desativado','ok');
-  // Sprint YALOG-WMS-015, itens 4/5: sincroniza ativação/desativação
-  // com o Supabase (best-effort).
+  // Sprint YALOG-WMS-016, itens 4/5: sincroniza com usuarios_operacionais
+  // (best-effort).
   _sincronizarUsuarioNaPlatform(u);
 }
 // Sprint YALOG-WMS-011 — Alterações 04-07: editar usuário operacional,
 // sempre restrito à empresa da sessão e nunca ao Master.
-// Sprint YALOG-WMS-012: gestão (editar/desativar) passa a ser
-// Master+Líder — Analista só cadastra (ver criarUsuario/podeCadastrarUsuarios).
-// Sprint YALOG-WMS-014, item 3: edição restrita a Nome/Perfil/Status —
-// login, company_id, empresa e id interno nunca mudam por aqui.
+// Sprint YALOG-WMS-012: gestão (editar/desativar) passa a ser Master+Líder.
+// Sprint YALOG-WMS-017, item 10: edição volta a permitir Login (login,
+// company_id, empresa e id interno continuam nunca editáveis pra além
+// do próprio campo Login já ter sua própria validação de duplicidade).
 function editarUsuario(id){
   if(!masterSession&&!podeGerirUsuarios()){showT('Ação requer Master ou Líder','err');return;}
   const u=DB.usuarios.find(x=>x.id===id&&x.company_id===usuarioAtual.company_id);
   if(!u){showT('Usuário não encontrado','err');return;}
   if(u.perfil==='master'){showT('O usuário Master é gerenciado pela YALog Platform','err');return;}
   document.getElementById('ueId').value=u.id;
-  document.getElementById('ueLoginSomenteLeitura').value=u.login;
   document.getElementById('ueNome').value=u.nome;
+  document.getElementById('ueLogin').value=u.login;
   document.getElementById('uePerfil').value=u.perfilExibicao||Object.keys(WMS_PERFIL_OPERACIONAL_MAP).find(k=>WMS_PERFIL_OPERACIONAL_MAP[k]===u.perfil)||'Conferente';
   document.getElementById('ueStatus').value=u.ativo!==false?'ativo':'inativo';
   openM('mEditarUsuarioWMS');
@@ -9589,14 +9662,19 @@ async function salvarEdicaoUsuarioWMS(){
   if(u.perfil==='master'){showT('O usuário Master é gerenciado pela YALog Platform','err');return;}
 
   const nome=document.getElementById('ueNome').value.trim();
+  const login=document.getElementById('ueLogin').value.trim();
   const rotulo=document.getElementById('uePerfil').value;
   const perfil=WMS_PERFIL_OPERACIONAL_MAP[rotulo];
   const status=document.getElementById('ueStatus').value;
   if(!nome){showT('Nome é obrigatório','err');return;}
+  if(!login){showT('Login é obrigatório','err');return;}
+  if(/\s/.test(login)){showT('Login não pode conter espaços','err');return;}
   if(!perfil){showT('Perfil é obrigatório','err');return;}
+  if(login!==u.login && DB.usuarios.find(x=>x.company_id===companyId&&x.login===login)){showT('Login já existe','err');return;}
 
   const camposAlterados=[];
   if(nome!==u.nome){u.nome=nome;camposAlterados.push('Nome');}
+  if(login!==u.login){u.login=login;camposAlterados.push('Login');}
   if(rotulo!==u.perfilExibicao){u.perfil=perfil;u.perfilExibicao=rotulo;camposAlterados.push('Perfil');}
   const ativoNovo=(status==='ativo');
   if(ativoNovo!==(u.ativo!==false)){u.ativo=ativoNovo;camposAlterados.push('Status');}
@@ -9604,16 +9682,22 @@ async function salvarEdicaoUsuarioWMS(){
   if(!camposAlterados.length){showT('Nenhuma alteração para salvar','info');closeM('mEditarUsuarioWMS');return;}
   u.updatedAt=now();
   // Sprint YALOG-WMS-014, item 11: identificador exato pedido.
-  _auditoriaUsuario('USUARIO_EDITADO', u);
+  _auditoriaUsuario('USUARIO_EDITADO', u, {campos:camposAlterados.join(', ')});
   save();closeM('mEditarUsuarioWMS');renderUsuarios();showT('Usuário atualizado','ok');
-  // Sprint YALOG-WMS-015, item 2: sincroniza a edição com o Supabase
-  // (best-effort).
+  // Sprint YALOG-WMS-016, item 2: sincroniza a edição com
+  // usuarios_operacionais (best-effort).
   _sincronizarUsuarioNaPlatform(u);
 }
-// Sprint YALOG-WMS-014, item 4: reset de senha — disponível só a
-// Master/Líder (podeGerirUsuarios), nunca para o Master, gera uma
-// senha temporária YLG-XXXXXX e marca obrigar_troca_senha=true.
-let _senhaResetVisivel=false;
+
+// ════════════════════════════════════════
+// MODAL SENHA (SPRINT YALOG-WMS-017, itens 11-12)
+// ════════════════════════════════════════
+// Substitui o antigo "Resetar Senha" (WMS-014) por um modal único com
+// duas formas de trocar a senha de um usuário operacional: manual
+// (Master e Líder podem definir qualquer senha) ou gerar uma senha
+// temporária YLG-XXXXXX. Disponível só a Master/Líder, nunca pro
+// Master (que troca a própria senha por Minha Conta).
+let _usuarioModalSenha=null;
 function _gerarSenhaTemporaria(){
   // Sem caracteres ambíguos (0/O, 1/I).
   const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -9621,32 +9705,75 @@ function _gerarSenhaTemporaria(){
   for(let i=0;i<6;i++)s+=chars[Math.floor(Math.random()*chars.length)];
   return 'YLG-'+s;
 }
-async function resetarSenhaUsuario(id){
+function abrirModalSenha(id){
   if(!masterSession&&!podeGerirUsuarios()){showT('Ação requer Master ou Líder','err');return;}
   const u=DB.usuarios.find(x=>x.id===id&&x.company_id===usuarioAtual.company_id);
   if(!u){showT('Usuário não encontrado','err');return;}
-  // Item 10: Líder nunca reseta a senha do Master (e nem o próprio
-  // Master usa este botão — a senha dele se troca por "Minha Conta").
-  if(u.perfil==='master'){showT('A senha do Master não é redefinida por aqui — use Minha Conta','err');return;}
-  if(!await wmsConfirm(`Gerar uma nova senha temporária para "${u.nome}"?\n\nA senha atual deixará de funcionar e o usuário precisará trocá-la no próximo login.`,'Resetar Senha','🔑','🔑 Gerar Nova Senha'))return;
-  const temp=_gerarSenhaTemporaria();
-  u.senha_hash=await hashSenha(temp);
-  u.obrigar_troca_senha=true;
+  if(u.perfil==='master'){showT('A senha do Master não é alterada por aqui — use Minha Conta','err');return;}
+  _usuarioModalSenha=u;
+  document.getElementById('senhaUsuarioId').value=u.id;
+  document.getElementById('senhaUsuarioNome').textContent=u.nome+' ('+u.login+')';
+  document.getElementById('senhaNovaManual').value='';
+  document.getElementById('senhaConfirmarManual').value='';
+  document.getElementById('senhaObrigarTroca').checked=false;
+  document.getElementById('senhaErro').style.display='none';
+  document.getElementById('senhaTempResultado').style.display='none';
+  document.getElementById('senhaTempValor').value='';
+  openM('mSenhaUsuario');
+}
+// Item Segurança: ao fechar, nunca deixa a senha em memória.
+function fecharModalSenha(){
+  _usuarioModalSenha=null;
+  document.getElementById('senhaNovaManual').value='';
+  document.getElementById('senhaConfirmarManual').value='';
+  document.getElementById('senhaTempValor').value='';
+  closeM('mSenhaUsuario');
+}
+async function salvarSenhaManual(){
+  const erroEl=document.getElementById('senhaErro');
+  erroEl.style.display='none';
+  const id=document.getElementById('senhaUsuarioId').value;
+  const u=DB.usuarios.find(x=>x.id===id&&x.company_id===usuarioAtual.company_id);
+  if(!u){erroEl.textContent='Usuário não encontrado.';erroEl.style.display='block';return;}
+  const nova=document.getElementById('senhaNovaManual').value;
+  const confirma=document.getElementById('senhaConfirmarManual').value;
+  if(!nova||nova.length<8){erroEl.textContent='A senha deve ter no mínimo 8 caracteres.';erroEl.style.display='block';return;}
+  if(nova!==confirma){erroEl.textContent='A confirmação não coincide com a nova senha.';erroEl.style.display='block';return;}
+  const obrigarTroca=document.getElementById('senhaObrigarTroca').checked;
+  u.senha_hash=await hashSenha(nova);
+  u.obrigar_troca_senha=obrigarTroca;
+  u.data_alteracao_senha=now();
   u.updatedAt=now();
   save();
-  // Item 11/12: auditoria nunca inclui a senha em si, só o evento.
-  _auditoriaUsuario('USUARIO_RESETADO', u);
-  document.getElementById('resetSenhaValor').value=temp;
-  _senhaResetVisivel=true;
-  openM('mResetSenha');
+  // Item 15/Segurança: auditoria nunca inclui a senha em si.
+  _auditoriaUsuario('SENHA_ALTERADA', u, {obrigar_troca_senha:obrigarTroca});
+  fecharModalSenha();
   renderUsuarios();
-  showT('Senha redefinida','ok');
-  // Sprint YALOG-WMS-015, item 3: sincroniza o novo senha_hash (nunca a
-  // senha em si) e obrigar_troca_senha com o Supabase (best-effort).
+  showT('Senha alterada','ok');
   _sincronizarUsuarioNaPlatform(u);
 }
-function copiarSenhaReset(){
-  const el=document.getElementById('resetSenhaValor');
+async function gerarESalvarSenhaTemporaria(){
+  const id=document.getElementById('senhaUsuarioId').value;
+  const u=DB.usuarios.find(x=>x.id===id&&x.company_id===usuarioAtual.company_id);
+  if(!u){showT('Usuário não encontrado','err');return;}
+  if(!await wmsConfirm(`Gerar uma nova senha temporária para "${u.nome}"?\n\nA senha atual deixará de funcionar e o usuário precisará trocá-la no próximo login.`,'Gerar Senha Temporária','🎲','🎲 Gerar'))return;
+  const temp=_gerarSenhaTemporaria();
+  u.senha_hash=await hashSenha(temp);
+  u.obrigar_troca_senha=true; // item 12: marca automaticamente
+  u.data_alteracao_senha=now();
+  u.updatedAt=now();
+  save();
+  // Item 15/Segurança: auditoria nunca inclui a senha em si, só o evento.
+  _auditoriaUsuario('SENHA_TEMPORARIA_GERADA', u);
+  document.getElementById('senhaObrigarTroca').checked=true;
+  document.getElementById('senhaTempValor').value=temp;
+  document.getElementById('senhaTempResultado').style.display='block';
+  renderUsuarios();
+  showT('Senha temporária gerada','ok');
+  _sincronizarUsuarioNaPlatform(u);
+}
+function copiarSenhaTemp(){
+  const el=document.getElementById('senhaTempValor');
   const valor=el.value;
   if(!valor)return;
   const copiar=()=>showT('Senha copiada','ok');
@@ -9656,12 +9783,26 @@ function copiarSenhaReset(){
     el.select();document.execCommand('copy');copiar();
   }
 }
-// Item 12: ao fechar, limpa o valor da tela e a flag — a senha
-// temporária não fica guardada em nenhuma variável depois disso.
-function fecharResetSenha(){
-  _senhaResetVisivel=false;
-  document.getElementById('resetSenhaValor').value='';
-  closeM('mResetSenha');
+
+// Sprint YALOG-WMS-017, item 13: exclusão definitiva de usuário
+// operacional — exclusiva do Master (item 14: Líder nunca exclui).
+// Nunca exclui o Master, histórico ou auditoria — só o cadastro do
+// usuário operacional em si.
+async function excluirUsuarioDefinitivo(id){
+  if(!masterSession&&!podeExcluirUsuarios()){showT('Exclusão é exclusiva do Master','err');return;}
+  const companyId=usuarioAtual.company_id;
+  const u=DB.usuarios.find(x=>x.id===id&&x.company_id===companyId);
+  if(!u){showT('Usuário não encontrado','err');return;}
+  if(u.perfil==='master'){showT('Não é possível excluir o Master','err');return;}
+  if(!await wmsConfirm('Deseja realmente excluir este usuário?\n\nEsta ação é definitiva.','Excluir Usuário','🗑️','🗑️ Excluir'))return;
+  DB.usuarios=DB.usuarios.filter(x=>!(x.id===id&&x.company_id===companyId));
+  save();
+  _auditoriaUsuario('USUARIO_EXCLUIDO', u);
+  renderUsuarios();
+  showT('Usuário excluído','ok');
+  // Remove também de usuarios_operacionais (best-effort) — sem isso, o
+  // usuário voltaria a aparecer no próximo download de outro computador.
+  _excluirUsuarioNaPlatform(u);
 }
 
 // ════════════════════════════════════════
