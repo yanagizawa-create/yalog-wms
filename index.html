@@ -506,6 +506,9 @@ a{color:inherit;text-decoration:none;}
     <div class="nav-grp">Dados</div>
     <div class="ni" onclick="go('historico')"><span class="ni-ic"><i data-lucide="layout-grid"></i></span> Movimentações</div>
     <div class="ni" onclick="exportAll()"><span class="ni-ic"><i data-lucide="download"></i></span> Exportar CSV</div>
+
+    <div class="nav-grp">Conta</div>
+    <div class="ni" onclick="go('minhaConta')"><span class="ni-ic"><i data-lucide="user-cog"></i></span> Minha Conta</div>
   </nav>
   <div class="sb-foot">WMS • v2.0.0<br>YALOG-WMS-001 • v2.0.0 Build 001</div>
 </aside>
@@ -1874,6 +1877,23 @@ a{color:inherit;text-decoration:none;}
   </div>
 </div>
 
+<!-- ════ MINHA CONTA (SPRINT YALOG-WMS-012) ════ -->
+<div class="screen" id="s-minhaConta">
+  <div class="ph">
+    <div><div class="ph-eye">Conta</div><div class="ph-title">Minha <em>Conta</em></div></div>
+  </div>
+  <div class="fsec" style="max-width:420px;">
+    <div class="fsec-t">🔑 Alterar Senha</div>
+    <p style="font-size:12px;color:var(--w70);margin-bottom:16px;">Disponível apenas para o usuário logado: <strong id="mcNomeUsuario">—</strong></p>
+    <div id="mcFormSenha">
+      <div class="fg" style="margin-bottom:12px;"><label>Nova Senha <span class="req">*</span></label><input type="password" id="mcNovaSenha" placeholder="Mínimo 4 caracteres"></div>
+      <div class="fg" style="margin-bottom:16px;"><label>Confirmar Senha <span class="req">*</span></label><input type="password" id="mcConfirmaSenha" placeholder="Repita a nova senha"></div>
+      <div id="mcErro" style="display:none;color:#f87171;font-size:11px;margin-bottom:12px;"></div>
+      <button class="btn btn-p" onclick="salvarMinhaConta()">✓ Salvar</button>
+    </div>
+    <div id="mcMasterAviso" style="display:none;font-size:12px;color:var(--w40);background:var(--bg3);padding:12px;border-left:2px solid var(--orange);">A senha do usuário Master é gerenciada pela YALog Platform e não pode ser alterada por aqui.</div>
+  </div>
+</div>
 
 <!-- ════ CONFIGURAÇÕES GERAIS (SPRINT YALOG-WMS-CERT-002) ════ -->
 <div class="screen" id="s-configGeral">
@@ -3157,12 +3177,11 @@ a{color:inherit;text-decoration:none;}
   <div class="fg" style="margin-bottom:20px;"><label>Perfil <span class="req">*</span></label>
     <select id="uPerfil">
       <option value="">Selecione o perfil...</option>
-      <option value="Conferente">Conferente</option>
-      <option value="Inventário">Inventário</option>
-      <option value="Operador">Operador</option>
-      <option value="Administrativo">Administrativo</option>
-      <option value="Supervisor">Supervisor</option>
       <option value="Líder">Líder</option>
+      <option value="Analista">Analista</option>
+      <option value="Administrativo">Administrativo</option>
+      <option value="Conferente">Conferente</option>
+      <option value="Operador">Operador</option>
     </select>
     <div id="perfilDesc" style="font-size:10px;color:var(--w40);font-family:var(--mono);margin-top:6px;padding:8px 10px;background:var(--bg3);border-left:2px solid var(--orange);display:none;"></div>
   </div>
@@ -3179,12 +3198,11 @@ a{color:inherit;text-decoration:none;}
   <div class="fg" style="margin-bottom:12px;"><label>Login (usuário) <span class="req">*</span></label><input type="text" id="ueLogin" style="text-transform:lowercase;" oninput="this.value=this.value.toLowerCase()"></div>
   <div class="fg" style="margin-bottom:12px;"><label>Perfil <span class="req">*</span></label>
     <select id="uePerfil">
-      <option value="Conferente">Conferente</option>
-      <option value="Inventário">Inventário</option>
-      <option value="Operador">Operador</option>
-      <option value="Administrativo">Administrativo</option>
-      <option value="Supervisor">Supervisor</option>
       <option value="Líder">Líder</option>
+      <option value="Analista">Analista</option>
+      <option value="Administrativo">Administrativo</option>
+      <option value="Conferente">Conferente</option>
+      <option value="Operador">Operador</option>
     </select>
   </div>
   <div class="fg" style="margin-bottom:12px;"><label>Status</label>
@@ -5331,6 +5349,40 @@ function _applyLoadedData(parsed){
   if(!DB.logo)        DB.logo={nome:'Seu Armazém',emoji:'🏭',img:null};
   // Remove masters sem _userCreated, exceto o usuário técnico de desenvolvimento (segurança)
   DB.usuarios=DB.usuarios.filter(u=>u.perfil!=='master'||u._userCreated===true||u._devTecnico===true);
+  // ── SPRINT YALOG-WMS-012: conversão automática de perfis antigos ──
+  // Perfis oficiais e definitivos: master/lider/analista/administrativo/
+  // conferente/operador. Qualquer usuário com perfil interno antigo
+  // (supervisor/estoquista/encarregado) é migrado para o equivalente
+  // mais próximo, sem perda de acesso:
+  //   supervisor            → lider
+  //   encarregado (legado, nunca chegou a ser atribuído por cadastro) → lider
+  //   estoquista + perfilExibicao='Administrativo' → administrativo
+  //   estoquista (demais casos, ex: perfilExibicao='Operador')       → operador
+  //   conferente/master → mantidos, só normaliza perfilExibicao
+  // Qualquer outro perfil desconhecido/obsoleto → lider (acesso mais
+  // amplo entre os operacionais, para não reduzir acesso de quem já
+  // tinha uma conta ativa). Cada conversão é registrada na auditoria.
+  const PERFIS_OFICIAIS_012=['master','lider','analista','administrativo','conferente','operador'];
+  DB.usuarios.forEach(u=>{
+    if(!u.perfil)return;
+    const perfilAntigo=u.perfil;
+    if(perfilAntigo==='supervisor'||perfilAntigo==='encarregado'){
+      u.perfil='lider'; u.perfilExibicao='Líder';
+    } else if(perfilAntigo==='estoquista'){
+      const paraAdministrativo=u.perfilExibicao==='Administrativo';
+      u.perfil=paraAdministrativo?'administrativo':'operador';
+      u.perfilExibicao=paraAdministrativo?'Administrativo':'Operador';
+    } else if(perfilAntigo==='conferente'){
+      u.perfilExibicao='Conferente';
+    } else if(perfilAntigo==='master'){
+      u.perfilExibicao='Master';
+    } else if(!PERFIS_OFICIAIS_012.includes(perfilAntigo)){
+      u.perfil='lider'; u.perfilExibicao='Líder';
+    }
+    if(u.perfil!==perfilAntigo){
+      logAuditoria('ALTERAÇÃO_DE_PERFIL', u.nome||u.login||'—', {de:perfilAntigo, para:u.perfil, motivo:'Conversão automática — Sprint YALOG-WMS-012'});
+    }
+  });
   // SPRINT YALOG-WMS-CERT-001, item 8 (histórico) — usuário técnico
   // permanente para homologação/debug. Sprint YALOG-WMS-007, item 1:
   // autenticação local foi eliminada por completo, então este seed
@@ -5494,7 +5546,7 @@ function barcode(num){let h='<div class="barcode-wrap"><div class="barcode-bars"
 // ══════════════════════════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════════════════════════
-const TITLES={capArmazem:'Capacidade do Armazém',home:'Visão Geral',recUpload:'Entrada de Mercadoria',recTarefas:'Conferências',estoqueList:'Produtos em Estoque',estoqueMapa:'Mapa do Armazém',curvaABC:'Curva ABC',bloqueios:'Posições Bloqueadas',sepUpload:'Solicitação de Separação',sepTarefas:'Tarefas de Separação',expedicao:'Expedição',devolucao:'Devoluções de Clientes',alertasValidade:'Alertas de Validade',ageingReport:'Ageing Report',custoArmazem:'Custo de Armazenagem',invList:'Inventários',historico:'Movimentações',cargaEstoque:'Carga de Estoque',enderecos:'Endereços',ajusteEstoque:'Ajuste de Estoque',masterAceite:'Aceites Master',usuarios:'Usuários',armazenagem:'Tarefas de Armazenagem',movimentar:'Movimentação entre Endereços',relSaida:'Relatório de Saída',relEstoque:'Relatório de Estoque',relRecebimento:'Relatório de Recebimento',tarefasMov:'Tarefas de Movimentação',paletes:'Rastreabilidade de Paletes',sites:'Unidades Logísticas',clientes:'Cadastro de Clientes',matrizPP:'Matriz Capacidade PP',limparEstoque:'Limpar / Excluir Estoque',backup:'Backup do Estoque',configGeral:'Configurações Gerais'};
+const TITLES={capArmazem:'Capacidade do Armazém',home:'Visão Geral',recUpload:'Entrada de Mercadoria',recTarefas:'Conferências',estoqueList:'Produtos em Estoque',estoqueMapa:'Mapa do Armazém',curvaABC:'Curva ABC',bloqueios:'Posições Bloqueadas',sepUpload:'Solicitação de Separação',sepTarefas:'Tarefas de Separação',expedicao:'Expedição',devolucao:'Devoluções de Clientes',alertasValidade:'Alertas de Validade',ageingReport:'Ageing Report',custoArmazem:'Custo de Armazenagem',invList:'Inventários',historico:'Movimentações',cargaEstoque:'Carga de Estoque',enderecos:'Endereços',ajusteEstoque:'Ajuste de Estoque',masterAceite:'Aceites Master',usuarios:'Usuários',armazenagem:'Tarefas de Armazenagem',movimentar:'Movimentação entre Endereços',relSaida:'Relatório de Saída',relEstoque:'Relatório de Estoque',relRecebimento:'Relatório de Recebimento',tarefasMov:'Tarefas de Movimentação',paletes:'Rastreabilidade de Paletes',sites:'Unidades Logísticas',clientes:'Cadastro de Clientes',matrizPP:'Matriz Capacidade PP',limparEstoque:'Limpar / Excluir Estoque',backup:'Backup do Estoque',configGeral:'Configurações Gerais',minhaConta:'Minha Conta'};
 function go(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById('s-'+id).classList.add('active');
@@ -5535,7 +5587,7 @@ function go(id){
     const el=document.getElementById('limparGeralBloco');
     if(el)el.style.display=isMaster()?'block':'none';
     const sl=document.getElementById('limparSeletivoBloco');
-    if(sl)sl.style.display=canAccess('supervisor')?'block':'none';
+    if(sl)sl.style.display=isMaster()?'block':'none';
   }
   // módulos v2
   if(id==='enderecos'){populateEndSites();populateFiltrosEnd();renderEnderecos();}
@@ -5544,6 +5596,7 @@ function go(id){
   if(id==='masterAceite')renderMasterAceite();
   if(id==='usuarios')renderUsuarios();
   if(id==='configGeral')renderConfigGeral();
+  if(id==='minhaConta')renderMinhaConta();
   updateBadges();
   if(window.innerWidth<900)document.getElementById('sb').classList.remove('open');
   if(window.lucide) lucide.createIcons();
@@ -8707,7 +8760,7 @@ function renderLoginUsers(){
   const ativos=DB.usuarios.filter(u=>u.ativo!==false);
   list.innerHTML=ativos.map(u=>`
     <div class="user-chip" onclick="selectUser('${u.id}')" id="uchip-${u.id}">
-      <div class="user-chip-avatar" style="background:${{'master':'var(--orange)','supervisor':'#7c3aed','estoquista':'#0891b2','conferente':'#16a34a'}[u.perfil]||'#16a34a'};color:#fff;">${u.nome[0].toUpperCase()}</div>
+      <div class="user-chip-avatar" style="background:${(PERFIS[u.perfil]&&PERFIS[u.perfil].color)||'#16a34a'};color:#fff;">${u.nome[0].toUpperCase()}</div>
       <div style="flex:1;"><div class="user-chip-name">${u.nome}</div><div class="user-chip-role">${u.login} · ${u.perfil}</div></div>
       ${perfilBadge(u.perfil)}
     </div>`).join('');
@@ -8889,8 +8942,7 @@ async function fazerLogin(){
 function updateUserPill(){
   if(!usuarioAtual)return;
   document.getElementById('tbAvatar').textContent=usuarioAtual.nome[0].toUpperCase();
-  const avatarColors={master:'var(--orange)',supervisor:'#7c3aed',estoquista:'#0891b2',conferente:'#16a34a'};
-  document.getElementById('tbAvatar').style.background=avatarColors[usuarioAtual.perfil]||'#16a34a';
+  document.getElementById('tbAvatar').style.background=(PERFIS[usuarioAtual.perfil]&&PERFIS[usuarioAtual.perfil].color)||'#16a34a';
   document.getElementById('tbUname').textContent=usuarioAtual.nome;
   document.getElementById('tbUrole').textContent=usuarioAtual.perfil;
 }
@@ -8925,28 +8977,34 @@ function sairMaster(){masterSession=false;renderMasterAceite();renderUsuarios();
 // ════════════════════════════════════════
 // PERFIS — helper e controle de acesso
 // ════════════════════════════════════════
+// ── SPRINT YALOG-WMS-012: Consolidação dos Perfis Operacionais ──
+// Os 6 perfis oficiais e definitivos do WMS. Substituem os 4 perfis
+// internos antigos (master/supervisor/estoquista/conferente) e o
+// perfil legado morto 'encarregado' (nunca chegou a ser atribuído
+// por nenhum fluxo de cadastro — só existia na hierarquia antiga).
+// 'master' nunca é atribuível pelo cadastro do WMS (Master só vem da
+// YALog Platform — arquitetura estabelecida desde a Sprint
+// YALOG-WMS-007/009/011, protegida pela seção "Compatibilidade"
+// desta Sprint, que proíbe alterar o Login da Platform).
 const PERFIS = {
-  master:     {label:'Master',         color:'var(--orange)', desc:'Acesso total · Gestão de usuários'},
-  supervisor: {label:'Supervisor',     color:'#7c3aed',       desc:'Acesso completo incluindo ajustes de estoque'},
-  estoquista: {label:'Estoquista',     color:'#0891b2',       desc:'Gestão operacional completa, sem ajustes'},
-  conferente: {label:'Conferente',     color:'#16a34a',       desc:'Separação, conferências, consulta e inventário'},
+  master:         {label:'Master',         color:'var(--orange)', desc:'Acesso total — administração completa do sistema.'},
+  lider:          {label:'Líder',          color:'#7c3aed',       desc:'Gestão operacional completa · Aprova e executa Ajustes de Estoque · Gestão de usuários operacionais.'},
+  analista:       {label:'Analista',       color:'#2563eb',       desc:'Operação, planejamento, relatórios e consultas · Ajustes de Estoque sujeitos à aprovação do Líder.'},
+  administrativo: {label:'Administrativo', color:'#0891b2',       desc:'Cadastros, produtos, clientes, fornecedores e relatórios · Sem movimentações operacionais.'},
+  conferente:     {label:'Conferente',     color:'#16a34a',       desc:'Recebimento, conferência, expedição, inventário e consultas de estoque.'},
+  operador:       {label:'Operador',       color:'#65a30d',       desc:'Recebimento, armazenagem, separação, movimentações e expedição (execução).'},
 };
-// Sprint YALOG-WMS-011: rótulos de cadastro para usuários operacionais
-// do WMS, mapeados para os 4 níveis internos ACIMA — canAccess/
-// canAdjust/PERFIS/a hierarquia de permissões não mudam nesta Sprint,
-// só ganham novos nomes de entrada. 'master' nunca é atribuível por
-// aqui (item 7 — Master só vem da Platform). Mapeamento fundamentado
-// nas descrições já existentes acima: Conferente/Inventário → mesmo
-// nível de "conferências...consulta e inventário"; Operador/
-// Administrativo → "gestão operacional completa, sem ajustes";
-// Supervisor/Líder → "acesso completo incluindo ajustes de estoque".
+// Rótulos de cadastro para usuários operacionais do WMS — agora 1:1
+// com os 6 perfis oficiais (nenhum rótulo duplicado apontando para o
+// mesmo perfil interno, como acontecia antes com Conferente/Inventário
+// e Operador/Administrativo). 'Master' fica de fora do cadastro (ver
+// nota acima) — o combo de Perfil exibe só os 5 perfis operacionais.
 const WMS_PERFIL_OPERACIONAL_MAP = {
+  'Líder':          'lider',
+  'Analista':       'analista',
+  'Administrativo': 'administrativo',
   'Conferente':     'conferente',
-  'Inventário':     'conferente',
-  'Operador':       'estoquista',
-  'Administrativo': 'estoquista',
-  'Supervisor':     'supervisor',
-  'Líder':          'supervisor',
+  'Operador':       'operador',
 };
 function perfilBadge(perfil, rotulo){
   const p=PERFIS[perfil];
@@ -8955,25 +9013,57 @@ function perfilBadge(perfil, rotulo){
   const texto=(rotulo||p.label).toUpperCase();
   return`<span style="background:${p.color}22;color:${p.color};font-size:8px;font-family:var(--mono);padding:2px 7px;font-weight:700;letter-spacing:.08em;">${texto}</span>`;
 }
-// Verifica se o usuário atual pode acessar determinada funcionalidade
-// nivel: 'conferente' | 'estoquista' | 'supervisor' | 'master'
+// Matriz oficial de permissões (Sprint YALOG-WMS-012) — base para o
+// futuro Controle de Permissões. Cada perfil aponta para o conjunto de
+// capacidades que pode exercer. Substitui a hierarquia linear antiga
+// (['conferente','estoquista','encarregado','supervisor','master']),
+// que não é mais capaz de representar perfis não-lineares como
+// Administrativo (cadastros, sem movimentação) e Operador (movimentação,
+// sem cadastro).
+const WMS_PERMISSOES = {
+  master:['dashboard','recebimento','conferencia','armazenagem','expedicao','inventario_abrir','inventario_aprovar','movimentacoes','indicadores','cadastros','planejamento','relatorios','consultas','consultas_estoque','ajuste_executar','ajuste_aprovar','gestao_usuarios','cadastro_usuarios','config_geral','limpar_estoque','backup','restore','inicializar_instalacao','exclusoes_criticas'],
+  lider:['dashboard','recebimento','conferencia','armazenagem','expedicao','inventario_abrir','inventario_aprovar','movimentacoes','indicadores','cadastros','ajuste_executar','ajuste_aprovar','gestao_usuarios','cadastro_usuarios'],
+  analista:['dashboard','recebimento','conferencia','armazenagem','expedicao','inventario_abrir','movimentacoes','indicadores','planejamento','relatorios','consultas','cadastro_usuarios'],
+  administrativo:['cadastros','produtos','clientes','fornecedores','transportadoras','relatorios','consultas','dashboard_readonly'],
+  conferente:['recebimento','conferencia','expedicao','inventario_abrir','consultas_estoque'],
+  operador:['recebimento','armazenagem','separacao','movimentacoes','expedicao_execucao'],
+};
+function temPermissao(chave){
+  if(!usuarioAtual)return false;
+  const lista=WMS_PERMISSOES[usuarioAtual.perfil];
+  return Array.isArray(lista)&&lista.includes(chave);
+}
+// canAccess(nivel) mantém a MESMA assinatura usada em ~25 pontos do
+// arquivo (nunca reescritos nesta Sprint) — só troca a hierarquia
+// linear pela consulta à matriz oficial via temPermissao(), mapeando
+// os níveis legados para a capacidade equivalente mais próxima.
 function canAccess(nivel){
   if(!usuarioAtual)return false;
-  const hierarquia=['conferente','estoquista','encarregado','supervisor','master'];
-  const userIdx=hierarquia.indexOf(usuarioAtual.perfil);
-  const nivelIdx=hierarquia.indexOf(nivel);
-  return userIdx>=nivelIdx;
+  if(usuarioAtual.perfil==='master')return true;
+  const MAPA_NIVEL_LEGADO={estoquista:'armazenagem',supervisor:'ajuste_aprovar',encarregado:'inventario_aprovar'};
+  return temPermissao(MAPA_NIVEL_LEGADO[nivel]||nivel);
 }
 function canAdjust(){
-  // Ajuste de estoque: supervisor e master
-  return usuarioAtual&&(usuarioAtual.perfil==='supervisor'||usuarioAtual.perfil==='master');
+  // Ajuste de Estoque: Master executa direto; Líder aprova e executa
+  // (matriz oficial da Sprint YALOG-WMS-012).
+  return usuarioAtual&&(usuarioAtual.perfil==='master'||usuarioAtual.perfil==='lider');
+}
+// Gestão de usuários operacionais: Master e Líder (CRUD completo).
+function podeGerirUsuarios(){
+  return usuarioAtual&&(usuarioAtual.perfil==='master'||usuarioAtual.perfil==='lider');
+}
+// Cadastro de usuários operacionais: Master, Líder e Analista (Analista
+// só cadastra — não edita/desativa/exclui, conforme matriz oficial).
+function podeCadastrarUsuarios(){
+  return usuarioAtual&&(usuarioAtual.perfil==='master'||usuarioAtual.perfil==='lider'||usuarioAtual.perfil==='analista');
 }
 
 async function criarUsuario(){
-  // Sprint YALOG-WMS-011: usuários operacionais voltaram a ser geridos
-  // 100% pelo WMS — a Platform só cuida do Usuário Master (ver
-  // fazerLogin()). Item 3: só o Master gerencia usuários.
-  if(!masterSession&&!isMaster()){showT('Acesso restrito ao Master','err');return;}
+  // Sprint YALOG-WMS-011: usuários operacionais geridos 100% pelo WMS.
+  // Sprint YALOG-WMS-012: matriz oficial de perfis — cadastro de
+  // usuários operacionais passa a ser permitido também a Líder e
+  // Analista (antes restrito só ao Master).
+  if(!masterSession&&!podeCadastrarUsuarios()){showT('Sem permissão para cadastrar usuários','err');return;}
   const nome=document.getElementById('uNome').value.trim();
   const login=document.getElementById('uLogin').value.trim();
   const senha=document.getElementById('uSenha').value;
@@ -8998,7 +9088,8 @@ async function criarUsuario(){
   closeM('mNovoUsuario');renderUsuarios();showT(`Usuário "${nome}" criado!`,'ok');
 }
 function renderUsuarios(){
-  const isMasterMode=isMaster()||masterSession;
+  const isMasterMode=isMaster()||masterSession||podeCadastrarUsuarios();
+  const podeGerir=podeGerirUsuarios()||masterSession;
   document.getElementById('usuariosMasterBlock').style.display=isMasterMode?'none':'block';
   document.getElementById('usuariosMasterPanel').style.display=isMasterMode?'block':'none';
   // Item 9: nunca listar usuários de outra empresa — tudo filtrado pelo
@@ -9019,13 +9110,13 @@ function renderUsuarios(){
     <td class="mn">${fD(u.createdAt?u.createdAt.split('T')[0]:'—')}</td>
     <td>${u.ativo!==false?'<span class="bg bg-gr">Ativo</span>':'<span class="bg bg-re">Inativo</span>'}</td>
     <td>
-      ${u.perfil!=='master'?`<button class="btn btn-o btn-xs" onclick="editarUsuario('${u.id}')">Editar</button> <button class="btn btn-r btn-xs" onclick="desativarUsuario('${u.id}')">${u.ativo!==false?'Desativar':'Ativar'}</button> <button class="btn btn-r btn-xs" onclick="excluirUsuario('${u.id}')">Excluir</button>`:'<span style="font-size:10px;color:var(--w40);">— vem da YALog Platform</span>'}
+      ${u.perfil==='master'?'<span style="font-size:10px;color:var(--w40);">— vem da YALog Platform</span>':(podeGerir?`<button class="btn btn-o btn-xs" onclick="editarUsuario('${u.id}')">Editar</button> <button class="btn btn-r btn-xs" onclick="desativarUsuario('${u.id}')">${u.ativo!==false?'Desativar':'Ativar'}</button> <button class="btn btn-r btn-xs" onclick="excluirUsuario('${u.id}')">Excluir</button>`:'<span style="font-size:10px;color:var(--w40);">— cadastro (Analista)</span>')}
     </td>
   </tr>`).join('');
   document.getElementById('masterNomeDisplay').textContent=usuariosDaEmpresa.find(u=>u.perfil==='master')?.nome||'Master';
 }
 async function desativarUsuario(id){
-  if(!masterSession&&!isMaster()){showT('Ação requer Master','err');return;}
+  if(!masterSession&&!podeGerirUsuarios()){showT('Ação requer Master ou Líder','err');return;}
   const u=DB.usuarios.find(x=>x.id===id&&x.company_id===usuarioAtual.company_id);if(!u)return;
   if(u.perfil==='master'){showT('Não é possível desativar o Master','err');return;}
   const vaiAtivar=u.ativo===false;
@@ -9036,8 +9127,10 @@ async function desativarUsuario(id){
 }
 // Sprint YALOG-WMS-011 — Alterações 04-07: editar e excluir usuário
 // operacional, sempre restrito à empresa da sessão e nunca ao Master.
+// Sprint YALOG-WMS-012: gestão (editar/desativar/excluir) passa a ser
+// Master+Líder — Analista só cadastra (ver criarUsuario/podeCadastrarUsuarios).
 function editarUsuario(id){
-  if(!masterSession&&!isMaster()){showT('Acesso restrito ao Master','err');return;}
+  if(!masterSession&&!podeGerirUsuarios()){showT('Ação requer Master ou Líder','err');return;}
   const u=DB.usuarios.find(x=>x.id===id&&x.company_id===usuarioAtual.company_id);
   if(!u){showT('Usuário não encontrado','err');return;}
   if(u.perfil==='master'){showT('O usuário Master é gerenciado pela YALog Platform','err');return;}
@@ -9050,7 +9143,7 @@ function editarUsuario(id){
   openM('mEditarUsuarioWMS');
 }
 async function salvarEdicaoUsuarioWMS(){
-  if(!masterSession&&!isMaster()){showT('Acesso restrito ao Master','err');return;}
+  if(!masterSession&&!podeGerirUsuarios()){showT('Ação requer Master ou Líder','err');return;}
   const id=document.getElementById('ueId').value;
   const companyId=usuarioAtual.company_id;
   const u=DB.usuarios.find(x=>x.id===id&&x.company_id===companyId);
@@ -9068,20 +9161,27 @@ async function salvarEdicaoUsuarioWMS(){
   if(senha && senha.length<4){showT('Senha mínima: 4 caracteres','err');return;}
 
   const camposAlterados=[];
+  const perfilAntigo=u.perfilExibicao||u.perfil;
+  let perfilMudou=false, senhaMudou=false;
   if(nome!==u.nome){u.nome=nome;camposAlterados.push('Nome');}
   if(login!==u.login){u.login=login;camposAlterados.push('Login');}
-  if(rotulo!==u.perfilExibicao){u.perfil=perfil;u.perfilExibicao=rotulo;camposAlterados.push('Perfil');}
+  if(rotulo!==u.perfilExibicao){u.perfil=perfil;u.perfilExibicao=rotulo;camposAlterados.push('Perfil');perfilMudou=true;}
   const ativoNovo=(status==='ativo');
   if(ativoNovo!==(u.ativo!==false)){u.ativo=ativoNovo;camposAlterados.push('Status');}
-  if(senha){u.senha_hash=await hashSenha(senha);camposAlterados.push('Senha');}
+  if(senha){u.senha_hash=await hashSenha(senha);camposAlterados.push('Senha');senhaMudou=true;}
 
   if(!camposAlterados.length){showT('Nenhuma alteração para salvar','info');closeM('mEditarUsuarioWMS');return;}
   u.updatedAt=now();
-  logAuditoria('Usuário editado', u.nome, {campos:camposAlterados.join(', '), company_id:companyId});
+  // Sprint YALOG-WMS-012, item Auditoria: eventos dedicados além do
+  // registro geral, mesmo padrão de logAuditoria já usado no resto do
+  // sistema.
+  logAuditoria('ALTERAÇÃO_DE_USUÁRIO', u.nome, {campos:camposAlterados.join(', '), company_id:companyId});
+  if(perfilMudou)logAuditoria('ALTERAÇÃO_DE_PERFIL', u.nome, {de:perfilAntigo, para:rotulo, company_id:companyId});
+  if(senhaMudou)logAuditoria('ALTERAÇÃO_DE_SENHA', u.nome, {company_id:companyId});
   save();closeM('mEditarUsuarioWMS');renderUsuarios();showT('Usuário atualizado','ok');
 }
 async function excluirUsuario(id){
-  if(!masterSession&&!isMaster()){showT('Acesso restrito ao Master','err');return;}
+  if(!masterSession&&!podeGerirUsuarios()){showT('Ação requer Master ou Líder','err');return;}
   const companyId=usuarioAtual.company_id;
   const u=DB.usuarios.find(x=>x.id===id&&x.company_id===companyId);
   if(!u){showT('Usuário não encontrado','err');return;}
@@ -9090,6 +9190,52 @@ async function excluirUsuario(id){
   DB.usuarios=DB.usuarios.filter(x=>!(x.id===id&&x.company_id===companyId));
   logAuditoria('Usuário excluído', u.nome, {perfil:u.perfilExibicao||u.perfil, company_id:companyId});
   save();renderUsuarios();showT('Usuário excluído','ok');
+}
+
+// ════════════════════════════════════════
+// MINHA CONTA (SPRINT YALOG-WMS-012)
+// ════════════════════════════════════════
+// Disponível apenas para o usuário logado, para trocar a própria
+// senha. IMPORTANTE: o Master autentica direto contra a YALog Platform
+// a cada login (Sprint YALOG-WMS-009) — seu senha_hash local é só um
+// espelho, nunca é de fato checado no login. Trocar esse campo local
+// não teria efeito real na senha do Master, então em vez de simular
+// uma troca que não funcionaria, mostramos um aviso direcionando à
+// Platform (mesmo padrão já usado na tela de Usuários para o Master:
+// "vem da YALog Platform"). Para os demais perfis (operacionais), a
+// senha É validada localmente, então a troca funciona de verdade.
+function renderMinhaConta(){
+  const nomeEl=document.getElementById('mcNomeUsuario');
+  if(nomeEl)nomeEl.textContent=usuarioAtual?usuarioAtual.nome:'—';
+  const form=document.getElementById('mcFormSenha');
+  const aviso=document.getElementById('mcMasterAviso');
+  const ehMaster=isMaster();
+  if(form)form.style.display=ehMaster?'none':'block';
+  if(aviso)aviso.style.display=ehMaster?'block':'none';
+  const erroEl=document.getElementById('mcErro');if(erroEl)erroEl.style.display='none';
+  const n1=document.getElementById('mcNovaSenha'),n2=document.getElementById('mcConfirmaSenha');
+  if(n1)n1.value='';if(n2)n2.value='';
+}
+async function salvarMinhaConta(){
+  if(!usuarioAtual){showT('Sessão inválida','err');return;}
+  if(isMaster()){showT('A senha do Master é gerenciada pela YALog Platform','err');return;}
+  const erroEl=document.getElementById('mcErro');
+  erroEl.style.display='none';
+  const novaSenha=document.getElementById('mcNovaSenha').value;
+  const confirmaSenha=document.getElementById('mcConfirmaSenha').value;
+  if(!novaSenha||novaSenha.length<4){erroEl.textContent='A senha deve ter no mínimo 4 caracteres.';erroEl.style.display='block';return;}
+  if(novaSenha!==confirmaSenha){erroEl.textContent='As senhas não coincidem.';erroEl.style.display='block';return;}
+  const u=DB.usuarios.find(x=>x.id===usuarioAtual.id);
+  if(!u){erroEl.textContent='Usuário não encontrado.';erroEl.style.display='block';return;}
+  // Mesma função de hash usada pelo login (hashSenha) — nunca grava
+  // senha em texto puro.
+  u.senha_hash=await hashSenha(novaSenha);
+  u.updatedAt=now();
+  save();
+  logAuditoria('ALTERAÇÃO_DE_SENHA', u.nome, {company_id:u.company_id});
+  document.getElementById('mcNovaSenha').value='';
+  document.getElementById('mcConfirmaSenha').value='';
+  showT('Senha alterada com sucesso!','ok');
 }
 
 
@@ -9109,6 +9255,7 @@ function cfgTab(tab){
   if(window.lucide)lucide.createIcons();
 }
 function renderConfigGeral(){
+  if(!isMaster()){showT('Configurações Gerais é exclusivo do Master','err');go('home');return;}
   // Empresa
   const nomeEl=document.getElementById('cfgEmpresaNomeAtual');
   if(nomeEl)nomeEl.textContent=DB.logo?.nome||'Seu Armazém';
@@ -10351,7 +10498,8 @@ function calcAjuste(){
   }
 }
 function solicitarAjuste(){
-  if(!canAdjust()&&!canAccess('estoquista')){showT('Sem permissão para solicitar ajuste','err');return;}
+  if(usuarioAtual&&usuarioAtual.perfil==='analista'){showT('Ajuste sujeito à aprovação do Líder.','err');return;}
+  if(!canAdjust()){showT('Sem permissão para solicitar ajuste','err');return;}
   const wmsId=document.getElementById('ajWmsId').value;
   const tipo=document.getElementById('ajTipo').value;
   const qtdFis=parseInt(document.getElementById('ajQtdFisica').value);
@@ -10502,9 +10650,11 @@ document.addEventListener('DOMContentLoaded',()=>{
   const descP=document.getElementById('perfilDesc');
   if(selP&&descP){
     const descs={
-      conferente:'Separação · Movimentação de endereços · Conferência de entrada e saída · Consulta de estoque · Inventário',
-      estoquista:'Tudo do Conferente + Carga de estoque · Mapa · Curva ABC · Bloqueios · Recebimento completo',
-      supervisor:'Acesso total incluindo Ajuste de estoque · Aprovação de ajustes (igual ao Master, sem gestão de usuários)',
+      'Líder':'Gestão operacional completa · Aprova e executa Ajustes de Estoque · Gestão de usuários operacionais',
+      'Analista':'Operação, planejamento, relatórios e consultas · Ajuste de Estoque sujeito à aprovação do Líder',
+      'Administrativo':'Cadastros, produtos, clientes, fornecedores e relatórios · Sem movimentações operacionais',
+      'Conferente':'Recebimento, conferência, expedição, inventário e consultas de estoque',
+      'Operador':'Recebimento, armazenagem, separação, movimentações e expedição (execução)',
     };
     selP.addEventListener('change',()=>{
       const d=descs[selP.value];
@@ -10753,27 +10903,27 @@ async function fazerLogoff(){
 function updateNavByPerfil(){
   if(!usuarioAtual)return;
   const perfil=usuarioAtual.perfil;
-  const isSuperiorOrMaster=perfil==='supervisor'||perfil==='master';
-  // Gestão: só supervisor e master
-  ['navGestaoGrp','navAjuste','navAceite','navUsuarios','navConfigGeral'].forEach(id=>{
+  const isMasterPerfil=perfil==='master';
+  const isLiderOuMaster=perfil==='lider'||isMasterPerfil;
+  // Usuários: Master e Líder (gestão completa) e Analista (só cadastro)
+  const podeVerUsuarios=isLiderOuMaster||perfil==='analista';
+  // Ajuste/Aceite: Líder e Master (aprovam/executam Ajustes de Estoque)
+  ['navAjuste','navAceite'].forEach(id=>{
     const el=document.getElementById(id);
-    if(el)el.style.display=isSuperiorOrMaster?'':'none';
+    if(el)el.style.display=isLiderOuMaster?'':'none';
   });
-  // Usuários: só master pode gerenciar
   const navU=document.getElementById('navUsuarios');
-  if(navU)navU.style.display=perfil==='master'?'':'none';
-  // Aceites: supervisor e master
-  const navA=document.getElementById('navAceite');
-  if(navA)navA.style.display=isSuperiorOrMaster?'':'none';
-  // Gestão group label
+  if(navU)navU.style.display=podeVerUsuarios?'':'none';
+  // Grupo "Gestão": visível se qualquer item dentro dele estiver visível
   const navG=document.getElementById('navGestaoGrp');
-  if(navG)navG.style.display=isSuperiorOrMaster?'':'none';
-  // Limpar estoque: supervisor e master
+  if(navG)navG.style.display=(isLiderOuMaster||perfil==='analista')?'':'none';
+  // Configurações Gerais, Limpar Estoque e Backup: exclusivos do Master
   const navL=document.getElementById('navLimpar');
-  if(navL)navL.style.display=isSuperiorOrMaster?'':'none';
-  // Backup: supervisor e master
+  if(navL)navL.style.display=isMasterPerfil?'':'none';
   const navB=document.getElementById('navBackup');
-  if(navB)navB.style.display=isSuperiorOrMaster?'':'none';
+  if(navB)navB.style.display=isMasterPerfil?'':'none';
+  const navCfg=document.getElementById('navConfigGeral');
+  if(navCfg)navCfg.style.display=isMasterPerfil?'':'none';
 }
 
 function previewLogo(input){
@@ -11121,7 +11271,7 @@ function filtrarProdutosLimpar(tipo,val){
 }
 
 async function executarLimpar(){
-  if(!canAccess('supervisor')){showT('Sem permissão para excluir estoque','err');return;}
+  if(!isMaster()){showT('Sem permissão para excluir estoque — Limpar Estoque é exclusivo do Master','err');return;}
   const tipo=document.getElementById('limparTipo')?.value;
   const val=document.getElementById('limparFiltroVal')?.value;
   if(!tipo||!val){showT('Selecione o tipo e o valor','err');return;}
@@ -11223,6 +11373,7 @@ function initBackup(){
 }
 
 function backupGeral(fmt){
+  if(!isMaster()){showT('Backup é exclusivo do Master','err');return;}
   if(!DB.produtos.length){showT('Sem dados para exportar','err');return;}
   if(fmt==='json'){
     const data={exportDate:now(),totalProdutos:DB.produtos.length,produtos:DB.produtos,clientes:DB.clientes,sites:DB.sites,movimentos:DB.movimentos.slice(-500)};
@@ -11260,6 +11411,7 @@ function filtrarBackup(){
 }
 
 function executarBackupFiltrado(){
+  if(!isMaster()){showT('Backup é exclusivo do Master','err');return;}
   const prods=filtrarBackup();
   if(!prods.length){showT('Nenhum produto para exportar','err');return;}
   const site=(DB.sites||[]).find(s=>s.id===document.getElementById('backupSite')?.value);
@@ -11562,7 +11714,8 @@ function onAjTipoChange(){
 
 // Override solicitarAjuste para suportar novos tipos
 function solicitarAjuste(){
-  if(!canAccess('estoquista')){showT('Sem permissão para solicitar ajuste','err');return;}
+  if(usuarioAtual&&usuarioAtual.perfil==='analista'){showT('Ajuste sujeito à aprovação do Líder.','err');return;}
+  if(!canAdjust()){showT('Sem permissão para solicitar ajuste','err');return;}
   const wmsId=document.getElementById('ajWmsId').value;
   const tipo=document.getElementById('ajTipo').value;
   const just=document.getElementById('ajJustificativa')?.value.trim();
@@ -12177,12 +12330,16 @@ function confirmarExclusaoTarefa(){
 
   // Sprint YALOG-WMS-007: a autorização de quem pode excluir passou a
   // ser a sessão ativa (vinda da Platform), não mais uma senha local
-  // reintroduzida aqui — mesma regra de perfil de sempre (Master,
-  // Supervisor ou Encarregado), fonte diferente.
-  const auth=(usuarioAtual&&(usuarioAtual.perfil==='master'||usuarioAtual.perfil==='supervisor'||usuarioAtual.perfil==='encarregado'))
-    ? usuarioAtual : null;
+  // reintroduzida aqui — mesma regra de perfil de sempre (Master ou
+  // Líder), fonte diferente.
+  // Sprint YALOG-WMS-012: 'supervisor'/'encarregado' não existem mais
+  // como perfis internos (migrados para 'lider') — corrigido para usar
+  // a mesma capacidade 'ajuste_aprovar' (Master/Líder) usada no resto
+  // do arquivo, em vez de comparar diretamente contra strings de
+  // perfis obsoletos.
+  const auth=temPermissao('ajuste_aprovar')?usuarioAtual:null;
   if(!auth){
-    showErro('Perfil sem permissão (requer Master, Supervisor ou Encarregado).');
+    showErro('Perfil sem permissão (requer Master ou Líder).');
     return;
   }
 
@@ -14471,10 +14628,14 @@ function processarDevolucao(id){
 // INVENTÁRIO — Sistema completo com 3 rodadas de contagem
 // ════════════════════════════════════════════════════════════════
 
-// Quem pode abrir/planejar/fechar inventário
-function _invCanOpen(){ return canAccess('estoquista'); }
-// Quem pode aprovar divergências
-function _invCanAprovar(){ return canAccess('encarregado'); }
+// Quem pode abrir/planejar/fechar inventário (Sprint YALOG-WMS-012:
+// Líder/Analista/Conferente/Master têm Inventário na matriz oficial;
+// Operador e Administrativo não — por isso usa a capacidade dedicada
+// 'inventario_abrir' em vez do antigo nível 'estoquista', que incluiria
+// Operador indevidamente e excluiria Conferente indevidamente).
+function _invCanOpen(){ return temPermissao('inventario_abrir'); }
+// Quem pode aprovar divergências (Líder e Master).
+function _invCanAprovar(){ return temPermissao('inventario_aprovar'); }
 
 // ── PLANEJAMENTO ─────────────────────────────────────────────────
 function abrirPlanejamentoInv(tipo){
