@@ -1624,6 +1624,7 @@ a{color:inherit;text-decoration:none;}
       </div>
       <div style="display:flex;gap:8px;">
         <button class="btn btn-p btn-sm" onclick="openM('mNovoUsuario')">+ Novo Usuário</button>
+        <button class="btn btn-o btn-sm" onclick="refreshUsuariosOperacionais()">🔄 Refresh</button>
         <button class="btn btn-o btn-sm" onclick="sairMaster()">Sair do modo Master</button>
       </div>
     </div>
@@ -9311,6 +9312,16 @@ function _ehErroTabelaAusente(erro){
   const msg=String((erro&&(erro.message||erro.details))||erro||'').toLowerCase();
   return erro.code==='PGRST205' || msg.includes('could not find the table') || msg.includes('schema cache');
 }
+// Sprint YALOG-WMS-016A, item 2: eliminar falhas silenciosas — todo
+// UPSERT/DELETE em usuarios_operacionais registra no Console, sucesso
+// ou erro, no formato exato pedido. Nunca esconde erro durante
+// homologação.
+function _logSyncSucesso(operacao, companyId, login, statusInfo){
+  console.log('[YALOG SYNC]\nUPLOAD OK\nEmpresa: '+companyId+'\nLogin: '+login+'\nOperação: '+operacao+'\nStatus: '+(statusInfo!==undefined&&statusInfo!==null?statusInfo:'—'));
+}
+function _logSyncErro(companyId, login, operacao, httpStatus, mensagem){
+  console.error('[YALOG SYNC ERROR]\nEmpresa: '+companyId+'\nLogin: '+login+'\nOperação: '+operacao+'\nHTTP Status: '+(httpStatus!==undefined&&httpStatus!==null?httpStatus:'—')+'\nMensagem: '+mensagem);
+}
 
 let _ultimoSyncUsuariosOperacionais={}; // { companyId: timestampMs }
 const _SYNC_USUARIOS_THROTTLE_MS=30000;
@@ -9356,44 +9367,65 @@ function _usuarioOperacionalParaLocal(row, companyId){
 // pra usuarios_operacionais — chamada depois de criar/editar/resetar
 // senha/ativar/desativar. Nunca lança, nunca bloqueia o fluxo local
 // que já aconteceu antes de cada chamada.
+// Sprint YALOG-WMS-016A, itens 1-3: usa sempre company_id+login como
+// chave lógica do UPSERT (nunca cria duplicidade), registra o
+// resultado no Console (sucesso ou erro, formato exato pedido) e
+// confirma a gravação com um SELECT logo depois.
 async function _sincronizarUsuarioNaPlatform(usuario){
   if(!usuario||usuario.perfil==='master')return; // Master nunca vai pra usuarios_operacionais
   if(_tabelaOperacionaisIndisponivel)return;
+  const operacao = usuario._migradoOperacionais ? 'UPDATE' : 'INSERT';
   try{
     const client=_obterClientePlatform();
     if(!client)return; // sem conexão — offline, cache local já é a fonte de verdade
     const row=_linhaUsuarioOperacional(usuario);
-    const {error}=await client.from('usuarios_operacionais').upsert(row,{onConflict:'company_id,login'});
+    const {error,status}=await client.from('usuarios_operacionais').upsert(row,{onConflict:'company_id,login'});
     if(error){
       if(_ehErroTabelaAusente(error)){
         _tabelaOperacionaisIndisponivel=true;
         console.warn('[WMS] Tabela usuarios_operacionais ainda não existe no Supabase — operando 100% local até ela ser criada.');
         return;
       }
-      console.warn('[WMS→Supabase] Falha ao sincronizar usuário (mantendo local):', error.message||error);
+      _logSyncErro(usuario.company_id, usuario.login, operacao, error.code||status, error.message||String(error));
+      return;
+    }
+    // item 3: confirma a gravação com um SELECT do registro recém-gravado.
+    const {data:conferencia, error:erroConf}=await client.from('usuarios_operacionais').select('id').eq('company_id',usuario.company_id).eq('login',usuario.login);
+    if(erroConf || !conferencia || conferencia.length!==1){
+      _logSyncErro(usuario.company_id, usuario.login, operacao+' (confirmação)', erroConf&&erroConf.code, erroConf?(erroConf.message||String(erroConf)):('SELECT retornou '+(conferencia?conferencia.length:0)+' registro(s), esperado 1'));
       return;
     }
     usuario._migradoOperacionais=true;
+    _logSyncSucesso(operacao, usuario.company_id, usuario.login, status||201);
     await _auditoriaSincronizacaoUsuario('USUARIO_UPLOAD', usuario);
-  }catch(e){ console.warn('[WMS→Supabase] Exceção ao sincronizar usuário (mantendo local):', e); }
+  }catch(e){ _logSyncErro(usuario.company_id, usuario.login, operacao, 'exceção', e.message||String(e)); }
 }
 // Sprint YALOG-WMS-017, item 13: contraparte de exclusão — sem isso,
 // um usuário excluído localmente voltaria a "ressuscitar" no próximo
 // download de outro computador (o registro remoto continuaria lá).
-// Mesmo padrão best-effort: nunca lança, nunca bloqueia o fluxo local
-// (a exclusão local já aconteceu antes desta chamada).
+// Sprint YALOG-WMS-016A, item 4: confirma com SELECT que não restou
+// registro órfão, e registra sucesso/erro no Console. Mesmo padrão
+// best-effort: nunca lança, nunca bloqueia o fluxo local (a exclusão
+// local já aconteceu antes desta chamada).
 async function _excluirUsuarioNaPlatform(usuario){
   if(!usuario||usuario.perfil==='master')return;
   if(_tabelaOperacionaisIndisponivel)return;
   try{
     const client=_obterClientePlatform();
     if(!client)return;
-    const {error}=await client.from('usuarios_operacionais').delete().eq('company_id',usuario.company_id).eq('login',usuario.login);
+    const {error,status}=await client.from('usuarios_operacionais').delete().eq('company_id',usuario.company_id).eq('login',usuario.login);
     if(error){
       if(_ehErroTabelaAusente(error)){ _tabelaOperacionaisIndisponivel=true; return; }
-      console.warn('[WMS→Supabase] Falha ao excluir usuário remotamente (removido só localmente por ora):', error.message||error);
+      _logSyncErro(usuario.company_id, usuario.login, 'DELETE', error.code||status, error.message||String(error));
+      return;
     }
-  }catch(e){ console.warn('[WMS→Supabase] Exceção ao excluir usuário remotamente:', e); }
+    const {data:conferencia, error:erroConf}=await client.from('usuarios_operacionais').select('id').eq('company_id',usuario.company_id).eq('login',usuario.login);
+    if(erroConf || (conferencia && conferencia.length>0)){
+      _logSyncErro(usuario.company_id, usuario.login, 'DELETE (confirmação)', erroConf&&erroConf.code, erroConf?(erroConf.message||String(erroConf)):('ainda restam '+conferencia.length+' registro(s) — possível órfão'));
+      return;
+    }
+    _logSyncSucesso('DELETE', usuario.company_id, usuario.login, status||204);
+  }catch(e){ _logSyncErro(usuario.company_id, usuario.login, 'DELETE', 'exceção', e.message||String(e)); }
 }
 // Migração automática, transparente e idempotente: todo usuário
 // operacional local ainda não marcado como migrado
@@ -9444,9 +9476,13 @@ async function _migrarUsuariosOperacionaisParaTabelaPropria(companyId){
 // Chamada no login e ao abrir Usuários — no máximo 1x a cada 30s por
 // empresa (nunca a cada tecla). Migra ANTES de baixar (idempotente).
 // Retorna true se algo mudou localmente (pra quem chamou decidir se
-// re-renderiza). `forcar` ignora o throttle (usado no boot do login).
-async function sincronizarUsuariosOperacionaisDaEmpresa(companyId, forcar){
-  if(_tabelaOperacionaisIndisponivel)return false;
+// re-renderiza). `forcar` ignora o throttle de 30s (usado no boot do
+// login). `ignorarIndisponibilidade` (Sprint YALOG-WMS-016A, item 6 —
+// botão Refresh) também dá uma nova chance à tabela mesmo que uma
+// tentativa anterior nesta sessão tenha marcado ela como ausente.
+async function sincronizarUsuariosOperacionaisDaEmpresa(companyId, forcar, ignorarIndisponibilidade){
+  if(_tabelaOperacionaisIndisponivel && !ignorarIndisponibilidade)return false;
+  if(ignorarIndisponibilidade)_tabelaOperacionaisIndisponivel=false;
   const agora=Date.now();
   if(!forcar && _ultimoSyncUsuariosOperacionais[companyId] && (agora-_ultimoSyncUsuariosOperacionais[companyId])<_SYNC_USUARIOS_THROTTLE_MS){
     return false; // já sincronizou recentemente — trabalha só sobre o cache
@@ -9458,10 +9494,10 @@ async function sincronizarUsuariosOperacionaisDaEmpresa(companyId, forcar){
     if(_tabelaOperacionaisIndisponivel)return false;
 
     // Toda consulta obrigatoriamente filtrada por Company ID.
-    const {data:linhas,error}=await client.from('usuarios_operacionais').select('*').eq('company_id',companyId);
+    const {data:linhas,error,status}=await client.from('usuarios_operacionais').select('*').eq('company_id',companyId);
     if(error){
       if(_ehErroTabelaAusente(error)){ _tabelaOperacionaisIndisponivel=true; return false; }
-      console.warn('[Supabase→WMS] Falha ao sincronizar usuários (mantendo cache local):', error.message||error);
+      _logSyncErro(companyId, '(todos)', 'DOWNLOAD', error.code||status, error.message||String(error));
       return false;
     }
     _ultimoSyncUsuariosOperacionais[companyId]=agora;
@@ -9488,12 +9524,39 @@ async function sincronizarUsuariosOperacionaisDaEmpresa(companyId, forcar){
         }
       }
     });
+    // Sprint YALOG-WMS-016A, item 9: quem foi excluído em outro
+    // computador some da tabela remota — sem detectar isso, "Refresh"
+    // nunca refletiria a exclusão. Só remove quem já tinha sido
+    // confirmado sincronizado alguma vez (_migradoOperacionais), pra
+    // nunca apagar um cadastro local recém-criado que ainda não subiu.
+    const loginsRemotos=new Set((linhas||[]).map(r=>r.login));
+    DB.usuarios=DB.usuarios.filter(u=>{
+      if(u.company_id!==companyId||u.perfil==='master')return true;
+      if(u._migradoOperacionais && !loginsRemotos.has(u.login)){
+        alterouAlgo=true;
+        _auditoriaSincronizacaoUsuario('USUARIO_DOWNLOAD', u, {removidoRemotamente:true});
+        return false;
+      }
+      return true;
+    });
+    // item 2/5: log de sucesso do download, mesmo padrão de logging.
+    console.log('[YALOG SYNC]\nDOWNLOAD OK\nEmpresa: '+companyId+'\nRegistros: '+(linhas?linhas.length:0)+'\nOperação: SELECT\nStatus: '+(status||200));
     if(alterouAlgo){
       save();
       _auditoriaSincronizacaoUsuario('USUARIO_SINCRONIZADO', {company_id:companyId, login:'(lote)', nome:'Sincronização de usuários operacionais'});
     }
     return alterouAlgo;
-  }catch(e){ console.warn('[Supabase→WMS] Exceção ao sincronizar usuários (mantendo cache local):', e); return false; }
+  }catch(e){ _logSyncErro(companyId, '(todos)', 'DOWNLOAD', 'exceção', e.message||String(e)); return false; }
+}
+// Sprint YALOG-WMS-016A, item 6: botão "REFRESH" — força novo download
+// ignorando throttle e qualquer estado de "tabela indisponível"
+// detectado antes nesta sessão, sempre a partir da tela de Usuários.
+async function refreshUsuariosOperacionais(){
+  if(!usuarioAtual||!usuarioAtual.company_id){showT('Sessão inválida','err');return;}
+  showT('Atualizando usuários...','info');
+  const mudou=await sincronizarUsuariosOperacionaisDaEmpresa(usuarioAtual.company_id, true, true);
+  renderUsuarios();
+  showT(mudou?'Lista atualizada — havia mudanças':'Lista já estava atualizada','ok');
 }
 
 async function criarUsuario(){
