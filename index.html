@@ -4056,6 +4056,7 @@ const YALOG_PLATFORM_PERFIL_MAP = {
   SUPER_ADMIN: 'master',
   GESTOR:      'master',
   MASTER:      'master',
+  MESTRE:      'master',
   USUARIO:     'conferente',
   // Retrocompatibilidade — nomes antigos/alternativos. Nunca remover.
   GESTOR_YALOG:   'master',
@@ -4105,16 +4106,13 @@ const YALOG_USUARIO_PLATFORM_CACHE_KEY = 'wms_platform_usuario_cache';
 function _salvarUsuarioCache(usuario) {
   try {
     const todos = Core.get(YALOG_USUARIO_PLATFORM_CACHE_KEY) || {};
-    // Correção: a leitura (_lerUsuarioCache, chamada por fazerLogin())
-    // monta a chave com companyId.toUpperCase()+':'+login.toLowerCase()
-    // (mesma normalização aplicada no formulário de login). Aqui a
-    // gravação usava usuario.company_id/usuario.login exatamente como
-    // vieram da linha do Supabase, sem normalizar — se o valor salvo no
-    // banco tiver capitalização diferente, a chave gravada nunca bate
-    // com a chave buscada, mesmo com o registro certo existindo no
-    // cache. Normalizado aqui pra usar exatamente a mesma forma da
-    // leitura, sempre.
-    const chave = String(usuario.company_id||'').toUpperCase()+':'+String(usuario.login||'').toLowerCase();
+    // A leitura (_lerUsuarioCache, chamada por fazerLogin()) monta a
+    // chave com companyId.toUpperCase()+':'+login.toLowerCase() (mesma
+    // normalização aplicada no formulário de login). Aqui a gravação
+    // usa os nomes reais das colunas da tabela `usuarios` da Platform
+    // (id_da_empresa/Conecte-se, não mais company_id/login), sempre
+    // normalizados pra bater exatamente com a forma da leitura.
+    const chave = String(usuario.id_da_empresa||'').toUpperCase()+':'+String(usuario['Conecte-se']||'').toLowerCase();
     todos[chave] = usuario;
     Core.set(YALOG_USUARIO_PLATFORM_CACHE_KEY, todos);
   } catch(e) {}
@@ -4139,7 +4137,7 @@ async function _autenticarUsuarioNaPlatform(companyId, login, senha) {
     return {ok:false, motivo: cache ? 'senha-invalida' : 'sem-conexao-sem-cache'};
   }
   try {
-    const { data:usuario, error } = await client.from('usuarios').select('*').eq('company_id', companyId).eq('login', login).single();
+    const { data:usuario, error } = await client.from('usuarios').select('*').eq('id_da_empresa', companyId).eq('Conecte-se', login).single();
     if (error && error.code !== 'PGRST116') {
       const cache = _lerUsuarioCache(companyId, login);
       if (cache && cache.senha_hash===senhaHash) return {ok:true, usuario:cache, offline:true};
@@ -4148,7 +4146,7 @@ async function _autenticarUsuarioNaPlatform(companyId, login, senha) {
     if (!usuario) return {ok:false, motivo:'usuario-nao-encontrado'};
     if (usuario.ativo === false) return {ok:false, motivo:'usuario-inativo'};
     if (usuario.senha_hash !== senhaHash) return {ok:false, motivo:'senha-invalida'};
-    if (!YALOG_PLATFORM_PERFIL_MAP[usuario.role]) return {ok:false, motivo:'perfil-nao-autorizado'};
+    if (!YALOG_PLATFORM_PERFIL_MAP[usuario.papel]) return {ok:false, motivo:'perfil-nao-autorizado'};
     _salvarUsuarioCache(usuario);
     return {ok:true, usuario, offline:false};
   } catch(err) {
@@ -9007,7 +9005,7 @@ async function fazerLogin(){
       // operacional da Platform (USUARIO/CONFERENTE/OPERACIONAL) sem
       // cadastro local não tem acesso (item 2/8: jamais buscar
       // operacional na Platform).
-      const perfilInterno=YALOG_PLATFORM_PERFIL_MAP[auth.usuario.role]||'conferente';
+      const perfilInterno=YALOG_PLATFORM_PERFIL_MAP[auth.usuario.papel]||'conferente';
       if(perfilInterno!=='master'){
         errEl.textContent='Usuário não encontrado.';
         errEl.style.display='block';
@@ -9038,7 +9036,7 @@ async function fazerLogin(){
       // "Minha Conta"/troca obrigatória de senha para achar o registro.
       usuario={
         id: masterLocal.id, nome: auth.usuario.nome, login,
-        perfil: 'master', company_id: companyId, platformRole: auth.usuario.role, ativo: true,
+        perfil: 'master', company_id: companyId, platformRole: auth.usuario.papel, ativo: true,
       };
     }
 
