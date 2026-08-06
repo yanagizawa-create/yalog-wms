@@ -4129,27 +4129,95 @@ function _lerUsuarioCache(companyId, login) {
 // padrão de _validarLicencaNaPlatform: erro de CONSULTA cai para o
 // cache; resposta autoritativa "não" nunca usa cache.
 async function _autenticarUsuarioNaPlatform(companyId, login, senha) {
+  // ═══ SPRINT YALOG-WMS-004 — instrumentação temporária de diagnóstico ═══
+  // 1) Antes da consulta
+  console.log('%c[TRACE 1] Antes da consulta — _autenticarUsuarioNaPlatform()','color:#f97316;font-weight:bold;');
+  console.log('  company_id recebido:', JSON.stringify(companyId), '| typeof:', typeof companyId);
+  console.log('  login recebido:', JSON.stringify(login), '| typeof:', typeof login);
+  console.log('  senha recebida (mascarada):', senha ? (senha[0]+'*'.repeat(Math.max(senha.length-1,0))+' ('+senha.length+' caracteres)') : '(vazia)');
+
   const senhaHash = await hashSenha(senha);
   const client = _obterClientePlatform();
   if (!client) {
+    console.log('[TRACE] _obterClientePlatform() retornou null — sem conexão, tentando cache local');
     const cache = _lerUsuarioCache(companyId, login);
     if (cache && cache.senha_hash===senhaHash) return {ok:true, usuario:cache, offline:true};
     return {ok:false, motivo: cache ? 'senha-invalida' : 'sem-conexao-sem-cache'};
   }
   try {
-    const { data:usuario, error } = await client.from('usuarios').select('*').eq('company_id', companyId).eq('login', login).single();
+    // 2) Antes do SELECT — exatamente a cadeia de chamada usada.
+    console.log('%c[TRACE 2] Antes do SELECT','color:#f97316;font-weight:bold;');
+    console.log("  client.from('usuarios')");
+    console.log("    .select('*')");
+    console.log("    .eq('company_id', "+JSON.stringify(companyId)+")");
+    console.log("    .eq('login', "+JSON.stringify(login)+")");
+    console.log("    .single()");
+
+    const resposta = await client.from('usuarios').select('*').eq('company_id', companyId).eq('login', login).single();
+    const usuario = resposta.data;
+    const error = resposta.error;
+
+    // 3) Após o SELECT
+    console.log('%c[TRACE 3] Após o SELECT','color:#f97316;font-weight:bold;');
+    console.log('  error:', error);
+    console.log('  status:', resposta.status);
+    console.log('  statusCode:', resposta.status);
+    console.log('  statusText:', resposta.statusText);
+    console.log('  count:', resposta.count);
+    console.log('  data completa retornada:', usuario);
+    if (!usuario && !error) console.log('%c  [TRACE] SELECT retornou VAZIO — nenhuma linha encontrada, sem erro explícito no objeto de resposta','color:#eab308;');
+
+    // 4) Se houver erro — objeto completo, nada resumido.
+    if (error) {
+      console.log('%c[TRACE 4] Erro retornado pelo Supabase (objeto completo)','color:#ef4444;font-weight:bold;');
+      console.log('  code:', error.code);
+      console.log('  message:', error.message);
+      console.log('  details:', error.details);
+      console.log('  hint:', error.hint);
+      console.log('  objeto inteiro:', JSON.parse(JSON.stringify(error)));
+    }
+
     if (error && error.code !== 'PGRST116') {
+      console.log('[TRACE] Erro tratado como falha de CONSULTA (não "sem linhas") — cai pro cache local, sem gerar "usuario-nao-encontrado"');
       const cache = _lerUsuarioCache(companyId, login);
       if (cache && cache.senha_hash===senhaHash) return {ok:true, usuario:cache, offline:true};
       throw new Error('falha ao consultar usuarios na Platform');
     }
-    if (!usuario) return {ok:false, motivo:'usuario-nao-encontrado'};
-    if (usuario.ativo === false) return {ok:false, motivo:'usuario-inativo'};
+
+    if (!usuario) {
+      // ═══ 7) LINHA EXATA onde nasce o motivo 'usuario-nao-encontrado' ═══
+      console.log('%c[TRACE 7] motivo:\'usuario-nao-encontrado\' gerado AQUI — _autenticarUsuarioNaPlatform(), logo abaixo desta linha','color:#ef4444;font-weight:bold;');
+      return {ok:false, motivo:'usuario-nao-encontrado'};
+    }
+
+    // 5) Se encontrar o usuário
+    console.log('%c[TRACE 5] Usuário encontrado','color:#22c55e;font-weight:bold;');
+    console.log('  company_id:', usuario.company_id);
+    console.log('  login:', usuario.login);
+    console.log('  role:', usuario.role);
+    console.log('  ativo:', usuario.ativo);
+    console.log('  senha_hash:', usuario.senha_hash);
+
+    if (usuario.ativo === false) {
+      console.log('[TRACE] usuario.ativo===false — motivo:\'usuario-inativo\'');
+      return {ok:false, motivo:'usuario-inativo'};
+    }
+
+    // 6) Antes da comparação da senha
+    console.log('%c[TRACE 6] Comparação de senha','color:#f97316;font-weight:bold;');
+    console.log('  hash informado:', senhaHash);
+    console.log('  hash armazenado:', usuario.senha_hash);
+    console.log(senhaHash===usuario.senha_hash ? '%c  HASH IGUAIS' : '%c  HASH DIFERENTES', senhaHash===usuario.senha_hash?'color:#22c55e;font-weight:bold;':'color:#ef4444;font-weight:bold;');
+
     if (usuario.senha_hash !== senhaHash) return {ok:false, motivo:'senha-invalida'};
+
+    console.log('[TRACE] YALOG_PLATFORM_PERFIL_MAP[usuario.role] ("'+usuario.role+'") =', YALOG_PLATFORM_PERFIL_MAP[usuario.role]);
     if (!YALOG_PLATFORM_PERFIL_MAP[usuario.role]) return {ok:false, motivo:'perfil-nao-autorizado'};
     _salvarUsuarioCache(usuario);
+    console.log('%c[TRACE] Autenticação concluída com sucesso — retornando {ok:true}','color:#22c55e;font-weight:bold;');
     return {ok:true, usuario, offline:false};
   } catch(err) {
+    console.log('%c[TRACE] Exceção capturada no catch — objeto completo:','color:#ef4444;font-weight:bold;', err);
     console.warn('[Platform] falha ao autenticar usuário — tentando cache local:', err);
     const cache = _lerUsuarioCache(companyId, login);
     if (cache && cache.senha_hash===senhaHash) return {ok:true, usuario:cache, offline:true};
@@ -8985,6 +9053,7 @@ async function fazerLogin(){
       // Platform — item 3, compatibilidade com Reset da Platform) —
       // só resta tentar a Platform.
       const auth=await _autenticarUsuarioNaPlatform(companyId, login, senha);
+      console.log('%c[TRACE 8a] fazerLogin() recebeu o retorno de _autenticarUsuarioNaPlatform()','color:#3b82f6;font-weight:bold;', auth);
       if(!auth.ok){
         const mensagens={
           'usuario-nao-encontrado':'Usuário não encontrado.',
@@ -8994,6 +9063,7 @@ async function fazerLogin(){
           'sem-conexao-sem-cache':'Sem conexão e sem dados salvos localmente. Tente novamente com internet.',
           'erro-autenticacao':'Não foi possível validar o usuário agora. Tente novamente.',
         };
+        console.log('%c[TRACE 8b] ORIGEM #1 da mensagem exibida — fazerLogin(), dicionário "mensagens", motivo="'+auth.motivo+'" → texto="'+(mensagens[auth.motivo]||'Não foi possível entrar.')+'"','color:#3b82f6;font-weight:bold;');
         errEl.textContent=mensagens[auth.motivo]||'Não foi possível entrar.';
         errEl.style.display='block';
         document.getElementById('loginSenha').value='';
@@ -9006,7 +9076,12 @@ async function fazerLogin(){
       // cadastro local não tem acesso (item 2/8: jamais buscar
       // operacional na Platform).
       const perfilInterno=YALOG_PLATFORM_PERFIL_MAP[auth.usuario.role]||'conferente';
+      console.log('%c[TRACE 8c] Mapeamento de perfil pós-autenticação','color:#3b82f6;font-weight:bold;');
+      console.log('  auth.usuario.role:', auth.usuario.role);
+      console.log('  YALOG_PLATFORM_PERFIL_MAP[role]:', YALOG_PLATFORM_PERFIL_MAP[auth.usuario.role]);
+      console.log('  perfilInterno resolvido:', perfilInterno);
       if(perfilInterno!=='master'){
+        console.log('%c[TRACE 8d] ORIGEM #2 da mensagem exibida — fazerLogin(), perfilInterno!==\'master\' (usuário autenticado com sucesso pela Platform, mas mapeado pra um perfil que não é master)','color:#ef4444;font-weight:bold;');
         errEl.textContent='Usuário não encontrado.';
         errEl.style.display='block';
         return;
