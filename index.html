@@ -4160,9 +4160,9 @@ async function _validarLicencaNaPlatform(companyId) {
   }
   try {
     const [rEmpresa, rLicenca, rModulo] = await Promise.all([
-      client.from('empresas').select('*').eq('company_id', companyId).single(),
-      client.from('licencas').select('*').eq('company_id', companyId).single(),
-      client.from('modulos').select('*').eq('company_id', companyId).eq('modulo','wms').single(),
+      client.from('empresas').select('*').eq('id_da_empresa', companyId).single(),
+      client.from('licencas').select('*').eq('id_da_empresa', companyId).single(),
+      client.from('modulos').select('*').eq('id_da_empresa', companyId).eq('modulo','wms').single(),
     ]);
     // Erro de CONSULTA (instabilidade de rede, RLS, timeout etc.) não é
     // uma resposta autoritativa "não" da Platform — cai para o cache
