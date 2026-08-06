@@ -4105,7 +4105,17 @@ const YALOG_USUARIO_PLATFORM_CACHE_KEY = 'wms_platform_usuario_cache';
 function _salvarUsuarioCache(usuario) {
   try {
     const todos = Core.get(YALOG_USUARIO_PLATFORM_CACHE_KEY) || {};
-    todos[usuario.company_id+':'+usuario.login] = usuario;
+    // Correção: a leitura (_lerUsuarioCache, chamada por fazerLogin())
+    // monta a chave com companyId.toUpperCase()+':'+login.toLowerCase()
+    // (mesma normalização aplicada no formulário de login). Aqui a
+    // gravação usava usuario.company_id/usuario.login exatamente como
+    // vieram da linha do Supabase, sem normalizar — se o valor salvo no
+    // banco tiver capitalização diferente, a chave gravada nunca bate
+    // com a chave buscada, mesmo com o registro certo existindo no
+    // cache. Normalizado aqui pra usar exatamente a mesma forma da
+    // leitura, sempre.
+    const chave = String(usuario.company_id||'').toUpperCase()+':'+String(usuario.login||'').toLowerCase();
+    todos[chave] = usuario;
     Core.set(YALOG_USUARIO_PLATFORM_CACHE_KEY, todos);
   } catch(e) {}
 }
