@@ -9393,23 +9393,52 @@ async function _sincronizarUsuarioNaPlatform(usuario){
     console.warn('[SYNC DIAG] Sincronização abortada: _tabelaOperacionaisIndisponivel=true nesta sessão (ver log [SYNC DIAG] anterior para o motivo original).');
     return;
   }
-  const operacao = usuario._migradoOperacionais ? 'UPDATE' : 'INSERT';
+  console.log('%c[SYNC] ═══ Iniciando sincronização de usuário ═══','color:#f97316;font-weight:bold;', usuario.login);
   try{
     const client=_obterClientePlatform();
     if(!client)return; // sem conexão — offline, cache local já é a fonte de verdade (motivo já logado por _obterClientePlatform)
-    console.log('[SYNC STEP 4] Cliente Supabase encontrado');
+    console.log('[SYNC STEP 4] Cliente Supabase criado');
     const row=_linhaUsuarioOperacional(usuario);
-    console.log('[SYNC STEP 5] Payload:', row);
-    console.log('[SYNC STEP 6] Executando UPSERT');
-    const {error,status}=await client.from('usuarios_operacionais').upsert(row,{onConflict:'company_id,login'});
-    console.log('[SYNC STEP 7] Resposta:', {error,status});
-    if(error){
-      if(_ehErroTabelaAusente(error)){
+    console.log('[SYNC STEP 5] Payload montado:', row);
+
+    // Sprint YALOG-WMS-016C — CORREÇÃO: `upsert(row,{onConflict:'company_id,login'})`
+    // exige que a tabela real tenha uma constraint UNIQUE/EXCLUSION
+    // exatamente em (company_id, login). Se a tabela foi criada sem
+    // essa constraint (ex.: via editor visual do Supabase, sem rodar o
+    // SQL completo), TODO upsert falha com o erro do Postgres 42P10
+    // ("no unique or exclusion constraint matching the ON CONFLICT
+    // specification") — e como SELECT não depende dessa constraint,
+    // isso bate exatamente com "SELECT funciona, INSERT nunca aparece,
+    // mesmo no computador que criou". Trocado por um SELECT explícito
+    // seguido de INSERT ou UPDATE — nunca mais depende de constraint
+    // nenhuma no banco.
+    console.log('[SYNC STEP 6] Verificando se o registro já existe (SELECT antes do UPSERT)');
+    const {data:existente, error:erroSelect}=await client.from('usuarios_operacionais').select('id').eq('company_id',usuario.company_id).eq('login',usuario.login);
+    if(erroSelect){
+      if(_ehErroTabelaAusente(erroSelect)){
         _tabelaOperacionaisIndisponivel=true;
-        console.warn('[SYNC DIAG] Tabela usuarios_operacionais ainda não existe no Supabase (ou nome errado) — operando 100% local até ela ser criada. Erro completo:', error);
+        console.warn('[SYNC DIAG] Tabela usuarios_operacionais ainda não existe no Supabase (ou nome errado) — operando 100% local até ela ser criada. Erro completo:', erroSelect);
         return;
       }
+      _logSyncErro(usuario.company_id, usuario.login, 'SELECT (pré-gravação)', erroSelect.code, erroSelect.message||String(erroSelect));
+      _dicaSeErroDeRLS(erroSelect);
+      return;
+    }
+    const operacao = (existente&&existente.length>0) ? 'UPDATE' : 'INSERT';
+    console.log('[SYNC STEP 6b] Operação decidida:', operacao, '(registro '+(operacao==='UPDATE'?'já existe':'não existe ainda')+')');
+
+    console.log('[SYNC STEP 7] Executando '+operacao);
+    let resultado;
+    if(operacao==='UPDATE'){
+      resultado=await client.from('usuarios_operacionais').update(row).eq('company_id',usuario.company_id).eq('login',usuario.login);
+    }else{
+      resultado=await client.from('usuarios_operacionais').insert(row);
+    }
+    const {error,status}=resultado;
+    console.log('[SYNC STEP 7b] Resposta HTTP:', {error,status});
+    if(error){
       _logSyncErro(usuario.company_id, usuario.login, operacao, error.code||status, error.message||String(error));
+      _dicaSeErroDeRLS(error);
       return;
     }
     // item 3: confirma a gravação com um SELECT do registro recém-gravado.
@@ -9420,10 +9449,25 @@ async function _sincronizarUsuarioNaPlatform(usuario){
       return;
     }
     usuario._migradoOperacionais=true;
-    console.log('[SYNC STEP 9] Registro confirmado');
-    _logSyncSucesso(operacao, usuario.company_id, usuario.login, status||201);
+    console.log('[SYNC STEP 9] Sincronização concluída — registro confirmado');
+    _logSyncSucesso(operacao, usuario.company_id, usuario.login, status||(operacao==='INSERT'?201:200));
     await _auditoriaSincronizacaoUsuario('USUARIO_UPLOAD', usuario);
-  }catch(e){ _logSyncErro(usuario.company_id, usuario.login, operacao, 'exceção', e.message||String(e)); }
+  }catch(e){
+    console.error('[SYNC STEP EXCEPTION] Exceção não tratada durante a sincronização:', e);
+    _logSyncErro(usuario.company_id, usuario.login, 'sincronização', 'exceção', e.message||String(e));
+  }
+}
+// Sprint YALOG-WMS-016C, FASE 4: pista explícita quando o erro tem a
+// assinatura típica de RLS bloqueando escrita (comum quando só a
+// policy de SELECT foi criada, sem INSERT/UPDATE para a role anon) —
+// isso é uma configuração no painel do Supabase, não algo que o
+// código do WMS consiga corrigir sozinho.
+function _dicaSeErroDeRLS(erro){
+  if(!erro)return;
+  const msg=String((erro&&(erro.message||erro.details))||erro||'').toLowerCase();
+  if(erro.code==='42501' || msg.includes('row-level security') || msg.includes('permission denied') || msg.includes('violates row-level security policy')){
+    console.error('%c[SYNC DIAG] Assinatura de erro típica de RLS bloqueando escrita. A tabela usuarios_operacionais provavelmente tem policy de SELECT para a role anon, mas NÃO tem policy de INSERT/UPDATE. Isso é configuração no painel do Supabase (Authentication → Policies) — o código do WMS não consegue corrigir isso sozinho.','color:#ef4444;font-weight:bold;');
+  }
 }
 // Sprint YALOG-WMS-017, item 13: contraparte de exclusão — sem isso,
 // um usuário excluído localmente voltaria a "ressuscitar" no próximo
@@ -9614,13 +9658,13 @@ async function criarUsuario(){
   DB.usuarios.push(novoUsuario);
   _auditoriaUsuario('USUARIO_CRIADO', novoUsuario);
   save();
-  console.log('[SYNC STEP 2] LocalStorage atualizado');
+  console.log('[SYNC STEP 2] Usuário salvo localmente');
   ['uNome','uLogin','uSenha'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('uPerfil').value='';
   closeM('mNovoUsuario');renderUsuarios();showT(`Usuário "${nome}" criado!`,'ok');
   // Sprint YALOG-WMS-016, item 1: grava também em usuarios_operacionais
   // (best-effort, nunca bloqueia o cadastro local que já aconteceu acima).
-  console.log('[SYNC STEP 3] Chamando sincronização');
+  console.log('[SYNC STEP 3] Entrando na sincronização');
   _sincronizarUsuarioNaPlatform(novoUsuario);
 }
 // Sprint YALOG-WMS-017, itens 4-8: renderiza a tela de Usuários em 3
