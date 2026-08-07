@@ -9844,13 +9844,18 @@ async function desativarUsuario(id){
   // Sprint YALOG-WMS-017, item 15: identificador exato STATUS_ALTERADO,
   // substituindo USUARIO_ATIVADO/USUARIO_DESATIVADO (WMS-014).
   _auditoriaUsuario('STATUS_ALTERADO', u, {de:statusAntigo, para:vaiAtivar?'ativo':'inativo'});
-  save();renderUsuarios();showT(vaiAtivar?'Usuário ativado':'Usuário desativado','ok');
+  save();renderUsuarios();
   // Sprint YALOG-WMS-016, itens 4/5: sincroniza com usuarios_operacionais.
-  // Sprint YALOG-WMS-HOTFIX-002: aguardado (era fire-and-forget) — o
-  // status precisa estar confirmado na nuvem antes de considerar a
-  // operação concluída, senão outro computador pode continuar vendo o
-  // status antigo por até 30s (throttle da próxima sincronização).
+  // Sprint YALOG-WMS-HOTFIX-002/003: aguardado (era fire-and-forget), e o
+  // toast só é exibido DEPOIS do resultado — antes dizia "sucesso" mesmo
+  // que a sincronização remota ainda estivesse pendente ou tivesse falhado.
   await _sincronizarUsuarioNaPlatform(u);
+  if(u._migradoOperacionais){
+    showT(vaiAtivar?'Usuário ativado':'Usuário desativado','ok');
+  }else{
+    console.warn('[SYNC DIAG] Alteração de status de', u.login, 'não confirmada no Supabase — outro computador pode continuar vendo o status antigo até a próxima sincronização.');
+    showT((vaiAtivar?'Usuário ativado':'Usuário desativado')+' neste computador, mas não foi possível confirmar no Supabase agora.','info');
+  }
 }
 // Sprint YALOG-WMS-011 — Alterações 04-07: editar usuário operacional,
 // sempre restrito à empresa da sessão e nunca ao Master.
@@ -9900,12 +9905,16 @@ async function salvarEdicaoUsuarioWMS(){
   u.updatedAt=now();
   // Sprint YALOG-WMS-014, item 11: identificador exato pedido.
   _auditoriaUsuario('USUARIO_EDITADO', u, {campos:camposAlterados.join(', ')});
-  save();closeM('mEditarUsuarioWMS');renderUsuarios();showT('Usuário atualizado','ok');
+  save();closeM('mEditarUsuarioWMS');renderUsuarios();
   // Sprint YALOG-WMS-016, item 2: sincroniza a edição com usuarios_operacionais.
-  // Sprint YALOG-WMS-HOTFIX-002: aguardado (era fire-and-forget), mesmo
-  // motivo do cadastro — edição (ex.: mudança de perfil) precisa estar
-  // confirmada na nuvem antes de liberar o uso em outro computador.
+  // Sprint YALOG-WMS-HOTFIX-002/003: aguardado, toast só depois do resultado.
   await _sincronizarUsuarioNaPlatform(u);
+  if(u._migradoOperacionais){
+    showT('Usuário atualizado','ok');
+  }else{
+    console.warn('[SYNC DIAG] Edição de', u.login, 'não confirmada no Supabase — outro computador pode continuar vendo os dados antigos até a próxima sincronização.');
+    showT('Usuário atualizado neste computador, mas não foi possível confirmar no Supabase agora.','info');
+  }
 }
 
 // ════════════════════════════════════════
@@ -9968,13 +9977,17 @@ async function salvarSenhaManual(){
   _auditoriaUsuario('SENHA_ALTERADA', u, {obrigar_troca_senha:obrigarTroca});
   fecharModalSenha();
   renderUsuarios();
-  showT('Senha alterada','ok');
-  // Sprint YALOG-WMS-HOTFIX-002: aguardado (era fire-and-forget) — sem
-  // isso, o novo usuário podia tentar logar com a senha nova em outro
-  // computador antes dela chegar no Supabase, e a validação de senha
-  // ali é 100% local (nunca cai pra Platform), então falharia sempre
-  // até o próximo ciclo de sincronização.
+  // Sprint YALOG-WMS-HOTFIX-002/003: aguardado, toast só depois do resultado
+  // — crítico aqui porque a validação de senha é 100% local (nunca cai
+  // pra Platform), então sem confirmação a troca simplesmente não
+  // funcionaria em outro computador até a próxima sincronização.
   await _sincronizarUsuarioNaPlatform(u);
+  if(u._migradoOperacionais){
+    showT('Senha alterada','ok');
+  }else{
+    console.warn('[SYNC DIAG] Nova senha de', u.login, 'não confirmada no Supabase — só funciona neste computador até a próxima sincronização.');
+    showT('Senha alterada neste computador, mas não foi possível confirmar no Supabase agora.','info');
+  }
 }
 async function gerarESalvarSenhaTemporaria(){
   const id=document.getElementById('senhaUsuarioId').value;
@@ -9993,9 +10006,14 @@ async function gerarESalvarSenhaTemporaria(){
   document.getElementById('senhaTempValor').value=temp;
   document.getElementById('senhaTempResultado').style.display='block';
   renderUsuarios();
-  showT('Senha temporária gerada','ok');
-  // Sprint YALOG-WMS-HOTFIX-002: aguardado, mesmo motivo de salvarSenhaManual.
+  // Sprint YALOG-WMS-HOTFIX-002/003: aguardado, toast só depois do resultado.
   await _sincronizarUsuarioNaPlatform(u);
+  if(u._migradoOperacionais){
+    showT('Senha temporária gerada','ok');
+  }else{
+    console.warn('[SYNC DIAG] Senha temporária de', u.login, 'não confirmada no Supabase — só funciona neste computador até a próxima sincronização.');
+    showT('Senha temporária gerada neste computador, mas não foi possível confirmar no Supabase agora.','info');
+  }
 }
 function copiarSenhaTemp(){
   const el=document.getElementById('senhaTempValor');
