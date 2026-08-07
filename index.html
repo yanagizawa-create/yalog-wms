@@ -9725,11 +9725,25 @@ async function criarUsuario(){
   console.log('[SYNC STEP 2] Usuário salvo localmente');
   ['uNome','uLogin','uSenha'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('uPerfil').value='';
-  closeM('mNovoUsuario');renderUsuarios();showT(`Usuário "${nome}" criado!`,'ok');
-  // Sprint YALOG-WMS-016, item 1: grava também em usuarios_operacionais
-  // (best-effort, nunca bloqueia o cadastro local que já aconteceu acima).
+  closeM('mNovoUsuario');renderUsuarios();
+  // Sprint YALOG-WMS-HOTFIX-002: antes disparava sem aguardar — o
+  // Master via "criado!" mesmo se a gravação na nuvem ainda estivesse
+  // em andamento (ou tivesse falhado), e podia entregar o computador
+  // pro novo usuário testar em outra máquina antes da sincronização
+  // acontecer de verdade (só reteria depois de 30s de throttle). Agora
+  // aguarda o resultado antes de dar a mensagem final — cadastro local
+  // continua instantâneo (linhas acima, inalteradas), só a mensagem é
+  // que passa a refletir se already está pronto pra outro computador.
   console.log('[SYNC STEP 3] Entrando na sincronização');
-  _sincronizarUsuarioNaPlatform(novoUsuario);
+  await _sincronizarUsuarioNaPlatform(novoUsuario);
+  if(novoUsuario._migradoOperacionais){
+    showT(`Usuário "${nome}" criado e já disponível em outros computadores!`,'ok');
+  }else{
+    // Não bloqueia nem desfaz o cadastro local — só avisa com precisão,
+    // em vez de dar "sucesso" genérico quando a nuvem ainda não confirmou.
+    console.warn('[SYNC DIAG] Cadastro de', login, 'ainda não confirmado no Supabase — vai reter automaticamente na próxima sincronização.');
+    showT(`Usuário "${nome}" criado neste computador. Aguarde a sincronização antes de usar em outro computador.`,'info');
+  }
 }
 // Sprint YALOG-WMS-017, itens 4-8: renderiza a tela de Usuários em 3
 // modos, conforme o perfil de quem está olhando:
@@ -9831,9 +9845,12 @@ async function desativarUsuario(id){
   // substituindo USUARIO_ATIVADO/USUARIO_DESATIVADO (WMS-014).
   _auditoriaUsuario('STATUS_ALTERADO', u, {de:statusAntigo, para:vaiAtivar?'ativo':'inativo'});
   save();renderUsuarios();showT(vaiAtivar?'Usuário ativado':'Usuário desativado','ok');
-  // Sprint YALOG-WMS-016, itens 4/5: sincroniza com usuarios_operacionais
-  // (best-effort).
-  _sincronizarUsuarioNaPlatform(u);
+  // Sprint YALOG-WMS-016, itens 4/5: sincroniza com usuarios_operacionais.
+  // Sprint YALOG-WMS-HOTFIX-002: aguardado (era fire-and-forget) — o
+  // status precisa estar confirmado na nuvem antes de considerar a
+  // operação concluída, senão outro computador pode continuar vendo o
+  // status antigo por até 30s (throttle da próxima sincronização).
+  await _sincronizarUsuarioNaPlatform(u);
 }
 // Sprint YALOG-WMS-011 — Alterações 04-07: editar usuário operacional,
 // sempre restrito à empresa da sessão e nunca ao Master.
@@ -9884,9 +9901,11 @@ async function salvarEdicaoUsuarioWMS(){
   // Sprint YALOG-WMS-014, item 11: identificador exato pedido.
   _auditoriaUsuario('USUARIO_EDITADO', u, {campos:camposAlterados.join(', ')});
   save();closeM('mEditarUsuarioWMS');renderUsuarios();showT('Usuário atualizado','ok');
-  // Sprint YALOG-WMS-016, item 2: sincroniza a edição com
-  // usuarios_operacionais (best-effort).
-  _sincronizarUsuarioNaPlatform(u);
+  // Sprint YALOG-WMS-016, item 2: sincroniza a edição com usuarios_operacionais.
+  // Sprint YALOG-WMS-HOTFIX-002: aguardado (era fire-and-forget), mesmo
+  // motivo do cadastro — edição (ex.: mudança de perfil) precisa estar
+  // confirmada na nuvem antes de liberar o uso em outro computador.
+  await _sincronizarUsuarioNaPlatform(u);
 }
 
 // ════════════════════════════════════════
@@ -9950,7 +9969,12 @@ async function salvarSenhaManual(){
   fecharModalSenha();
   renderUsuarios();
   showT('Senha alterada','ok');
-  _sincronizarUsuarioNaPlatform(u);
+  // Sprint YALOG-WMS-HOTFIX-002: aguardado (era fire-and-forget) — sem
+  // isso, o novo usuário podia tentar logar com a senha nova em outro
+  // computador antes dela chegar no Supabase, e a validação de senha
+  // ali é 100% local (nunca cai pra Platform), então falharia sempre
+  // até o próximo ciclo de sincronização.
+  await _sincronizarUsuarioNaPlatform(u);
 }
 async function gerarESalvarSenhaTemporaria(){
   const id=document.getElementById('senhaUsuarioId').value;
@@ -9970,7 +9994,8 @@ async function gerarESalvarSenhaTemporaria(){
   document.getElementById('senhaTempResultado').style.display='block';
   renderUsuarios();
   showT('Senha temporária gerada','ok');
-  _sincronizarUsuarioNaPlatform(u);
+  // Sprint YALOG-WMS-HOTFIX-002: aguardado, mesmo motivo de salvarSenhaManual.
+  await _sincronizarUsuarioNaPlatform(u);
 }
 function copiarSenhaTemp(){
   const el=document.getElementById('senhaTempValor');
