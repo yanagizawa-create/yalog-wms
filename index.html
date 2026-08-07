@@ -3992,6 +3992,28 @@ const YALOG_PLATFORM_SESSION_KEY = 'yalog_admin_session';
 let _yalogAcessoBloqueado = false;
 
 let _platformClientSingleton = null;
+// Sprint YALOG-ENG-006 (itens 1/2/3/4 — a partir da auditoria
+// YALOG-AUD-005, Seções 6 e 8.1): duas correções nesta função, nenhuma
+// muda o comportamento de negócio.
+//   (a) auth.persistSession:false (+ autoRefreshToken/detectSessionInUrl
+//       false, mesma família de opção) — este client nunca chama nenhum
+//       método .auth.*, então isso não muda nada do que ele já fazia; só
+//       impede, em definitivo, que ele leia OU grave qualquer sessão no
+//       localStorage. Elimina a possibilidade (achado da auditoria) de
+//       ele herdar por acidente a sessão anônima que _obterClienteSupabase()
+//       cria pra wms_kv_store — os dois nunca mais podem se enxergar, não
+//       importa a ordem de criação nem o que o outro client fizer depois.
+//       Continua indo pro Supabase só com a apikey (role anon), sempre.
+//   (b) URL/key agora vêm de CoreConfig.supabaseUrl/supabaseKey — a mesma
+//       origem que _obterClienteSupabase() já usa — em vez das constantes
+//       fixas direto. Sem mudança de comportamento hoje (CoreConfig
+//       nasce com esses mesmos valores como seed, e nada nunca chamou
+//       CoreConfig.useSupabase() pra trocá-los), mas fecha a divergência
+//       apontada na auditoria (comentário da linha ~3890 já prometia que
+//       "o cliente real é sempre criado a partir do CoreConfig" — só que
+//       este client não cumpria). Se um dia useSupabase() for chamado,
+//       os dois clients passam a apontar pro mesmo projeto/chave juntos,
+//       nunca um sozinho.
 function _obterClientePlatform() {
   if (_platformClientSingleton) return _platformClientSingleton;
   if (typeof window === 'undefined' || !window.supabase || !window.supabase.createClient) {
@@ -4000,7 +4022,11 @@ function _obterClientePlatform() {
     console.warn('[SYNC DIAG] _obterClientePlatform: window.supabase indisponível (biblioteca supabase-js ainda não carregada, ou bloqueada). Sincronização de usuarios_operacionais ficará offline até isso resolver.');
     return null;
   }
-  try { _platformClientSingleton = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY); }
+  try {
+    _platformClientSingleton = window.supabase.createClient(CoreConfig.supabaseUrl, CoreConfig.supabaseKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+    });
+  }
   catch(e) { console.warn('[SYNC DIAG] _obterClientePlatform: exceção ao criar o client:', e); _platformClientSingleton = null; }
   return _platformClientSingleton;
 }
