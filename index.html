@@ -4164,12 +4164,19 @@ async function _autenticarUsuarioNaPlatform(companyId, login, senha) {
     return {ok:false, motivo: cache ? 'senha-invalida' : 'sem-conexao-sem-cache'};
   }
   try {
-    const { data:usuario, error } = await client.from('usuarios').select('*').eq('company_id', companyId).eq('login', login).single();
-    if (error && error.code !== 'PGRST116') {
+    // SPRINT HOTFIX — LOGIN WMS: .single() removido — .single() força
+    // erro PGRST116 tanto pra 0 linhas quanto pra mais de 1 linha
+    // batendo, tratando os dois casos como idênticos e escondendo qual
+    // dos dois realmente aconteceu. Consulta sem .single(), pegando a
+    // primeira linha manualmente.
+    const { data, error } = await client.from('usuarios').select('*').eq('company_id', companyId).eq('login', login);
+    if (error) {
       const cache = _lerUsuarioCache(companyId, login);
       if (cache && cache.senha_hash===senhaHash) return {ok:true, usuario:cache, offline:true};
       throw new Error('falha ao consultar usuarios na Platform');
     }
+    const usuario = data?.[0] ?? null;
+    console.log('[LOGIN DIAGNÓSTICO] usuarios — company_id recebido:', companyId, '| login recebido:', login, '| linhas retornadas:', data?.length ?? 0, '| resultado bruto:', JSON.stringify(data));
     if (!usuario) return {ok:false, motivo:'usuario-nao-encontrado'};
     if (usuario.ativo === false) return {ok:false, motivo:'usuario-inativo'};
     if (usuario.senha_hash !== senhaHash) return {ok:false, motivo:'senha-invalida'};
@@ -4194,27 +4201,39 @@ async function _validarLicencaNaPlatform(companyId) {
     return cache ? {...cache, offline:true} : {ok:false, motivo:'sem-conexao-sem-cache'};
   }
   try {
+    // SPRINT HOTFIX — LOGIN WMS: mesma correção de _autenticarUsuarioNaPlatform
+    // — .single() removido nas três consultas (empresas/licencas/modulos).
+    // Só existe UM client em todo o fluxo: o singleton devolvido por
+    // _obterClientePlatform(), reaproveitado nas três chamadas abaixo —
+    // nenhuma instância nova é criada aqui.
     const [rEmpresa, rLicenca, rModulo] = await Promise.all([
-      client.from('empresas').select('*').eq('company_id', companyId).single(),
-      client.from('licencas').select('*').eq('company_id', companyId).single(),
-      client.from('modulos').select('*').eq('company_id', companyId).eq('modulo','wms').single(),
+      client.from('empresas').select('*').eq('company_id', companyId),
+      client.from('licencas').select('*').eq('company_id', companyId),
+      client.from('modulos').select('*').eq('company_id', companyId).eq('modulo','wms'),
     ]);
     // Erro de CONSULTA (instabilidade de rede, RLS, timeout etc.) não é
     // uma resposta autoritativa "não" da Platform — cai para o cache
-    // antes de bloquear (item 9). PGRST116 ("no rows") é tratado como
-    // resposta autoritativa de verdade (empresa/licença/módulo realmente
-    // não encontrados), não como falha de conexão.
-    const falhaConsulta = [rEmpresa, rLicenca, rModulo].some(r => r.error && r.error.code !== 'PGRST116');
+    // antes de bloquear (item 9). Sem .single(), "não encontrado" nunca
+    // vem como error — vem como data:[] — então falhaConsulta agora só
+    // cobre erro de verdade (conexão/permissão), nunca "0 resultados".
+    const falhaConsulta = [rEmpresa, rLicenca, rModulo].some(r => r.error);
     if (falhaConsulta) {
       const cache = _lerValidacaoCache(companyId);
       if (cache) return {...cache, offline:true};
       throw new Error('falha ao consultar empresas/licencas/modulos na Platform');
     }
-    const empresa=rEmpresa.data, licenca=rLicenca.data, modulo=rModulo.data;
-    if (!empresa || empresa.ativo === false) return {ok:false, motivo:'empresa-inativa'};
-    if (!licenca || licenca.status !== 'ATIVA') return {ok:false, motivo:'licenca-inativa'};
+    const empresa = rEmpresa.data?.[0] ?? null;
+    const licenca = rLicenca.data?.[0] ?? null;
+    const modulo  = rModulo.data?.[0] ?? null;
+    console.log('[LOGIN DIAGNÓSTICO] company_id recebido:', companyId);
+    console.log('[LOGIN DIAGNÓSTICO] empresas — linhas:', rEmpresa.data?.length ?? 0, '| resultado bruto:', JSON.stringify(rEmpresa.data));
+    console.log('[LOGIN DIAGNÓSTICO] licencas — linhas:', rLicenca.data?.length ?? 0, '| resultado bruto:', JSON.stringify(rLicenca.data));
+    console.log('[LOGIN DIAGNÓSTICO] modulos — linhas:', rModulo.data?.length ?? 0, '| resultado bruto:', JSON.stringify(rModulo.data));
+    console.log('[LOGIN DIAGNÓSTICO] empresa encontrada:', !!empresa, '| ativo:', empresa?.ativo, '| licenca status:', licenca?.status, '| modulo status:', modulo?.status);
+    if (empresa === null || empresa.ativo === false) return {ok:false, motivo:'empresa-inativa'};
+    if (licenca === null || licenca.status !== 'ATIVA') return {ok:false, motivo:'licenca-inativa'};
     if (licenca.validade && new Date(licenca.validade) < new Date()) return {ok:false, motivo:'licenca-vencida'};
-    if (!modulo || modulo.status !== 'LIBERADO') return {ok:false, motivo:'modulo-bloqueado'};
+    if (modulo === null || modulo.status !== 'LIBERADO') return {ok:false, motivo:'modulo-bloqueado'};
     const resultado = {ok:true, companyId, empresa, licenca, offline:false};
     _salvarValidacaoCache(resultado);
     return resultado;
