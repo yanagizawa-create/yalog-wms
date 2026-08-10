@@ -8987,11 +8987,20 @@ async function fazerLogin(){
     // localmente (filtrado por company_id — item 9) ANTES de qualquer
     // consulta de usuário à Platform.
     const usuariosDaEmpresa=DB.usuarios.filter(u=>u.company_id===companyId);
-    const localUser=usuariosDaEmpresa.find(u=>u.login===login && u.ativo!==false);
+    // Sprint YALOG-WMS-HOTFIX-004: comparação de login normalizada dos
+    // dois lados. A HOTFIX-003 corrigiu o cadastro/edição pra gravar
+    // sempre em minúsculo, mas usuários operacionais criados ANTES
+    // daquela correção continuam com o login gravado como o Master
+    // digitou originalmente (ex.: "Joana") — em outro dispositivo, o
+    // registro chega assim via download e a comparação ===, sensível a
+    // maiúscula/minúscula, nunca batia com o que a pessoa digita no
+    // login (já normalizado pra minúsculo). Não altera nada do
+    // cadastro, sincronização ou Platform — só a comparação aqui.
+    const localUser=usuariosDaEmpresa.find(u=>String(u.login||'').toLowerCase()===login && u.ativo!==false);
     // Sprint YALOG-WMS-014, item 7: usuário existe mas está inativo —
     // mensagem específica, sem cair no fallback de Platform (que
     // resultaria num genérico "Usuário não encontrado.").
-    const usuarioInativo=usuariosDaEmpresa.find(u=>u.login===login && u.ativo===false && u.perfil!=='master');
+    const usuarioInativo=usuariosDaEmpresa.find(u=>String(u.login||'').toLowerCase()===login && u.ativo===false && u.perfil!=='master');
     if(!localUser && usuarioInativo){
       errEl.textContent='Usuário desativado. Contate o administrador da empresa.';
       errEl.style.display='block';
@@ -9664,7 +9673,9 @@ async function sincronizarUsuariosOperacionaisDaEmpresa(companyId, forcar, ignor
     (linhas||[]).forEach(row=>{
       if(!row.login)return;
       const remoto=_usuarioOperacionalParaLocal(row, companyId);
-      const localExistente=DB.usuarios.find(u=>u.company_id===companyId && u.login===row.login && u.perfil!=='master');
+      // Sprint YALOG-WMS-HOTFIX-005: mesma normalização do fazerLogin().
+      const loginRemoto = String(row.login || '').trim().toLowerCase();
+      const localExistente=DB.usuarios.find(u=>u.company_id===companyId && String(u.login||'').trim().toLowerCase()===loginRemoto && u.perfil!=='master');
       if(!localExistente){
         // Usuário criado em outro computador — nunca visto aqui ainda.
         DB.usuarios.push(remoto);
@@ -9688,10 +9699,10 @@ async function sincronizarUsuariosOperacionaisDaEmpresa(companyId, forcar, ignor
     // nunca refletiria a exclusão. Só remove quem já tinha sido
     // confirmado sincronizado alguma vez (_migradoOperacionais), pra
     // nunca apagar um cadastro local recém-criado que ainda não subiu.
-    const loginsRemotos=new Set((linhas||[]).map(r=>r.login));
+    const loginsRemotos=new Set((linhas||[]).map(r=>String(r.login||'').trim().toLowerCase()));
     DB.usuarios=DB.usuarios.filter(u=>{
       if(u.company_id!==companyId||u.perfil==='master')return true;
-      if(u._migradoOperacionais && !loginsRemotos.has(u.login)){
+      if(u._migradoOperacionais && !loginsRemotos.has(String(u.login||'').trim().toLowerCase())){
         alterouAlgo=true;
         _auditoriaSincronizacaoUsuario('USUARIO_DOWNLOAD', u, {removidoRemotamente:true});
         return false;
