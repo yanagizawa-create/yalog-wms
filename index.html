@@ -9457,10 +9457,33 @@ async function _sincronizarUsuarioNaPlatform(usuario){
     console.warn('[SYNC DIAG] Sincronização abortada: _tabelaOperacionaisIndisponivel=true nesta sessão (ver log [SYNC DIAG] anterior para o motivo original).');
     return;
   }
-  console.log('%c[SYNC] ═══ Iniciando sincronização de usuário ═══','color:#f97316;font-weight:bold;', usuario.login);
+  // Sprint YALOG-WMS-HOTFIX-003: gravação definitiva — até 3 tentativas
+  // antes de desistir. Cada tentativa refaz o ciclo inteiro (SELECT →
+  // INSERT/UPDATE → SELECT de confirmação lendo de volta do Supabase,
+  // nunca de cache/localStorage/memória/IndexedDB) — só marca
+  // usuario._migradoOperacionais=true quando essa confirmação, vinda
+  // direto do banco, bate. "Tabela ausente" nunca é reentetado (é uma
+  // condição estrutural, não transitória — tentar de novo não muda nada).
+  const MAX_TENTATIVAS=3;
+  for(let tentativa=1; tentativa<=MAX_TENTATIVAS; tentativa++){
+    console.log('%c[SYNC] ═══ Iniciando sincronização de usuário (tentativa '+tentativa+'/'+MAX_TENTATIVAS+') ═══','color:#f97316;font-weight:bold;', usuario.login);
+    const sucesso = await _tentarSincronizarUsuarioNaPlatform(usuario);
+    if(sucesso || _tabelaOperacionaisIndisponivel) return;
+    if(tentativa<MAX_TENTATIVAS){
+      const espera=400*tentativa;
+      console.warn('[SYNC DIAG] Tentativa '+tentativa+' falhou — nova tentativa em '+espera+'ms.');
+      await new Promise(r=>setTimeout(r,espera));
+    }
+  }
+  console.error('[SYNC DIAG] Todas as '+MAX_TENTATIVAS+' tentativas de gravação definitiva falharam para', usuario.login, '— usuário permanece só local até a próxima sincronização (ex.: reabrir a tela Usuários).');
+}
+// Uma única tentativa do ciclo completo SELECT→INSERT/UPDATE→SELECT de
+// confirmação. Retorna true só quando o Supabase confirma, de verdade,
+// que o registro existe — nunca com base em cache local.
+async function _tentarSincronizarUsuarioNaPlatform(usuario){
   try{
     const client=_obterClientePlatform();
-    if(!client)return; // sem conexão — offline, cache local já é a fonte de verdade (motivo já logado por _obterClientePlatform)
+    if(!client)return false; // sem conexão — offline, cache local já é a fonte de verdade (motivo já logado por _obterClientePlatform)
     console.log('[SYNC STEP 4] Cliente Supabase criado');
     const row=_linhaUsuarioOperacional(usuario);
     console.log('[SYNC STEP 5] Payload montado:', row);
@@ -9482,11 +9505,11 @@ async function _sincronizarUsuarioNaPlatform(usuario){
       if(_ehErroTabelaAusente(erroSelect)){
         _tabelaOperacionaisIndisponivel=true;
         console.warn('[SYNC DIAG] Tabela usuarios_operacionais ainda não existe no Supabase (ou nome errado) — operando 100% local até ela ser criada. Erro completo:', erroSelect);
-        return;
+        return false;
       }
       _logSyncErro(usuario.company_id, usuario.login, 'SELECT (pré-gravação)', erroSelect.code, erroSelect.message||String(erroSelect));
       _dicaSeErroDeRLS(erroSelect);
-      return;
+      return false;
     }
     const operacao = (existente&&existente.length>0) ? 'UPDATE' : 'INSERT';
     console.log('[SYNC STEP 6b] Operação decidida:', operacao, '(registro '+(operacao==='UPDATE'?'já existe':'não existe ainda')+')');
@@ -9503,22 +9526,25 @@ async function _sincronizarUsuarioNaPlatform(usuario){
     if(error){
       _logSyncErro(usuario.company_id, usuario.login, operacao, error.code||status, error.message||String(error));
       _dicaSeErroDeRLS(error);
-      return;
+      return false;
     }
-    // item 3: confirma a gravação com um SELECT do registro recém-gravado.
-    console.log('[SYNC STEP 8] SELECT confirmação');
+    // item 3: confirma a gravação com um SELECT do registro recém-gravado
+    // — lido de volta direto do Supabase, nunca de cache/state/local.
+    console.log('[SYNC STEP 8] SELECT confirmação (direto do Supabase)');
     const {data:conferencia, error:erroConf}=await client.from('usuarios_operacionais').select('id').eq('company_id',usuario.company_id).eq('login',usuario.login);
     if(erroConf || !conferencia || conferencia.length!==1){
       _logSyncErro(usuario.company_id, usuario.login, operacao+' (confirmação)', erroConf&&erroConf.code, erroConf?(erroConf.message||String(erroConf)):('SELECT retornou '+(conferencia?conferencia.length:0)+' registro(s), esperado 1'));
-      return;
+      return false;
     }
     usuario._migradoOperacionais=true;
-    console.log('[SYNC STEP 9] Sincronização concluída — registro confirmado');
+    console.log('[SYNC STEP 9] Sincronização concluída — registro confirmado no Supabase');
     _logSyncSucesso(operacao, usuario.company_id, usuario.login, status||(operacao==='INSERT'?201:200));
     await _auditoriaSincronizacaoUsuario('USUARIO_UPLOAD', usuario);
+    return true;
   }catch(e){
     console.error('[SYNC STEP EXCEPTION] Exceção não tratada durante a sincronização:', e);
     _logSyncErro(usuario.company_id, usuario.login, 'sincronização', 'exceção', e.message||String(e));
+    return false;
   }
 }
 // Sprint YALOG-WMS-016C, FASE 4: pista explícita quando o erro tem a
