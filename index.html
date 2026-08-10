@@ -9725,7 +9725,17 @@ async function criarUsuario(){
   // (ver podeCadastrarUsuarios).
   if(!masterSession&&!podeCadastrarUsuarios()){showT('Sem permissão para cadastrar usuários','err');return;}
   const nome=document.getElementById('uNome').value.trim();
-  const login=document.getElementById('uLogin').value.trim();
+  // Sprint YALOG-WMS-HOTFIX-003 (correção cirúrgica): faltava
+  // .toLowerCase() aqui — fazerLogin() normaliza o login digitado com
+  // .toLowerCase() antes de comparar (linha ~8945), mas o cadastro
+  // salvava exatamente como o Master digitou. Se o Master digitasse
+  // qualquer letra maiúscula (ex.: "Joana"), a comparação por === no
+  // login (100% correta e sem alterar) nunca batia com o que o próprio
+  // usuário operacional digitasse depois (ex.: "joana") — é essa a
+  // divergência exata entre o fluxo do Master (login sempre consultado
+  // já normalizado, porque a Platform já grava/consulta de forma
+  // consistente) e o do usuário operacional criado pelo WMS.
+  const login=document.getElementById('uLogin').value.trim().toLowerCase();
   const senha=document.getElementById('uSenha').value;
   const rotulo=document.getElementById('uPerfil').value;
   const perfil=WMS_PERFIL_OPERACIONAL_MAP[rotulo];
@@ -9910,7 +9920,10 @@ async function salvarEdicaoUsuarioWMS(){
   if(u.perfil==='master'){showT('O usuário Master é gerenciado pela YALog Platform','err');return;}
 
   const nome=document.getElementById('ueNome').value.trim();
-  const login=document.getElementById('ueLogin').value.trim();
+  // Sprint YALOG-WMS-HOTFIX-003: mesma correção de criarUsuario() —
+  // sem .toLowerCase(), editar o login (ex.: corrigir digitação) podia
+  // reintroduzir a mesma divergência de maiúscula/minúscula.
+  const login=document.getElementById('ueLogin').value.trim().toLowerCase();
   const rotulo=document.getElementById('uePerfil').value;
   const perfil=WMS_PERFIL_OPERACIONAL_MAP[rotulo];
   const status=document.getElementById('ueStatus').value;
