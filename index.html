@@ -8945,6 +8945,10 @@ async function fazerLogin(){
   const login=document.getElementById('loginUsuario').value.trim().toLowerCase();
   const senha=document.getElementById('loginSenha').value;
   errEl.style.display='none';
+  // [DIAG-HOTFIX-007] Instrumentação temporária — remover após achar a
+  // causa raiz em ambiente publicado. Não altera nenhuma lógica abaixo.
+  console.log('[DIAG-HOTFIX-007] Company ID recebido no login:', JSON.stringify(companyId));
+  console.log('[DIAG-HOTFIX-007] Login recebido:', JSON.stringify(login));
 
   if(!companyId||!login||!senha){
     errEl.textContent='Preencha Company ID, usuário e senha.';
@@ -8987,6 +8991,9 @@ async function fazerLogin(){
     // localmente (filtrado por company_id — item 9) ANTES de qualquer
     // consulta de usuário à Platform.
     const usuariosDaEmpresa=DB.usuarios.filter(u=>u.company_id===companyId);
+    // [DIAG-HOTFIX-007] Estado do array local (DB.usuarios) já filtrado
+    // por company_id, no momento exato da comparação usada pelo find().
+    console.log('[DIAG-HOTFIX-007] Usuários locais (DB.usuarios) desta empresa, após sincronização:', JSON.stringify(usuariosDaEmpresa.map(u=>({login:u.login, company_id:u.company_id, ativo:u.ativo, perfil:u.perfil}))));
     // Sprint YALOG-WMS-HOTFIX-004: comparação de login normalizada dos
     // dois lados. A HOTFIX-003 corrigiu o cadastro/edição pra gravar
     // sempre em minúsculo, mas usuários operacionais criados ANTES
@@ -9001,7 +9008,11 @@ async function fazerLogin(){
     // mensagem específica, sem cair no fallback de Platform (que
     // resultaria num genérico "Usuário não encontrado.").
     const usuarioInativo=usuariosDaEmpresa.find(u=>String(u.login||'').toLowerCase()===login && u.ativo===false && u.perfil!=='master');
+    // [DIAG-HOTFIX-007] Resultado exato da comparação usada pelo find().
+    console.log('[DIAG-HOTFIX-007] Resultado da comparação (find) — localUser encontrado:', !!localUser, localUser?JSON.stringify({login:localUser.login,company_id:localUser.company_id,ativo:localUser.ativo,perfil:localUser.perfil}):null);
+    console.log('[DIAG-HOTFIX-007] Resultado da comparação (find) — usuarioInativo encontrado:', !!usuarioInativo);
     if(!localUser && usuarioInativo){
+      console.log('[DIAG-HOTFIX-007] Motivo exato da rejeição: usuário encontrado localmente, porém ativo===false (desativado).');
       errEl.textContent='Usuário desativado. Contate o administrador da empresa.';
       errEl.style.display='block';
       document.getElementById('loginSenha').value='';
@@ -9016,6 +9027,7 @@ async function fazerLogin(){
       // Item 8: usuário operacional — valida senha 100% local, nunca
       // consulta a Platform.
       if(!localBate){
+        console.log('[DIAG-HOTFIX-007] Motivo exato da rejeição: usuário local encontrado, porém a senha digitada não bate com o senha_hash local.');
         errEl.textContent='Senha incorreta.';
         errEl.style.display='block';
         document.getElementById('loginSenha').value='';
@@ -9041,6 +9053,7 @@ async function fazerLogin(){
       // só resta tentar a Platform.
       const auth=await _autenticarUsuarioNaPlatform(companyId, login, senha);
       if(!auth.ok){
+        console.log('[DIAG-HOTFIX-007] Motivo exato da rejeição: localUser não encontrado (nem ativo nem inativo) — caiu no fallback da Platform, que também não encontrou. auth.motivo:', auth.motivo);
         const mensagens={
           'usuario-nao-encontrado':'Usuário não encontrado.',
           'usuario-inativo':'Usuário inativo.',
@@ -9096,6 +9109,8 @@ async function fazerLogin(){
     }
 
     usuarioAtual=usuario;
+    // [DIAG-HOTFIX-007] Valor final de usuarioAtual, já atribuído.
+    console.log('[DIAG-HOTFIX-007] Valor final de usuarioAtual:', JSON.stringify(usuarioAtual));
     // Sprint YALOG-WMS-013, item 5: função independente, chamada só
     // depois do login concluído — nunca interfere na autenticação.
     registrarUltimoLogin(usuario);
@@ -9663,6 +9678,11 @@ async function sincronizarUsuariosOperacionaisDaEmpresa(companyId, forcar, ignor
 
     // Toda consulta obrigatoriamente filtrada por Company ID.
     const {data:linhas,error,status}=await client.from('usuarios_operacionais').select('*').eq('company_id',companyId);
+    // [DIAG-HOTFIX-007] Instrumentação temporária — remover após achar a
+    // causa raiz em ambiente publicado. Não altera nenhuma lógica abaixo.
+    console.log('[DIAG-HOTFIX-007] SELECT usuarios_operacionais — company_id usado no filtro:', JSON.stringify(companyId));
+    console.log('[DIAG-HOTFIX-007] Quantidade de usuários retornados pela consulta ao Supabase:', (linhas||[]).length);
+    (linhas||[]).forEach((r,i)=>console.log('[DIAG-HOTFIX-007] Linha remota #'+i+' — login:', JSON.stringify(r.login), '| company_id:', JSON.stringify(r.company_id)));
     if(error){
       if(_ehErroTabelaAusente(error)){ _tabelaOperacionaisIndisponivel=true; return false; }
       _logSyncErro(companyId, '(todos)', 'DOWNLOAD', error.code||status, error.message||String(error));
