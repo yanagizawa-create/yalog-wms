@@ -9022,11 +9022,41 @@ async function fazerLogin(){
     // Sprint YALOG-WMS-014, item 7: usuário existe mas está inativo —
     // mensagem específica, sem cair no fallback de Platform (que
     // resultaria num genérico "Usuário não encontrado.").
-    const usuarioInativo=usuariosDaEmpresa.find(u=>String(u.login||'').toLowerCase()===login && u.ativo===false && u.perfil!=='master');
+    const usuarioInativoLocalOriginal=usuariosDaEmpresa.find(u=>String(u.login||'').toLowerCase()===login && u.ativo===false && u.perfil!=='master');
     // [DIAG-HOTFIX-007] Resultado exato da comparação usada pelo find().
     console.log('[DIAG-HOTFIX-007] Resultado da comparação (find) — localUser encontrado:', !!localUser, localUser?JSON.stringify({login:localUser.login,company_id:localUser.company_id,ativo:localUser.ativo,perfil:localUser.perfil}):null);
-    console.log('[DIAG-HOTFIX-007] Resultado da comparação (find) — usuarioInativo encontrado:', !!usuarioInativo);
-    if(!localUser && usuarioInativo){
+    console.log('[DIAG-HOTFIX-007] Resultado da comparação (find) — usuarioInativo encontrado:', !!usuarioInativoLocalOriginal);
+
+    // Sprint YALOG-WMS-HOTFIX-009: usuarios_operacionais (Supabase) é a
+    // ÚNICA fonte de verdade para autenticação de usuário operacional —
+    // DB.usuarios (localUser, acima) nunca decide sozinho se o login é
+    // válido; serve só de cache pra interface e de fallback quando
+    // offline. Consulta direta, agora, na tabela remota — nunca
+    // reaproveita o que a sincronização geral já tinha trazido antes
+    // (que pode estar minutos/segundos desatualizado em relação a um
+    // cadastro feito em outro computador nesse meio tempo).
+    const authOperacionalRemoto=await _autenticarUsuarioOperacionalNaTabela(companyId, login);
+    // Master nunca está em usuarios_operacionais — se achou algo remoto,
+    // é garantidamente um usuário operacional; usa os dados FRESCOS
+    // (ativo/senha_hash) de lá em vez da cópia local, que pode estar
+    // desatualizada mesmo já sincronizada uma vez nesta sessão.
+    let localUser2=localUser, usuarioInativo=usuarioInativoLocalOriginal;
+    if(authOperacionalRemoto.status==='online'){
+      if(authOperacionalRemoto.usuario){
+        const fresco=_usuarioOperacionalParaLocal(authOperacionalRemoto.usuario, companyId);
+        fresco.id = (localUser&&localUser.id) || (usuarioInativoLocalOriginal&&usuarioInativoLocalOriginal.id) || ('op-'+companyId+'-'+fresco.login);
+        if(fresco.ativo===false){ localUser2=null; usuarioInativo=fresco; }
+        else { localUser2=fresco; usuarioInativo=null; }
+      }else if(!localUser && !usuarioInativoLocalOriginal){
+        // Não existe em usuarios_operacionais — pode ainda ser o Master
+        // (tratado mais abaixo, inalterado); garante que não sobra
+        // nenhum resquício operacional obsoleto do cache local.
+        localUser2=null; usuarioInativo=null;
+      }
+    }
+    // status==='offline': mantém exatamente o que já estava (localUser/
+    // usuarioInativoLocalOriginal) — mesmo comportamento de sempre.
+    if(!localUser2 && usuarioInativo){
       console.log('[DIAG-HOTFIX-007] Motivo exato da rejeição: usuário encontrado localmente, porém ativo===false (desativado).');
       errEl.textContent='Usuário desativado. Contate o administrador da empresa.';
       errEl.style.display='block';
@@ -9035,14 +9065,15 @@ async function fazerLogin(){
       return;
     }
     const senhaHashDigitada=await hashSenha(senha);
-    const localBate=!!(localUser && localUser.senha_hash && localUser.senha_hash===senhaHashDigitada);
+    const localBate=!!(localUser2 && localUser2.senha_hash && localUser2.senha_hash===senhaHashDigitada);
     let usuario=null;
 
-    if(localUser && localUser.perfil!=='master'){
-      // Item 8: usuário operacional — valida senha 100% local, nunca
-      // consulta a Platform.
+    if(localUser2 && localUser2.perfil!=='master'){
+      // Item 8: usuário operacional — valida senha contra o dado mais
+      // recente da tabela remota (localUser2), consultado agora mesmo
+      // acima — nunca contra uma cópia potencialmente desatualizada.
       if(!localBate){
-        console.log('[DIAG-HOTFIX-007] Motivo exato da rejeição: usuário local encontrado, porém a senha digitada não bate com o senha_hash local.');
+        console.log('[DIAG-HOTFIX-007] Motivo exato da rejeição: usuário encontrado (via usuarios_operacionais), porém a senha digitada não bate.');
         errEl.textContent='Senha incorreta.';
         errEl.style.display='block';
         document.getElementById('loginSenha').value='';
@@ -9050,9 +9081,17 @@ async function fazerLogin(){
         return;
       }
       usuario={
-        id: localUser.id, nome: localUser.nome, login: localUser.login,
-        perfil: localUser.perfil, company_id: companyId, platformRole: null, ativo: true,
+        id: localUser2.id, nome: localUser2.nome, login: localUser2.login,
+        perfil: localUser2.perfil, company_id: companyId, platformRole: null, ativo: true,
       };
+      // Item 3 da Sprint: DB.usuarios só é populado/atualizado DEPOIS de
+      // autenticar — nunca antes, nunca como pré-condição. Mantém a
+      // interface (telas, listas) sempre alinhada com o dado que acabou
+      // de vir da tabela remota, sem esperar o próximo ciclo de sync.
+      const idxCache=DB.usuarios.findIndex(u=>u.id===localUser2.id);
+      if(idxCache>=0) DB.usuarios[idxCache]={...DB.usuarios[idxCache], ...localUser2};
+      else DB.usuarios.push(localUser2);
+      save();
     }else if(localUser && localUser.perfil==='master' && localBate){
       // Sprint YALOG-WMS-013: Master com hash local já configurado (via
       // "Minha Conta", ou de um login anterior confirmado pela
@@ -9567,12 +9606,21 @@ async function _tentarSincronizarUsuarioNaPlatform(usuario){
       _dicaSeErroDeRLS(error);
       return false;
     }
-    // item 3: confirma a gravação com um SELECT do registro recém-gravado
-    // — lido de volta direto do Supabase, nunca de cache/state/local.
+    // item 3 (Sprint YALOG-WMS-HOTFIX-010): confirma a gravação lendo de
+    // volta os campos EXATOS que a autenticação (HOTFIX-009,
+    // _autenticarUsuarioOperacionalNaTabela) usa pra decidir um login —
+    // não só que uma linha existe, mas que login/ativo/senha_hash
+    // persistidos batem exatamente com o que acabou de ser enviado.
+    // Continua lido direto do Supabase, nunca de cache/state/local.
     console.log('[SYNC STEP 8] SELECT confirmação (direto do Supabase)');
-    const {data:conferencia, error:erroConf}=await client.from('usuarios_operacionais').select('id').eq('company_id',usuario.company_id).eq('login',usuario.login);
+    const {data:conferencia, error:erroConf}=await client.from('usuarios_operacionais').select('login,ativo,senha_hash').eq('company_id',usuario.company_id).eq('login',usuario.login);
     if(erroConf || !conferencia || conferencia.length!==1){
       _logSyncErro(usuario.company_id, usuario.login, operacao+' (confirmação)', erroConf&&erroConf.code, erroConf?(erroConf.message||String(erroConf)):('SELECT retornou '+(conferencia?conferencia.length:0)+' registro(s), esperado 1'));
+      return false;
+    }
+    const persistido=conferencia[0];
+    if(persistido.login!==row.login || persistido.ativo!==row.ativo || persistido.senha_hash!==row.senha_hash){
+      _logSyncErro(usuario.company_id, usuario.login, operacao+' (confirmação)', 'divergencia-campos', 'Registro persistido diverge do enviado — login/ativo/senha_hash não batem exatamente com o que a autenticação vai ler.');
       return false;
     }
     usuario._migradoOperacionais=true;
@@ -9678,6 +9726,34 @@ async function _migrarUsuariosOperacionaisParaTabelaPropria(companyId){
 // login). `ignorarIndisponibilidade` (Sprint YALOG-WMS-016A, item 6 —
 // botão Refresh) também dá uma nova chance à tabela mesmo que uma
 // tentativa anterior nesta sessão tenha marcado ela como ausente.
+// Sprint YALOG-WMS-HOTFIX-009: usuarios_operacionais (Supabase) é a
+// ÚNICA fonte de verdade para autenticar um usuário operacional.
+// DB.usuarios nunca decide sozinho se um login é válido — serve só de
+// cache pra interface (telas/listas) e de fallback quando offline.
+// Consulta direta, sempre no momento do login, nunca reaproveitando o
+// que uma sincronização anterior já tinha trazido (que pode estar
+// desatualizada em relação a um cadastro feito segundos atrás em
+// outro dispositivo). Mesmo padrão de filtro/erro já usado em
+// sincronizarUsuariosOperacionaisDaEmpresa — só muda o que se faz com
+// o resultado.
+async function _autenticarUsuarioOperacionalNaTabela(companyId, login){
+  const client=_obterClientePlatform();
+  if(!client) return {status:'offline'};
+  try{
+    const {data, error}=await client.from('usuarios_operacionais').select('*').eq('company_id', companyId);
+    if(error){
+      if(_ehErroTabelaAusente(error)){ _tabelaOperacionaisIndisponivel=true; return {status:'offline'}; }
+      console.warn('[HOTFIX-009] Falha ao consultar usuarios_operacionais no login — degradando pro cache local:', error);
+      return {status:'offline'};
+    }
+    const loginNormalizado=String(login||'').trim().toLowerCase();
+    const usuario=(data||[]).find(u=>String(u.login||'').trim().toLowerCase()===loginNormalizado);
+    return {status:'online', usuario: usuario||null};
+  }catch(e){
+    console.warn('[HOTFIX-009] Exceção ao consultar usuarios_operacionais no login — degradando pro cache local:', e);
+    return {status:'offline'};
+  }
+}
 async function sincronizarUsuariosOperacionaisDaEmpresa(companyId, forcar, ignorarIndisponibilidade){
   if(_tabelaOperacionaisIndisponivel && !ignorarIndisponibilidade)return false;
   if(ignorarIndisponibilidade)_tabelaOperacionaisIndisponivel=false;
