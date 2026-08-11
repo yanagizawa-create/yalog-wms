@@ -8960,10 +8960,6 @@ async function fazerLogin(){
   const login=document.getElementById('loginUsuario').value.trim().toLowerCase();
   const senha=document.getElementById('loginSenha').value;
   errEl.style.display='none';
-  // [DIAG-HOTFIX-007] Instrumentação temporária — remover após achar a
-  // causa raiz em ambiente publicado. Não altera nenhuma lógica abaixo.
-  console.log('[DIAG-HOTFIX-007] Company ID recebido no login:', JSON.stringify(companyId));
-  console.log('[DIAG-HOTFIX-007] Login recebido:', JSON.stringify(login));
 
   if(!companyId||!login||!senha){
     errEl.textContent='Preencha Company ID, usuário e senha.';
@@ -8992,179 +8988,117 @@ async function fazerLogin(){
       return;
     }
 
-    // Sprint YALOG-WMS-015, item 6: Company ID validado → Empresa
-    // validada (acima) → busca usuários operacionais no Supabase →
-    // funde no cache local → só então segue pro login (que continua
-    // 100% local a partir daqui, como já era). Só força ignorar o
-    // throttle na PRIMEIRA vez desta empresa nesta sessão (item 11:
-    // "baixar apenas uma vez") — tentativas de login seguintes (ex.:
-    // senha digitada errada) respeitam o throttle normal de 30s.
-    await sincronizarUsuariosOperacionaisDaEmpresa(companyId, !_ultimoSyncUsuariosOperacionais[companyId]);
+    let usuario=null;
 
-    // Sprint YALOG-WMS-011, itens 2/8: usuários operacionais moram
-    // exclusivamente no WMS — jamais na Platform. Tenta achar o login
-    // localmente (filtrado por company_id — item 9) ANTES de qualquer
-    // consulta de usuário à Platform.
-    const usuariosDaEmpresa=DB.usuarios.filter(u=>u.company_id===companyId);
-    // [DIAG-HOTFIX-007] Estado do array local (DB.usuarios) já filtrado
-    // por company_id, no momento exato da comparação usada pelo find().
-    console.log('[DIAG-HOTFIX-007] Usuários locais (DB.usuarios) desta empresa, após sincronização:', JSON.stringify(usuariosDaEmpresa.map(u=>({login:u.login, company_id:u.company_id, ativo:u.ativo, perfil:u.perfil}))));
-    // Sprint YALOG-WMS-HOTFIX-004: comparação de login normalizada dos
-    // dois lados. A HOTFIX-003 corrigiu o cadastro/edição pra gravar
-    // sempre em minúsculo, mas usuários operacionais criados ANTES
-    // daquela correção continuam com o login gravado como o Master
-    // digitou originalmente (ex.: "Joana") — em outro dispositivo, o
-    // registro chega assim via download e a comparação ===, sensível a
-    // maiúscula/minúscula, nunca batia com o que a pessoa digita no
-    // login (já normalizado pra minúsculo). Não altera nada do
-    // cadastro, sincronização ou Platform — só a comparação aqui.
-    const localUser=usuariosDaEmpresa.find(u=>String(u.login||'').toLowerCase()===login && u.ativo!==false);
-    // Sprint YALOG-WMS-014, item 7: usuário existe mas está inativo —
-    // mensagem específica, sem cair no fallback de Platform (que
-    // resultaria num genérico "Usuário não encontrado.").
-    const usuarioInativoLocalOriginal=usuariosDaEmpresa.find(u=>String(u.login||'').toLowerCase()===login && u.ativo===false && u.perfil!=='master');
-    // [DIAG-HOTFIX-007] Resultado exato da comparação usada pelo find().
-    console.log('[DIAG-HOTFIX-007] Resultado da comparação (find) — localUser encontrado:', !!localUser, localUser?JSON.stringify({login:localUser.login,company_id:localUser.company_id,ativo:localUser.ativo,perfil:localUser.perfil}):null);
-    console.log('[DIAG-HOTFIX-007] Resultado da comparação (find) — usuarioInativo encontrado:', !!usuarioInativoLocalOriginal);
-
-    // Sprint YALOG-WMS-HOTFIX-009: usuarios_operacionais (Supabase) é a
-    // ÚNICA fonte de verdade para autenticação de usuário operacional —
-    // DB.usuarios (localUser, acima) nunca decide sozinho se o login é
-    // válido; serve só de cache pra interface e de fallback quando
-    // offline. Consulta direta, agora, na tabela remota — nunca
-    // reaproveita o que a sincronização geral já tinha trazido antes
-    // (que pode estar minutos/segundos desatualizado em relação a um
-    // cadastro feito em outro computador nesse meio tempo).
-    const authOperacionalRemoto=await _autenticarUsuarioOperacionalNaTabela(companyId, login);
-    // Master nunca está em usuarios_operacionais — se achou algo remoto,
-    // é garantidamente um usuário operacional; usa os dados FRESCOS
-    // (ativo/senha_hash) de lá em vez da cópia local, que pode estar
-    // desatualizada mesmo já sincronizada uma vez nesta sessão.
-    let localUser2=localUser, usuarioInativo=usuarioInativoLocalOriginal;
-    if(authOperacionalRemoto.status==='online'){
-      if(authOperacionalRemoto.usuario){
-        const fresco=_usuarioOperacionalParaLocal(authOperacionalRemoto.usuario, companyId);
-        fresco.id = (localUser&&localUser.id) || (usuarioInativoLocalOriginal&&usuarioInativoLocalOriginal.id) || ('op-'+companyId+'-'+fresco.login);
-        if(fresco.ativo===false){ localUser2=null; usuarioInativo=fresco; }
-        else { localUser2=fresco; usuarioInativo=null; }
-      }else if(!localUser && !usuarioInativoLocalOriginal){
-        // Não existe em usuarios_operacionais — pode ainda ser o Master
-        // (tratado mais abaixo, inalterado); garante que não sobra
-        // nenhum resquício operacional obsoleto do cache local.
-        localUser2=null; usuarioInativo=null;
-      }
-    }
-    // status==='offline': mantém exatamente o que já estava (localUser/
-    // usuarioInativoLocalOriginal) — mesmo comportamento de sempre.
-    if(!localUser2 && usuarioInativo){
-      console.log('[DIAG-HOTFIX-007] Motivo exato da rejeição: usuário encontrado localmente, porém ativo===false (desativado).');
+    // Sprint YALOG-WMS-REFACTOR-001: pipeline exclusivo e determinístico
+    // do usuário operacional — usuarios_operacionais é consultada agora
+    // mesmo, direto no Supabase, sem depender de nenhuma sincronização
+    // anterior nem de DB.usuarios. Fluxo do Master (abaixo, no `else`)
+    // permanece com a mesma lógica/condições/mensagens de sempre.
+    const authOperacional=await autenticarUsuarioOperacional(companyId, login, senha);
+    if(authOperacional.ok){
+      usuario={
+        id: authOperacional.usuario.id, nome: authOperacional.usuario.nome, login: authOperacional.usuario.login,
+        perfil: authOperacional.usuario.perfil, company_id: companyId, platformRole: null, ativo: true,
+      };
+      // DB.usuarios só é populado/atualizado DEPOIS de autenticar —
+      // nunca antes, nunca como pré-condição. Aqui vira exclusivamente
+      // cache de interface (telas, listas), nunca mais fonte de decisão.
+      const idxCache=DB.usuarios.findIndex(u=>u.id===authOperacional.usuario.id);
+      if(idxCache>=0) DB.usuarios[idxCache]={...DB.usuarios[idxCache], ...authOperacional.usuario};
+      else DB.usuarios.push(authOperacional.usuario);
+      save();
+    }else if(authOperacional.motivo==='inativo'){
       errEl.textContent='Usuário desativado. Contate o administrador da empresa.';
       errEl.style.display='block';
       document.getElementById('loginSenha').value='';
       document.getElementById('loginSenha').focus();
       return;
-    }
-    const senhaHashDigitada=await hashSenha(senha);
-    const localBate=!!(localUser2 && localUser2.senha_hash && localUser2.senha_hash===senhaHashDigitada);
-    let usuario=null;
-
-    if(localUser2 && localUser2.perfil!=='master'){
-      // Item 8: usuário operacional — valida senha contra o dado mais
-      // recente da tabela remota (localUser2), consultado agora mesmo
-      // acima — nunca contra uma cópia potencialmente desatualizada.
-      if(!localBate){
-        console.log('[DIAG-HOTFIX-007] Motivo exato da rejeição: usuário encontrado (via usuarios_operacionais), porém a senha digitada não bate.');
-        errEl.textContent='Senha incorreta.';
-        errEl.style.display='block';
-        document.getElementById('loginSenha').value='';
-        document.getElementById('loginSenha').focus();
-        return;
-      }
-      usuario={
-        id: localUser2.id, nome: localUser2.nome, login: localUser2.login,
-        perfil: localUser2.perfil, company_id: companyId, platformRole: null, ativo: true,
-      };
-      // Item 3 da Sprint: DB.usuarios só é populado/atualizado DEPOIS de
-      // autenticar — nunca antes, nunca como pré-condição. Mantém a
-      // interface (telas, listas) sempre alinhada com o dado que acabou
-      // de vir da tabela remota, sem esperar o próximo ciclo de sync.
-      const idxCache=DB.usuarios.findIndex(u=>u.id===localUser2.id);
-      if(idxCache>=0) DB.usuarios[idxCache]={...DB.usuarios[idxCache], ...localUser2};
-      else DB.usuarios.push(localUser2);
-      save();
-    }else if(localUser && localUser.perfil==='master' && localBate){
-      // Sprint YALOG-WMS-013: Master com hash local já configurado (via
-      // "Minha Conta", ou de um login anterior confirmado pela
-      // Platform) — autentica 100% local, sem depender da Platform.
-      usuario={
-        id: localUser.id, nome: localUser.nome, login: localUser.login,
-        perfil: 'master', company_id: companyId, platformRole: localUser.platformRole||null, ativo: true,
-      };
+    }else if(authOperacional.motivo==='senha-invalida'){
+      errEl.textContent='Senha incorreta.';
+      errEl.style.display='block';
+      document.getElementById('loginSenha').value='';
+      document.getElementById('loginSenha').focus();
+      return;
     }else{
-      // Sem cadastro local (primeiro acesso) OU é o Master com hash
-      // local ausente/desatualizado (ex.: senha redefinida pela
-      // Platform — item 3, compatibilidade com Reset da Platform) —
-      // só resta tentar a Platform.
-      const auth=await _autenticarUsuarioNaPlatform(companyId, login, senha);
-      if(!auth.ok){
-        console.log('[DIAG-HOTFIX-007] Motivo exato da rejeição: localUser não encontrado (nem ativo nem inativo) — caiu no fallback da Platform, que também não encontrou. auth.motivo:', auth.motivo);
-        const mensagens={
-          'usuario-nao-encontrado':'Usuário não encontrado.',
-          'usuario-inativo':'Usuário inativo.',
-          'senha-invalida':'Senha incorreta.',
-          'perfil-nao-autorizado':'Perfil não autorizado.',
-          'sem-conexao-sem-cache':'Sem conexão e sem dados salvos localmente. Tente novamente com internet.',
-          'erro-autenticacao':'Não foi possível validar o usuário agora. Tente novamente.',
+      // motivo==='nao-encontrado': não existe em usuarios_operacionais
+      // (nem local nem remoto) — só pode ser o Master, que nunca está
+      // nessa tabela. Fluxo do Master preservado, mesmas condições e
+      // mensagens de sempre (Sprint YALOG-WMS-013).
+      const masterLocalExistente=DB.usuarios.find(u=>u.company_id===companyId && u.perfil==='master');
+      const senhaHashDigitada=await hashSenha(senha);
+      const localBateMaster=!!(masterLocalExistente && masterLocalExistente.senha_hash && masterLocalExistente.senha_hash===senhaHashDigitada);
+      if(masterLocalExistente && localBateMaster){
+        // Sprint YALOG-WMS-013: Master com hash local já configurado (via
+        // "Minha Conta", ou de um login anterior confirmado pela
+        // Platform) — autentica 100% local, sem depender da Platform.
+        usuario={
+          id: masterLocalExistente.id, nome: masterLocalExistente.nome, login: masterLocalExistente.login,
+          perfil: 'master', company_id: companyId, platformRole: masterLocalExistente.platformRole||null, ativo: true,
         };
-        errEl.textContent=mensagens[auth.motivo]||'Não foi possível entrar.';
-        errEl.style.display='block';
-        document.getElementById('loginSenha').value='';
-        document.getElementById('loginSenha').focus();
-        return;
-      }
-      // Item 6 (WMS-010): mapeamento intocado. Só perfis que mapeiam
-      // para 'master' são aceitos vindos da Platform — um usuário
-      // operacional da Platform (USUARIO/CONFERENTE/OPERACIONAL) sem
-      // cadastro local não tem acesso (item 2/8: jamais buscar
-      // operacional na Platform).
-      const perfilInterno=YALOG_PLATFORM_PERFIL_MAP[auth.usuario.role]||'conferente';
-      if(perfilInterno!=='master'){
-        errEl.textContent='Usuário não encontrado.';
-        errEl.style.display='block';
-        return;
-      }
-      // Item 7: o Master é espelhado localmente — é assim que aparece
-      // (protegido, sem editar/excluir) na tela de Usuários do WMS.
-      // Sprint YALOG-WMS-013: a Platform acabou de confirmar que esta
-      // senha está correta — cacheia o hash local (mesma hashSenha() de
-      // sempre) pra os próximos logins do Master funcionarem 100% pelo
-      // WMS, sem depender mais da Platform (item 3/objetivo da Sprint).
-      let masterLocal=DB.usuarios.find(u=>u.company_id===companyId && u.perfil==='master');
-      if(masterLocal){
-        masterLocal.nome=auth.usuario.nome; masterLocal.login=login;
-        masterLocal.senha_hash=senhaHashDigitada; masterLocal.updatedAt=now();
       }else{
-        masterLocal={
-          id:'master-'+companyId, company_id:companyId, login, nome:auth.usuario.nome,
-          perfil:'master', perfilExibicao:'Master', platformSourced:true,
-          senha_hash:senhaHashDigitada, obrigar_troca_senha:false,
-          ativo:true, createdAt:now(), updatedAt:now(),
+        // Sem cadastro local (primeiro acesso) OU é o Master com hash
+        // local ausente/desatualizado (ex.: senha redefinida pela
+        // Platform — item 3, compatibilidade com Reset da Platform) —
+        // só resta tentar a Platform.
+        const auth=await _autenticarUsuarioNaPlatform(companyId, login, senha);
+        if(!auth.ok){
+          const mensagens={
+            'usuario-nao-encontrado':'Usuário não encontrado.',
+            'usuario-inativo':'Usuário inativo.',
+            'senha-invalida':'Senha incorreta.',
+            'perfil-nao-autorizado':'Perfil não autorizado.',
+            'sem-conexao-sem-cache':'Sem conexão e sem dados salvos localmente. Tente novamente com internet.',
+            'erro-autenticacao':'Não foi possível validar o usuário agora. Tente novamente.',
+          };
+          errEl.textContent=mensagens[auth.motivo]||'Não foi possível entrar.';
+          errEl.style.display='block';
+          document.getElementById('loginSenha').value='';
+          document.getElementById('loginSenha').focus();
+          return;
+        }
+        // Item 6 (WMS-010): mapeamento intocado. Só perfis que mapeiam
+        // para 'master' são aceitos vindos da Platform — um usuário
+        // operacional da Platform (USUARIO/CONFERENTE/OPERACIONAL) sem
+        // cadastro local não tem acesso (item 2/8: jamais buscar
+        // operacional na Platform).
+        const perfilInterno=YALOG_PLATFORM_PERFIL_MAP[auth.usuario.role]||'conferente';
+        if(perfilInterno!=='master'){
+          errEl.textContent='Usuário não encontrado.';
+          errEl.style.display='block';
+          return;
+        }
+        // Item 7: o Master é espelhado localmente — é assim que aparece
+        // (protegido, sem editar/excluir) na tela de Usuários do WMS.
+        // Sprint YALOG-WMS-013: a Platform acabou de confirmar que esta
+        // senha está correta — cacheia o hash local (mesma hashSenha() de
+        // sempre) pra os próximos logins do Master funcionarem 100% pelo
+        // WMS, sem depender mais da Platform (item 3/objetivo da Sprint).
+        let masterLocal=masterLocalExistente;
+        if(masterLocal){
+          masterLocal.nome=auth.usuario.nome; masterLocal.login=login;
+          masterLocal.senha_hash=senhaHashDigitada; masterLocal.updatedAt=now();
+        }else{
+          masterLocal={
+            id:'master-'+companyId, company_id:companyId, login, nome:auth.usuario.nome,
+            perfil:'master', perfilExibicao:'Master', platformSourced:true,
+            senha_hash:senhaHashDigitada, obrigar_troca_senha:false,
+            ativo:true, createdAt:now(), updatedAt:now(),
+          };
+          DB.usuarios.push(masterLocal);
+        }
+        save();
+        // Sprint YALOG-WMS-013: usa o id do registro espelhado local (não
+        // mais o sintético "companyId:login") — é o mesmo id usado por
+        // "Minha Conta"/troca obrigatória de senha para achar o registro.
+        usuario={
+          id: masterLocal.id, nome: auth.usuario.nome, login,
+          perfil: 'master', company_id: companyId, platformRole: auth.usuario.role, ativo: true,
         };
-        DB.usuarios.push(masterLocal);
       }
-      save();
-      // Sprint YALOG-WMS-013: usa o id do registro espelhado local (não
-      // mais o sintético "companyId:login") — é o mesmo id usado por
-      // "Minha Conta"/troca obrigatória de senha para achar o registro.
-      usuario={
-        id: masterLocal.id, nome: auth.usuario.nome, login,
-        perfil: 'master', company_id: companyId, platformRole: auth.usuario.role, ativo: true,
-      };
     }
 
     usuarioAtual=usuario;
-    // [DIAG-HOTFIX-007] Valor final de usuarioAtual, já atribuído.
-    console.log('[DIAG-HOTFIX-007] Valor final de usuarioAtual:', JSON.stringify(usuarioAtual));
     // Sprint YALOG-WMS-013, item 5: função independente, chamada só
     // depois do login concluído — nunca interfere na autenticação.
     registrarUltimoLogin(usuario);
@@ -9172,10 +9106,17 @@ async function fazerLogin(){
     // Platform (o SSO foi removido na Sprint YALOG-WMS-009). Grava
     // exatamente os 5 campos pedidos; o restante do objeto acima
     // (perfil interno, id etc.) é reconstruído em tempo de execução,
-    // nunca persistido.
+    // nunca persistido. Sessão sempre nova — initLogin() já limpa
+    // qualquer sessão anterior antes de exibir a tela de login.
     Core.sessionSet(SESSAO_KEY, {
       company_id: companyId, login, nome: usuario.nome, role: usuario.platformRole||usuario.perfil, timestamp: Date.now(),
     });
+    // Sprint YALOG-WMS-REFACTOR-001: "Executar sincronização da
+    // interface" — só agora, depois de autenticar, carrega a lista
+    // completa de usuários operacionais da empresa (usada por
+    // renderUsuarios() e demais telas). Nunca gate a autenticação em
+    // si; fire-and-forget não bloqueia o Dashboard.
+    sincronizarUsuariosOperacionaisDaEmpresa(companyId, true).catch(e=>console.warn('[REFACTOR-001] Sincronização pós-login falhou (não bloqueia o acesso):', e));
 
     const empresaNome=(validacaoEmpresa.empresa && (validacaoEmpresa.empresa.nome_fantasia||validacaoEmpresa.empresa.razao_social))||null;
     if(empresaNome){ _yalogEmpresaNomePlatform=empresaNome; renderLogo(); }
@@ -9726,33 +9667,44 @@ async function _migrarUsuariosOperacionaisParaTabelaPropria(companyId){
 // login). `ignorarIndisponibilidade` (Sprint YALOG-WMS-016A, item 6 —
 // botão Refresh) também dá uma nova chance à tabela mesmo que uma
 // tentativa anterior nesta sessão tenha marcado ela como ausente.
-// Sprint YALOG-WMS-HOTFIX-009: usuarios_operacionais (Supabase) é a
-// ÚNICA fonte de verdade para autenticar um usuário operacional.
-// DB.usuarios nunca decide sozinho se um login é válido — serve só de
-// cache pra interface (telas/listas) e de fallback quando offline.
-// Consulta direta, sempre no momento do login, nunca reaproveitando o
-// que uma sincronização anterior já tinha trazido (que pode estar
-// desatualizada em relação a um cadastro feito segundos atrás em
-// outro dispositivo). Mesmo padrão de filtro/erro já usado em
-// sincronizarUsuariosOperacionaisDaEmpresa — só muda o que se faz com
-// o resultado.
-async function _autenticarUsuarioOperacionalNaTabela(companyId, login){
+// Sprint YALOG-WMS-REFACTOR-001 — SUBSTITUI integralmente a função
+// _autenticarUsuarioOperacionalNaTabela() da HOTFIX-009. Pipeline
+// exclusivo e determinístico: usuarios_operacionais (Supabase) é a
+// ÚNICA fonte de verdade pra autenticar um usuário operacional — toda
+// a decisão (existe? está ativo? a senha bate?) acontece aqui, contra
+// o dado consultado agora mesmo, nunca contra DB.usuarios/cache/
+// sincronização anterior. Só cai pro estado local confirmado
+// (DB.usuarios) quando genuinamente offline/sem conexão — nunca como
+// escolha quando o Supabase está acessível. DB.usuarios, depois desta
+// função, é populado só como cache de interface (por quem chama),
+// nunca antes, nunca como parte da decisão.
+async function autenticarUsuarioOperacional(companyId, login, senha){
+  const senhaHashDigitada=await hashSenha(senha);
+  const loginNormalizado=String(login||'').trim().toLowerCase();
   const client=_obterClientePlatform();
-  if(!client) return {status:'offline'};
-  try{
-    const {data, error}=await client.from('usuarios_operacionais').select('*').eq('company_id', companyId);
-    if(error){
-      if(_ehErroTabelaAusente(error)){ _tabelaOperacionaisIndisponivel=true; return {status:'offline'}; }
-      console.warn('[HOTFIX-009] Falha ao consultar usuarios_operacionais no login — degradando pro cache local:', error);
-      return {status:'offline'};
+  if(client){
+    try{
+      const {data, error}=await client.from('usuarios_operacionais').select('*').eq('company_id', companyId);
+      if(error && _ehErroTabelaAusente(error)) _tabelaOperacionaisIndisponivel=true;
+      if(!error){
+        const registro=(data||[]).find(u=>String(u.login||'').trim().toLowerCase()===loginNormalizado);
+        if(!registro) return {status:'online', ok:false, motivo:'nao-encontrado'};
+        if(registro.ativo===false) return {status:'online', ok:false, motivo:'inativo'};
+        if(registro.senha_hash!==senhaHashDigitada) return {status:'online', ok:false, motivo:'senha-invalida'};
+        return {status:'online', ok:true, usuario:_usuarioOperacionalParaLocal(registro, companyId)};
+      }
+      console.warn('[REFACTOR-001] Falha ao consultar usuarios_operacionais no login — degradando pro estado local confirmado:', error);
+    }catch(e){
+      console.warn('[REFACTOR-001] Exceção ao consultar usuarios_operacionais no login — degradando pro estado local confirmado:', e);
     }
-    const loginNormalizado=String(login||'').trim().toLowerCase();
-    const usuario=(data||[]).find(u=>String(u.login||'').trim().toLowerCase()===loginNormalizado);
-    return {status:'online', usuario: usuario||null};
-  }catch(e){
-    console.warn('[HOTFIX-009] Exceção ao consultar usuarios_operacionais no login — degradando pro cache local:', e);
-    return {status:'offline'};
   }
+  // Offline/erro de consulta — único fallback aceitável: o último
+  // estado local confirmado (nunca decide sozinho quando online).
+  const local=DB.usuarios.find(u=>u.company_id===companyId && String(u.login||'').trim().toLowerCase()===loginNormalizado && u.perfil!=='master');
+  if(!local) return {status:'offline', ok:false, motivo:'nao-encontrado'};
+  if(local.ativo===false) return {status:'offline', ok:false, motivo:'inativo'};
+  if(local.senha_hash!==senhaHashDigitada) return {status:'offline', ok:false, motivo:'senha-invalida'};
+  return {status:'offline', ok:true, usuario:local};
 }
 async function sincronizarUsuariosOperacionaisDaEmpresa(companyId, forcar, ignorarIndisponibilidade){
   if(_tabelaOperacionaisIndisponivel && !ignorarIndisponibilidade)return false;
