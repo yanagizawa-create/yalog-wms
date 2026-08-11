@@ -8995,7 +8995,7 @@ async function fazerLogin(){
     // mesmo, direto no Supabase, sem depender de nenhuma sincronização
     // anterior nem de DB.usuarios. Fluxo do Master (abaixo, no `else`)
     // permanece com a mesma lógica/condições/mensagens de sempre.
-    const authOperacional=await autenticarUsuarioOperacional(companyId, login, senha);
+    const authOperacional=await wmsAutenticarUsuarioOperacional(companyId, login, senha);
     if(authOperacional.ok){
       usuario={
         id: authOperacional.usuario.id, nome: authOperacional.usuario.nome, login: authOperacional.usuario.login,
@@ -9021,10 +9021,13 @@ async function fazerLogin(){
       document.getElementById('loginSenha').focus();
       return;
     }else{
-      // motivo==='nao-encontrado': não existe em usuarios_operacionais
-      // (nem local nem remoto) — só pode ser o Master, que nunca está
-      // nessa tabela. Fluxo do Master preservado, mesmas condições e
-      // mensagens de sempre (Sprint YALOG-WMS-013).
+      // motivo==='nao-encontrado' OU 'sem-conexao': ou realmente não
+      // existe em usuarios_operacionais, ou a consulta não pôde ser
+      // feita agora — nos dois casos, só pode ainda ser o Master (que
+      // nunca está nessa tabela, e cujo login local não depende de
+      // rede). Fluxo do Master preservado, mesmas condições e
+      // mensagens de sempre (Sprint YALOG-WMS-013) — incluindo o login
+      // 100% local e offline do Master, que não pode regredir aqui.
       const masterLocalExistente=DB.usuarios.find(u=>u.company_id===companyId && u.perfil==='master');
       const senhaHashDigitada=await hashSenha(senha);
       const localBateMaster=!!(masterLocalExistente && masterLocalExistente.senha_hash && masterLocalExistente.senha_hash===senhaHashDigitada);
@@ -9459,133 +9462,81 @@ function _usuarioOperacionalParaLocal(row, companyId){
     createdAt:row.criado_em||now(), updatedAt:row.atualizado_em||now(),
   };
 }
-// item Segurança: nunca loga a senha em si, nem em texto puro nem
-// hash — _linhaUsuarioOperacional só manda o hash já calculado, igual
-// ao que já era salvo localmente.
-// Envia (best-effort) o estado local atual de um usuário operacional
-// pra usuarios_operacionais — chamada depois de criar/editar/resetar
-// senha/ativar/desativar. Nunca lança, nunca bloqueia o fluxo local
-// que já aconteceu antes de cada chamada.
-// Sprint YALOG-WMS-016A, itens 1-3: usa sempre company_id+login como
-// chave lógica do UPSERT (nunca cria duplicidade), registra o
-// resultado no Console (sucesso ou erro, formato exato pedido) e
-// confirma a gravação com um SELECT logo depois.
-async function _sincronizarUsuarioNaPlatform(usuario){
-  if(!usuario||usuario.perfil==='master')return; // Master nunca vai pra usuarios_operacionais
-  if(_tabelaOperacionaisIndisponivel){
-    console.warn('[SYNC DIAG] Sincronização abortada: _tabelaOperacionaisIndisponivel=true nesta sessão (ver log [SYNC DIAG] anterior para o motivo original).');
-    return;
-  }
-  // Sprint YALOG-WMS-HOTFIX-003: gravação definitiva — até 3 tentativas
-  // antes de desistir. Cada tentativa refaz o ciclo inteiro (SELECT →
-  // INSERT/UPDATE → SELECT de confirmação lendo de volta do Supabase,
-  // nunca de cache/localStorage/memória/IndexedDB) — só marca
-  // usuario._migradoOperacionais=true quando essa confirmação, vinda
-  // direto do banco, bate. "Tabela ausente" nunca é reentetado (é uma
-  // condição estrutural, não transitória — tentar de novo não muda nada).
-  const MAX_TENTATIVAS=3;
-  for(let tentativa=1; tentativa<=MAX_TENTATIVAS; tentativa++){
-    console.log('%c[SYNC] ═══ Iniciando sincronização de usuário (tentativa '+tentativa+'/'+MAX_TENTATIVAS+') ═══','color:#f97316;font-weight:bold;', usuario.login);
-    const sucesso = await _tentarSincronizarUsuarioNaPlatform(usuario);
-    if(sucesso || _tabelaOperacionaisIndisponivel) return;
-    if(tentativa<MAX_TENTATIVAS){
-      const espera=400*tentativa;
-      console.warn('[SYNC DIAG] Tentativa '+tentativa+' falhou — nova tentativa em '+espera+'ms.');
-      await new Promise(r=>setTimeout(r,espera));
-    }
-  }
-  console.error('[SYNC DIAG] Todas as '+MAX_TENTATIVAS+' tentativas de gravação definitiva falharam para', usuario.login, '— usuário permanece só local até a próxima sincronização (ex.: reabrir a tela Usuários).');
-}
-// Uma única tentativa do ciclo completo SELECT→INSERT/UPDATE→SELECT de
-// confirmação. Retorna true só quando o Supabase confirma, de verdade,
-// que o registro existe — nunca com base em cache local.
-async function _tentarSincronizarUsuarioNaPlatform(usuario){
+// ════════════════════════════════════════════════════════════════
+// Sprint YALOG-WMS-REFACTOR-002 — PIPELINE ÚNICO E NOVO de persistência
+// do usuário operacional. Substitui integralmente e remove por completo
+// _sincronizarUsuarioNaPlatform / _tentarSincronizarUsuarioNaPlatform /
+// _dicaSeErroDeRLS (não reaproveitados — implementação nova, sem
+// fallback, sem IF herdado de sprint anterior). Usada pelas 5 ações
+// que alteram um usuário operacional (criar/editar/senha manual/senha
+// temporária/ativar-desativar) — uma única implementação, sem
+// variantes. Constrói o payload aqui mesmo (não chama
+// _linhaUsuarioOperacional — essa função continua existindo só porque
+// a sincronização geral, protegida nesta Sprint, ainda depende dela).
+// ════════════════════════════════════════════════════════════════
+async function wmsPersistirUsuarioOperacional(usuarioLocal){
+  const client=_obterClientePlatform();
+  if(!client) return false;
+  const payload={
+    company_id:usuarioLocal.company_id, login:usuarioLocal.login, nome:usuarioLocal.nome,
+    perfil:usuarioLocal.perfil, perfil_exibicao:usuarioLocal.perfilExibicao||null,
+    senha_hash:usuarioLocal.senha_hash, ativo:usuarioLocal.ativo!==false,
+    obrigar_troca_senha:!!usuarioLocal.obrigar_troca_senha,
+    ultimo_login:usuarioLocal.ultimo_login||null,
+    ultima_troca_senha:usuarioLocal.data_alteracao_senha||null,
+    atualizado_em:usuarioLocal.updatedAt||now(),
+  };
   try{
-    const client=_obterClientePlatform();
-    if(!client)return false; // sem conexão — offline, cache local já é a fonte de verdade (motivo já logado por _obterClientePlatform)
-    console.log('[SYNC STEP 4] Cliente Supabase criado');
-    const row=_linhaUsuarioOperacional(usuario);
-    console.log('[SYNC STEP 5] Payload montado:', row);
-
-    // Sprint YALOG-WMS-016C — CORREÇÃO: `upsert(row,{onConflict:'company_id,login'})`
-    // exige que a tabela real tenha uma constraint UNIQUE/EXCLUSION
-    // exatamente em (company_id, login). Se a tabela foi criada sem
-    // essa constraint (ex.: via editor visual do Supabase, sem rodar o
-    // SQL completo), TODO upsert falha com o erro do Postgres 42P10
-    // ("no unique or exclusion constraint matching the ON CONFLICT
-    // specification") — e como SELECT não depende dessa constraint,
-    // isso bate exatamente com "SELECT funciona, INSERT nunca aparece,
-    // mesmo no computador que criou". Trocado por um SELECT explícito
-    // seguido de INSERT ou UPDATE — nunca mais depende de constraint
-    // nenhuma no banco.
-    console.log('[SYNC STEP 6] Verificando se o registro já existe (SELECT antes do UPSERT)');
-    const {data:existente, error:erroSelect}=await client.from('usuarios_operacionais').select('id').eq('company_id',usuario.company_id).eq('login',usuario.login);
+    const {data:existente, error:erroSelect}=await client.from('usuarios_operacionais').select('id').eq('company_id',payload.company_id).eq('login',payload.login);
     if(erroSelect){
-      if(_ehErroTabelaAusente(erroSelect)){
-        _tabelaOperacionaisIndisponivel=true;
-        console.warn('[SYNC DIAG] Tabela usuarios_operacionais ainda não existe no Supabase (ou nome errado) — operando 100% local até ela ser criada. Erro completo:', erroSelect);
-        return false;
-      }
-      _logSyncErro(usuario.company_id, usuario.login, 'SELECT (pré-gravação)', erroSelect.code, erroSelect.message||String(erroSelect));
-      _dicaSeErroDeRLS(erroSelect);
+      if(_ehErroTabelaAusente(erroSelect)) _tabelaOperacionaisIndisponivel=true;
+      _logSyncErro(payload.company_id, payload.login, 'SELECT (pré-gravação)', erroSelect.code, erroSelect.message||String(erroSelect));
       return false;
     }
-    const operacao = (existente&&existente.length>0) ? 'UPDATE' : 'INSERT';
-    console.log('[SYNC STEP 6b] Operação decidida:', operacao, '(registro '+(operacao==='UPDATE'?'já existe':'não existe ainda')+')');
-
-    console.log('[SYNC STEP 7] Executando '+operacao);
-    let resultado;
-    if(operacao==='UPDATE'){
-      resultado=await client.from('usuarios_operacionais').update(row).eq('company_id',usuario.company_id).eq('login',usuario.login);
-    }else{
-      resultado=await client.from('usuarios_operacionais').insert(row);
-    }
-    const {error,status}=resultado;
-    console.log('[SYNC STEP 7b] Resposta HTTP:', {error,status});
-    if(error){
-      _logSyncErro(usuario.company_id, usuario.login, operacao, error.code||status, error.message||String(error));
-      _dicaSeErroDeRLS(error);
+    const operacao=(existente&&existente.length>0)?'UPDATE':'INSERT';
+    const resultado = operacao==='UPDATE'
+      ? await client.from('usuarios_operacionais').update(payload).eq('company_id',payload.company_id).eq('login',payload.login)
+      : await client.from('usuarios_operacionais').insert(payload);
+    if(resultado.error){
+      _logSyncErro(payload.company_id, payload.login, operacao, resultado.error.code||resultado.status, resultado.error.message||String(resultado.error));
       return false;
     }
-    // item 3 (Sprint YALOG-WMS-HOTFIX-010): confirma a gravação lendo de
-    // volta os campos EXATOS que a autenticação (HOTFIX-009,
-    // _autenticarUsuarioOperacionalNaTabela) usa pra decidir um login —
-    // não só que uma linha existe, mas que login/ativo/senha_hash
-    // persistidos batem exatamente com o que acabou de ser enviado.
-    // Continua lido direto do Supabase, nunca de cache/state/local.
-    console.log('[SYNC STEP 8] SELECT confirmação (direto do Supabase)');
-    const {data:conferencia, error:erroConf}=await client.from('usuarios_operacionais').select('login,ativo,senha_hash').eq('company_id',usuario.company_id).eq('login',usuario.login);
+    // Confirma lendo de volta a MESMA linha e comparando TODOS os
+    // campos enviados — só marca sucesso se persistido===enviado em
+    // cada um deles, nunca só pela existência da linha.
+    const {data:conferencia, error:erroConf}=await client.from('usuarios_operacionais')
+      .select('company_id,login,nome,perfil,perfil_exibicao,senha_hash,ativo,obrigar_troca_senha')
+      .eq('company_id',payload.company_id).eq('login',payload.login);
     if(erroConf || !conferencia || conferencia.length!==1){
-      _logSyncErro(usuario.company_id, usuario.login, operacao+' (confirmação)', erroConf&&erroConf.code, erroConf?(erroConf.message||String(erroConf)):('SELECT retornou '+(conferencia?conferencia.length:0)+' registro(s), esperado 1'));
+      _logSyncErro(payload.company_id, payload.login, operacao+' (confirmação)', erroConf&&erroConf.code, erroConf?(erroConf.message||String(erroConf)):('SELECT retornou '+(conferencia?conferencia.length:0)+' registro(s), esperado 1'));
       return false;
     }
-    const persistido=conferencia[0];
-    if(persistido.login!==row.login || persistido.ativo!==row.ativo || persistido.senha_hash!==row.senha_hash){
-      _logSyncErro(usuario.company_id, usuario.login, operacao+' (confirmação)', 'divergencia-campos', 'Registro persistido diverge do enviado — login/ativo/senha_hash não batem exatamente com o que a autenticação vai ler.');
+    const p=conferencia[0];
+    const camposIguais = p.company_id===payload.company_id && p.login===payload.login && p.nome===payload.nome &&
+      p.perfil===payload.perfil && p.perfil_exibicao===payload.perfil_exibicao && p.senha_hash===payload.senha_hash &&
+      p.ativo===payload.ativo && p.obrigar_troca_senha===payload.obrigar_troca_senha;
+    if(!camposIguais){
+      _logSyncErro(payload.company_id, payload.login, operacao+' (confirmação)', 'divergencia-campos', 'Registro persistido diverge do enviado, campo a campo.');
       return false;
     }
-    usuario._migradoOperacionais=true;
-    console.log('[SYNC STEP 9] Sincronização concluída — registro confirmado no Supabase');
-    _logSyncSucesso(operacao, usuario.company_id, usuario.login, status||(operacao==='INSERT'?201:200));
-    await _auditoriaSincronizacaoUsuario('USUARIO_UPLOAD', usuario);
+    usuarioLocal._migradoOperacionais=true;
+    _logSyncSucesso(operacao, payload.company_id, payload.login, resultado.status||(operacao==='INSERT'?201:200));
+    await _auditoriaSincronizacaoUsuario('USUARIO_UPLOAD', usuarioLocal);
     return true;
   }catch(e){
-    console.error('[SYNC STEP EXCEPTION] Exceção não tratada durante a sincronização:', e);
-    _logSyncErro(usuario.company_id, usuario.login, 'sincronização', 'exceção', e.message||String(e));
+    _logSyncErro(payload.company_id, payload.login, 'sincronização', 'exceção', e.message||String(e));
     return false;
   }
 }
-// Sprint YALOG-WMS-016C, FASE 4: pista explícita quando o erro tem a
-// assinatura típica de RLS bloqueando escrita (comum quando só a
-// policy de SELECT foi criada, sem INSERT/UPDATE para a role anon) —
-// isso é uma configuração no painel do Supabase, não algo que o
-// código do WMS consiga corrigir sozinho.
-function _dicaSeErroDeRLS(erro){
-  if(!erro)return;
-  const msg=String((erro&&(erro.message||erro.details))||erro||'').toLowerCase();
-  if(erro.code==='42501' || msg.includes('row-level security') || msg.includes('permission denied') || msg.includes('violates row-level security policy')){
-    console.error('%c[SYNC DIAG] Assinatura de erro típica de RLS bloqueando escrita. A tabela usuarios_operacionais provavelmente tem policy de SELECT para a role anon, mas NÃO tem policy de INSERT/UPDATE. Isso é configuração no painel do Supabase (Authentication → Policies) — o código do WMS não consegue corrigir isso sozinho.','color:#ef4444;font-weight:bold;');
+async function wmsPersistirUsuarioOperacionalComRetentativa(usuarioLocal){
+  if(!usuarioLocal||usuarioLocal.perfil==='master')return false;
+  if(_tabelaOperacionaisIndisponivel)return false;
+  for(let tentativa=1; tentativa<=3; tentativa++){
+    if(await wmsPersistirUsuarioOperacional(usuarioLocal)) return true;
+    if(_tabelaOperacionaisIndisponivel) return false;
+    if(tentativa<3) await new Promise(r=>setTimeout(r,400*tentativa));
   }
+  return false;
 }
 // Sprint YALOG-WMS-017, item 13: contraparte de exclusão — sem isso,
 // um usuário excluído localmente voltaria a "ressuscitar" no próximo
@@ -9667,44 +9618,40 @@ async function _migrarUsuariosOperacionaisParaTabelaPropria(companyId){
 // login). `ignorarIndisponibilidade` (Sprint YALOG-WMS-016A, item 6 —
 // botão Refresh) também dá uma nova chance à tabela mesmo que uma
 // tentativa anterior nesta sessão tenha marcado ela como ausente.
-// Sprint YALOG-WMS-REFACTOR-001 — SUBSTITUI integralmente a função
-// _autenticarUsuarioOperacionalNaTabela() da HOTFIX-009. Pipeline
-// exclusivo e determinístico: usuarios_operacionais (Supabase) é a
-// ÚNICA fonte de verdade pra autenticar um usuário operacional — toda
-// a decisão (existe? está ativo? a senha bate?) acontece aqui, contra
-// o dado consultado agora mesmo, nunca contra DB.usuarios/cache/
-// sincronização anterior. Só cai pro estado local confirmado
-// (DB.usuarios) quando genuinamente offline/sem conexão — nunca como
-// escolha quando o Supabase está acessível. DB.usuarios, depois desta
-// função, é populado só como cache de interface (por quem chama),
-// nunca antes, nunca como parte da decisão.
-async function autenticarUsuarioOperacional(companyId, login, senha){
+// Sprint YALOG-WMS-REFACTOR-002 — SUBSTITUI integralmente
+// autenticarUsuarioOperacional() da REFACTOR-001 (removida). Pipeline
+// único, novo, sem fallback: usuarios_operacionais é a ÚNICA fonte —
+// não usa DB.usuarios, cache, localStorage, IndexedDB, sincronização
+// anterior nem qualquer lista já carregada, nem mesmo quando offline.
+// Sem conexão, a autenticação simplesmente não é possível — não há
+// mais um "modo offline" para o login operacional.
+async function wmsAutenticarUsuarioOperacional(companyId, login, senha){
+  const client=_obterClientePlatform();
+  if(!client) return {ok:false, motivo:'sem-conexao'};
   const senhaHashDigitada=await hashSenha(senha);
   const loginNormalizado=String(login||'').trim().toLowerCase();
-  const client=_obterClientePlatform();
-  if(client){
-    try{
-      const {data, error}=await client.from('usuarios_operacionais').select('*').eq('company_id', companyId);
-      if(error && _ehErroTabelaAusente(error)) _tabelaOperacionaisIndisponivel=true;
-      if(!error){
-        const registro=(data||[]).find(u=>String(u.login||'').trim().toLowerCase()===loginNormalizado);
-        if(!registro) return {status:'online', ok:false, motivo:'nao-encontrado'};
-        if(registro.ativo===false) return {status:'online', ok:false, motivo:'inativo'};
-        if(registro.senha_hash!==senhaHashDigitada) return {status:'online', ok:false, motivo:'senha-invalida'};
-        return {status:'online', ok:true, usuario:_usuarioOperacionalParaLocal(registro, companyId)};
-      }
-      console.warn('[REFACTOR-001] Falha ao consultar usuarios_operacionais no login — degradando pro estado local confirmado:', error);
-    }catch(e){
-      console.warn('[REFACTOR-001] Exceção ao consultar usuarios_operacionais no login — degradando pro estado local confirmado:', e);
+  try{
+    const {data, error}=await client.from('usuarios_operacionais').select('*').eq('company_id', companyId);
+    if(error){
+      if(_ehErroTabelaAusente(error)) _tabelaOperacionaisIndisponivel=true;
+      return {ok:false, motivo:'sem-conexao'};
     }
+    const registro=(data||[]).find(u=>String(u.login||'').trim().toLowerCase()===loginNormalizado);
+    if(!registro) return {ok:false, motivo:'nao-encontrado'};
+    if(registro.ativo===false) return {ok:false, motivo:'inativo'};
+    if(registro.senha_hash!==senhaHashDigitada) return {ok:false, motivo:'senha-invalida'};
+    return {ok:true, usuario:{
+      id: registro.id, company_id: companyId, login: registro.login, nome: registro.nome,
+      perfil: registro.perfil||'conferente', perfilExibicao: registro.perfil_exibicao||null,
+      senha_hash: registro.senha_hash, ativo:true,
+      obrigar_troca_senha: !!registro.obrigar_troca_senha,
+      ultimo_login: registro.ultimo_login||null, data_alteracao_senha: registro.ultima_troca_senha||null,
+      createdAt: registro.criado_em||now(), updatedAt: registro.atualizado_em||now(),
+      _migradoOperacionais:true,
+    }};
+  }catch(e){
+    return {ok:false, motivo:'sem-conexao'};
   }
-  // Offline/erro de consulta — único fallback aceitável: o último
-  // estado local confirmado (nunca decide sozinho quando online).
-  const local=DB.usuarios.find(u=>u.company_id===companyId && String(u.login||'').trim().toLowerCase()===loginNormalizado && u.perfil!=='master');
-  if(!local) return {status:'offline', ok:false, motivo:'nao-encontrado'};
-  if(local.ativo===false) return {status:'offline', ok:false, motivo:'inativo'};
-  if(local.senha_hash!==senhaHashDigitada) return {status:'offline', ok:false, motivo:'senha-invalida'};
-  return {status:'offline', ok:true, usuario:local};
 }
 async function sincronizarUsuariosOperacionaisDaEmpresa(companyId, forcar, ignorarIndisponibilidade){
   if(_tabelaOperacionaisIndisponivel && !ignorarIndisponibilidade)return false;
@@ -9845,7 +9792,7 @@ async function criarUsuario(){
   // continua instantâneo (linhas acima, inalteradas), só a mensagem é
   // que passa a refletir se already está pronto pra outro computador.
   console.log('[SYNC STEP 3] Entrando na sincronização');
-  await _sincronizarUsuarioNaPlatform(novoUsuario);
+  await wmsPersistirUsuarioOperacionalComRetentativa(novoUsuario);
   if(novoUsuario._migradoOperacionais){
     showT(`Usuário "${nome}" criado e já disponível em outros computadores!`,'ok');
   }else{
@@ -9959,7 +9906,7 @@ async function desativarUsuario(id){
   // Sprint YALOG-WMS-HOTFIX-002/003: aguardado (era fire-and-forget), e o
   // toast só é exibido DEPOIS do resultado — antes dizia "sucesso" mesmo
   // que a sincronização remota ainda estivesse pendente ou tivesse falhado.
-  await _sincronizarUsuarioNaPlatform(u);
+  await wmsPersistirUsuarioOperacionalComRetentativa(u);
   if(u._migradoOperacionais){
     showT(vaiAtivar?'Usuário ativado':'Usuário desativado','ok');
   }else{
@@ -10021,7 +9968,7 @@ async function salvarEdicaoUsuarioWMS(){
   save();closeM('mEditarUsuarioWMS');renderUsuarios();
   // Sprint YALOG-WMS-016, item 2: sincroniza a edição com usuarios_operacionais.
   // Sprint YALOG-WMS-HOTFIX-002/003: aguardado, toast só depois do resultado.
-  await _sincronizarUsuarioNaPlatform(u);
+  await wmsPersistirUsuarioOperacionalComRetentativa(u);
   if(u._migradoOperacionais){
     showT('Usuário atualizado','ok');
   }else{
@@ -10094,7 +10041,7 @@ async function salvarSenhaManual(){
   // — crítico aqui porque a validação de senha é 100% local (nunca cai
   // pra Platform), então sem confirmação a troca simplesmente não
   // funcionaria em outro computador até a próxima sincronização.
-  await _sincronizarUsuarioNaPlatform(u);
+  await wmsPersistirUsuarioOperacionalComRetentativa(u);
   if(u._migradoOperacionais){
     showT('Senha alterada','ok');
   }else{
@@ -10120,7 +10067,7 @@ async function gerarESalvarSenhaTemporaria(){
   document.getElementById('senhaTempResultado').style.display='block';
   renderUsuarios();
   // Sprint YALOG-WMS-HOTFIX-002/003: aguardado, toast só depois do resultado.
-  await _sincronizarUsuarioNaPlatform(u);
+  await wmsPersistirUsuarioOperacionalComRetentativa(u);
   if(u._migradoOperacionais){
     showT('Senha temporária gerada','ok');
   }else{
