@@ -9370,12 +9370,14 @@ function _auditoriaUsuario(acao, alvo, extra){
 // tabela própria `usuarios_operacionais`, vinculada exclusivamente a
 // Company ID. Reaproveita o MESMO client dedicado
 // _obterClientePlatform() (Sprint YALOG-WMS-009 — sempre `anon`,
-// nunca faz sign-in) — só o nome da tabela e as colunas mudam (agora
-// nomes naturais: perfil/perfil_exibicao/ultimo_login/
-// data_alteracao_senha/obrigar_troca_senha, sem sufixo `_wms`, já que
-// a tabela passa a ser 100% do WMS). A Platform continua responsável
-// só por Empresas/Licenças/Company ID/SUPER_ADMIN/GESTOR/MASTER —
-// nunca mais consultada para usuário operacional depois da migração.
+// nunca faz sign-in) — só o nome da tabela e as colunas mudam. Sprint
+// YALOG-WMS-DATABASE-001: `perfil_exibicao` foi removida desta lista —
+// nunca existiu de verdade como coluna (confirmado por HTTP 400 real);
+// colunas reais confirmadas: company_id/login/perfil/senha_hash/ativo/
+// obrigar_troca_senha/ultimo_login/ultima_troca_senha/criado_em/
+// atualizado_em. A Platform continua responsável só por Empresas/
+// Licenças/Company ID/SUPER_ADMIN/GESTOR/MASTER — nunca mais
+// consultada para usuário operacional depois da migração.
 //
 // A TABELA usuarios_operacionais PRECISA JÁ EXISTIR no Supabase — o
 // HTML nunca tenta criar tabela nenhuma (proibido explicitamente pela
@@ -9441,7 +9443,7 @@ function _linhaUsuarioOperacional(u){
   // WMS/UI) não muda — só a chave enviada ao Supabase.
   return {
     company_id:u.company_id, login:u.login, nome:u.nome,
-    perfil:u.perfil, perfil_exibicao:u.perfilExibicao||null,
+    perfil:u.perfil,
     senha_hash:u.senha_hash, ativo:u.ativo!==false,
     obrigar_troca_senha:!!u.obrigar_troca_senha,
     ultimo_login:u.ultimo_login||null,
@@ -9453,7 +9455,14 @@ function _usuarioOperacionalParaLocal(row, companyId){
   return {
     id: row.id || ('op-'+companyId+'-'+row.login),
     company_id:companyId, login:row.login, nome:row.nome,
-    perfil:row.perfil||'conferente', perfilExibicao:row.perfil_exibicao||null,
+    perfil:row.perfil||'conferente',
+    // Sprint YALOG-WMS-DATABASE-001: perfil_exibicao NUNCA existiu como
+    // coluna real de usuarios_operacionais (confirmado por HTTP 400 real
+    // — "Could not find the 'perfil_exibicao' column"). perfilExibicao
+    // continua existindo só na interface (badges, filtros, formulário de
+    // edição) — reconstruído aqui a partir de `perfil`, mesmo padrão já
+    // usado em salvarEdicaoUsuarioWMS() pra popular o formulário.
+    perfilExibicao: Object.keys(WMS_PERFIL_OPERACIONAL_MAP).find(k=>WMS_PERFIL_OPERACIONAL_MAP[k]===(row.perfil||'conferente'))||'Conferente',
     senha_hash:row.senha_hash, ativo:row.ativo!==false,
     obrigar_troca_senha:!!row.obrigar_troca_senha,
     ultimo_login:row.ultimo_login||null,
@@ -9479,7 +9488,7 @@ async function wmsPersistirUsuarioOperacional(usuarioLocal){
   if(!client) return false;
   const payload={
     company_id:usuarioLocal.company_id, login:usuarioLocal.login, nome:usuarioLocal.nome,
-    perfil:usuarioLocal.perfil, perfil_exibicao:usuarioLocal.perfilExibicao||null,
+    perfil:usuarioLocal.perfil,
     senha_hash:usuarioLocal.senha_hash, ativo:usuarioLocal.ativo!==false,
     obrigar_troca_senha:!!usuarioLocal.obrigar_troca_senha,
     ultimo_login:usuarioLocal.ultimo_login||null,
@@ -9534,7 +9543,7 @@ async function wmsPersistirUsuarioOperacional(usuarioLocal){
     console.log('Filtro utilizado:', {company_id:payload.company_id, login:payload.login});
     console.groupEnd();
     const {data:conferencia, error:erroConf}=await client.from('usuarios_operacionais')
-      .select('company_id,login,nome,perfil,perfil_exibicao,senha_hash,ativo,obrigar_troca_senha')
+      .select('company_id,login,nome,perfil,senha_hash,ativo,obrigar_troca_senha')
       .eq('company_id',payload.company_id).eq('login',payload.login);
     // [YALOG-OBS-001] ETAPA 5 — após o SELECT de confirmação.
     console.groupCollapsed('[YALOG-OBS-001] ETAPA 5 — retorno do SELECT de confirmação');
@@ -9553,7 +9562,7 @@ async function wmsPersistirUsuarioOperacional(usuarioLocal){
     }
     const p=conferencia[0];
     const camposIguais = p.company_id===payload.company_id && p.login===payload.login && p.nome===payload.nome &&
-      p.perfil===payload.perfil && p.perfil_exibicao===payload.perfil_exibicao && p.senha_hash===payload.senha_hash &&
+      p.perfil===payload.perfil && p.senha_hash===payload.senha_hash &&
       p.ativo===payload.ativo && p.obrigar_troca_senha===payload.obrigar_troca_senha;
     if(!camposIguais){
       _logSyncErro(payload.company_id, payload.login, operacao+' (confirmação)', 'divergencia-campos', 'Registro persistido diverge do enviado, campo a campo.');
@@ -9701,7 +9710,8 @@ async function wmsAutenticarUsuarioOperacional(companyId, login, senha){
     if(registro.senha_hash!==senhaHashDigitada) return {ok:false, motivo:'senha-invalida'};
     return {ok:true, usuario:{
       id: registro.id, company_id: companyId, login: registro.login, nome: registro.nome,
-      perfil: registro.perfil||'conferente', perfilExibicao: registro.perfil_exibicao||null,
+      perfil: registro.perfil||'conferente',
+      perfilExibicao: Object.keys(WMS_PERFIL_OPERACIONAL_MAP).find(k=>WMS_PERFIL_OPERACIONAL_MAP[k]===(registro.perfil||'conferente'))||'Conferente',
       senha_hash: registro.senha_hash, ativo:true,
       obrigar_troca_senha: !!registro.obrigar_troca_senha,
       ultimo_login: registro.ultimo_login||null, data_alteracao_senha: registro.ultima_troca_senha||null,
