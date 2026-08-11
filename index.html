@@ -9510,6 +9510,10 @@ async function wmsPersistirUsuarioOperacional(usuarioLocal){
       return false;
     }
     const operacao=(existente&&existente.length>0)?'UPDATE':'INSERT';
+    // Sprint YALOG-WMS-PERSIST-001: criado_em está no schema confirmado
+    // mas nunca era enviado — só no INSERT (nunca no UPDATE, pra não
+    // sobrescrever a data de criação original numa edição).
+    if(operacao==='INSERT') payload.criado_em=usuarioLocal.createdAt||now();
     // [YALOG-OBS-001] ETAPA 2 — antes do INSERT/UPDATE.
     console.groupCollapsed('[YALOG-OBS-001] ETAPA 2 — antes de '+operacao+' em usuarios_operacionais');
     console.log('Tabela utilizada:', 'usuarios_operacionais');
@@ -9542,8 +9546,10 @@ async function wmsPersistirUsuarioOperacional(usuarioLocal){
     console.groupCollapsed('[YALOG-OBS-001] ETAPA 4 — antes do SELECT de confirmação');
     console.log('Filtro utilizado:', {company_id:payload.company_id, login:payload.login});
     console.groupEnd();
+    // ETAPA 5 (Sprint YALOG-WMS-PERSIST-001): select * — exatamente
+    // como especificado, em vez de uma lista fixa de colunas.
     const {data:conferencia, error:erroConf}=await client.from('usuarios_operacionais')
-      .select('company_id,login,nome,perfil,senha_hash,ativo,obrigar_troca_senha')
+      .select('*')
       .eq('company_id',payload.company_id).eq('login',payload.login);
     // [YALOG-OBS-001] ETAPA 5 — após o SELECT de confirmação.
     console.groupCollapsed('[YALOG-OBS-001] ETAPA 5 — retorno do SELECT de confirmação');
