@@ -9491,24 +9491,64 @@ async function wmsPersistirUsuarioOperacional(usuarioLocal){
     if(erroSelect){
       if(_ehErroTabelaAusente(erroSelect)) _tabelaOperacionaisIndisponivel=true;
       _logSyncErro(payload.company_id, payload.login, 'SELECT (pré-gravação)', erroSelect.code, erroSelect.message||String(erroSelect));
+      // [YALOG-OBS-001] ETAPA 7 — falha ainda na checagem pré-gravação
+      // (não é o INSERT em si, mas é a etapa que decide INSERT vs UPDATE
+      // — sem ela nunca se chega à ETAPA 2).
+      console.groupCollapsed('[YALOG-OBS-001] wmsPersistirUsuarioOperacional — falha no SELECT pré-gravação');
+      console.error('Código do erro:', erroSelect.code);
+      console.error('Mensagem completa:', erroSelect.message||String(erroSelect));
+      console.groupEnd();
       return false;
     }
     const operacao=(existente&&existente.length>0)?'UPDATE':'INSERT';
+    // [YALOG-OBS-001] ETAPA 2 — antes do INSERT/UPDATE.
+    console.groupCollapsed('[YALOG-OBS-001] ETAPA 2 — antes de '+operacao+' em usuarios_operacionais');
+    console.log('Tabela utilizada:', 'usuarios_operacionais');
+    console.log('Objeto enviado:', payload);
+    console.log('Quantidade de campos:', Object.keys(payload).length);
+    console.groupEnd();
     const resultado = operacao==='UPDATE'
       ? await client.from('usuarios_operacionais').update(payload).eq('company_id',payload.company_id).eq('login',payload.login)
       : await client.from('usuarios_operacionais').insert(payload);
+    // [YALOG-OBS-001] ETAPA 3 — após o INSERT/UPDATE.
+    console.groupCollapsed('[YALOG-OBS-001] ETAPA 3 — retorno do Supabase após '+operacao);
+    console.log('Objeto retornado (data):', resultado.data!==undefined?resultado.data:'(não solicitado — insert()/update() sem .select() encadeado)');
+    console.log('Erro retornado:', resultado.error||null);
+    console.log('Status HTTP:', resultado.status!==undefined?resultado.status:'(não informado pelo cliente)');
+    console.log('Quantidade de linhas:', Array.isArray(resultado.data)?resultado.data.length:'(não aplicável — ver "Objeto retornado" acima)');
+    console.groupEnd();
     if(resultado.error){
       _logSyncErro(payload.company_id, payload.login, operacao, resultado.error.code||resultado.status, resultado.error.message||String(resultado.error));
+      // [YALOG-OBS-001] ETAPA 7 — erro no INSERT/UPDATE em si.
+      console.groupCollapsed('[YALOG-OBS-001] ETAPA 7 — exceção/erro em '+operacao);
+      console.error('Código do erro:', resultado.error.code||resultado.status);
+      console.error('Mensagem completa:', resultado.error.message||String(resultado.error));
+      console.groupEnd();
       return false;
     }
     // Confirma lendo de volta a MESMA linha e comparando TODOS os
     // campos enviados — só marca sucesso se persistido===enviado em
     // cada um deles, nunca só pela existência da linha.
+    // [YALOG-OBS-001] ETAPA 4 — antes do SELECT de confirmação.
+    console.groupCollapsed('[YALOG-OBS-001] ETAPA 4 — antes do SELECT de confirmação');
+    console.log('Filtro utilizado:', {company_id:payload.company_id, login:payload.login});
+    console.groupEnd();
     const {data:conferencia, error:erroConf}=await client.from('usuarios_operacionais')
       .select('company_id,login,nome,perfil,perfil_exibicao,senha_hash,ativo,obrigar_troca_senha')
       .eq('company_id',payload.company_id).eq('login',payload.login);
+    // [YALOG-OBS-001] ETAPA 5 — após o SELECT de confirmação.
+    console.groupCollapsed('[YALOG-OBS-001] ETAPA 5 — retorno do SELECT de confirmação');
+    console.log('Quantidade de linhas:', conferencia?conferencia.length:0);
+    console.log('Objeto retornado:', conferencia||null);
+    if(erroConf) console.error('Erro retornado:', erroConf);
+    console.groupEnd();
     if(erroConf || !conferencia || conferencia.length!==1){
       _logSyncErro(payload.company_id, payload.login, operacao+' (confirmação)', erroConf&&erroConf.code, erroConf?(erroConf.message||String(erroConf)):('SELECT retornou '+(conferencia?conferencia.length:0)+' registro(s), esperado 1'));
+      // [YALOG-OBS-001] ETAPA 7.
+      console.groupCollapsed('[YALOG-OBS-001] ETAPA 7 — SELECT de confirmação não retornou exatamente 1 linha');
+      console.error('Código do erro:', erroConf&&erroConf.code);
+      console.error('Mensagem completa:', erroConf?(erroConf.message||String(erroConf)):('SELECT retornou '+(conferencia?conferencia.length:0)+' registro(s), esperado 1'));
+      console.groupEnd();
       return false;
     }
     const p=conferencia[0];
@@ -9517,14 +9557,33 @@ async function wmsPersistirUsuarioOperacional(usuarioLocal){
       p.ativo===payload.ativo && p.obrigar_troca_senha===payload.obrigar_troca_senha;
     if(!camposIguais){
       _logSyncErro(payload.company_id, payload.login, operacao+' (confirmação)', 'divergencia-campos', 'Registro persistido diverge do enviado, campo a campo.');
+      // [YALOG-OBS-001] ETAPA 7.
+      console.groupCollapsed('[YALOG-OBS-001] ETAPA 7 — divergência de campos entre enviado e persistido');
+      console.error('Código do erro:', 'divergencia-campos');
+      console.error('Mensagem completa:', 'Registro persistido diverge do enviado, campo a campo.');
+      console.error('Enviado:', payload);
+      console.error('Persistido:', p);
+      console.groupEnd();
       return false;
     }
     usuarioLocal._migradoOperacionais=true;
+    // [YALOG-OBS-001] ETAPA 6 — antes do retorno de sucesso.
+    console.groupCollapsed('[YALOG-OBS-001] ETAPA 6 — persistência confirmada');
+    console.log('Persistência confirmada: true');
+    console.log('Operação:', operacao);
+    console.log('company_id/login confirmados:', payload.company_id, payload.login);
+    console.groupEnd();
     _logSyncSucesso(operacao, payload.company_id, payload.login, resultado.status||(operacao==='INSERT'?201:200));
     await _auditoriaSincronizacaoUsuario('USUARIO_UPLOAD', usuarioLocal);
     return true;
   }catch(e){
     _logSyncErro(payload.company_id, payload.login, 'sincronização', 'exceção', e.message||String(e));
+    // [YALOG-OBS-001] ETAPA 7 — exceção não tratada.
+    console.groupCollapsed('[YALOG-OBS-001] ETAPA 7 — exceção não tratada em wmsPersistirUsuarioOperacional');
+    console.error('Mensagem completa:', e.message||String(e));
+    console.error('Código do erro:', e.code||'(sem código)');
+    console.error('Stack:', e.stack||'(sem stack disponível)');
+    console.groupEnd();
     return false;
   }
 }
@@ -9767,6 +9826,14 @@ async function criarUsuario(){
   if(!perfil){showT('Perfil é obrigatório','err');return;}
   if(!senha||senha.length<8){showT('Senha mínima: 8 caracteres','err');return;}
   const companyId=usuarioAtual.company_id;
+  // [YALOG-OBS-001] ETAPA 1 — entrada de criarUsuario(), já com todos
+  // os 4 dados pedidos disponíveis (Company ID só existe a partir daqui).
+  console.groupCollapsed('[YALOG-OBS-001] ETAPA 1 — entrada de criarUsuario()');
+  console.log('Company ID:', companyId);
+  console.log('Login:', login);
+  console.log('Nome:', nome);
+  console.log('Perfil:', perfil);
+  console.groupEnd();
   // Item 13: toda consulta filtrada por company_id da sessão — login
   // único dentro da empresa.
   if(DB.usuarios.find(u=>u.company_id===companyId&&u.login===login)){showT('Login já existe','err');return;}
