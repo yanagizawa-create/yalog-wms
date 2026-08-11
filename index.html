@@ -5438,7 +5438,22 @@ function save(){
 }
 function _applyLoadedData(parsed){
   if(parsed && Object.keys(parsed).length > 0){
-    DB = {...DB, ...parsed};
+    // Sprint YALOG-WMS-HOTFIX-008: `usuarios` é EXCLUÍDO deliberadamente
+    // deste merge. Esta função carrega de Core.get(DBKEY) — um blob
+    // POR INSTALAÇÃO (installation_id, um por navegador/computador),
+    // persistido em wms_kv_store. Usar esse blob como fonte da lista de
+    // usuários operacionais cria uma segunda fonte de verdade, paralela
+    // à tabela `usuarios_operacionais` (essa sim compartilhada de
+    // verdade entre todos os dispositivos da empresa, via
+    // sincronizarUsuariosOperacionaisDaEmpresa()) — e qualquer chamada a
+    // load() depois do login (ex.: o botão geral "Atualizar",
+    // refreshGeral(), usado para estoque/tarefas) sobrescreveria a lista
+    // já correta em memória pela cópia antiga daquele mesmo dispositivo.
+    // A partir de agora, usuarios nunca vem daqui — só da sincronização
+    // dedicada, que é a única fonte de verdade real (compartilhada) para
+    // usuários operacionais.
+    const { usuarios: _usuariosIgnoradosDoBlobLocal, ...parsedSemUsuarios } = parsed;
+    DB = {...DB, ...parsedSemUsuarios, usuarios: DB.usuarios};
   }
   // Garante TODOS os arrays/campos existam (independente de quando foi salvo)
   if(!DB.usuarios)    DB.usuarios=[];
