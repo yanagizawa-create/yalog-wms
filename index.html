@@ -3717,6 +3717,22 @@ const DBKEY='wms_3cs_v2026';
 
 // ── PROVIDER: LOCAL (idêntico ao comportamento anterior à SUPA-001) ──
 /* ═══════════════════════════════════════════════════════════════
+   SPRINT YALOG-WMS-TENANT-003 — IDENTIDADE TENANT-AWARE
+   ═══════════════════════════════════════════════════════════════
+   A identidade lógica do dado operacional do WMS passa a ser
+   company_id + module_id + key (em vez de só key). module_id é fixo
+   deste módulo ('wms') — nunca uma empresa é fixa no código.
+   _companyIdLocalAtual só é preenchido depois do login (ver
+   _confirmarSessaoCarregada) e é lido só por dois lugares: o
+   LocalStorageProvider (para prefixar a chave física do DB
+   operacional, mais abaixo) e o SupabaseProvider (para anexar
+   company_id/module_id às operações de rede). Nenhum outro módulo
+   do WMS referencia esta variável diretamente.
+   ═══════════════════════════════════════════════════════════════ */
+let _companyIdLocalAtual = null;
+const WMS_MODULE_ID = 'wms';
+
+/* ═══════════════════════════════════════════════════════════════
    SPRINT YALOG-WMS-SUPA-002 — HARDENING DA CAMADA SUPABASE
    ═══════════════════════════════════════════════════════════════
    Esta Sprint é só arquitetura: Core.get()/set()/remove()/exists()/
@@ -3828,24 +3844,56 @@ const SyncLogger = {
    PROVIDER: LOCAL  (item 10 — mesma interface do Supabase)
    ═══════════════════════════════════════ */
 const LocalStorageProvider = {
+  // SPRINT YALOG-WMS-TENANT-003 — só a chave do DB operacional (DBKEY,
+  // 'wms_3cs_v2026') é tenant-aware no cache local. As demais chaves
+  // (caches de licença/usuário da Platform, log de sync, meta de boot
+  // etc.) continuam com a chave física de sempre, sem prefixo — fora
+  // do escopo desta sprint, sem necessidade de isolamento por empresa
+  // (são caches por instalação, não dado operacional compartilhado).
+  // Sem empresa autenticada ainda (_companyIdLocalAtual null), o
+  // comportamento é IDÊNTICO ao anterior a esta sprint.
+  _chaveFisica(key) {
+    if (key === DBKEY && _companyIdLocalAtual) {
+      return 'wms:' + _companyIdLocalAtual + ':' + key;
+    }
+    return key;
+  },
+  // Migração automática e não-destrutiva: se o dispositivo já tem dado
+  // operacional gravado na chave antiga (global, sem prefixo) e a nova
+  // chave da empresa ainda não existe, copia o valor — nunca apaga a
+  // chave antiga, nunca sobrescreve uma chave nova já existente.
+  _migrarParaEmpresa(companyId) {
+    try {
+      const antigo = localStorage.getItem(DBKEY);
+      if (!antigo) return;
+      const novaChave = 'wms:' + companyId + ':' + DBKEY;
+      if (localStorage.getItem(novaChave) !== null) return; // já migrado antes
+      localStorage.setItem(novaChave, antigo);
+      console.log('[WMS TENANT] cache local existente migrado para a empresa ' + companyId + ' (chave antiga preservada, não removida).');
+    } catch(e) { console.warn('[WMS TENANT] falha ao migrar cache local para a empresa', companyId, e); }
+  },
   get(key) {
-    try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }
-    catch(e) { console.warn('[LocalStorageProvider.get] falha ao ler', key, e); return null; }
+    const k = this._chaveFisica(key);
+    try { const raw = localStorage.getItem(k); return raw ? JSON.parse(raw) : null; }
+    catch(e) { console.warn('[LocalStorageProvider.get] falha ao ler', k, e); return null; }
   },
   set(key, value) {
     if (!DataValidator.ehChaveValida(key) || !DataValidator.ehValido(value)) {
       SyncLogger.registrar({ operacao:'set', provider:'local', resultado:'ignorado', erro:'valor ou chave inválidos', quantidade:0 });
       return false;
     }
-    try { localStorage.setItem(key, JSON.stringify(value)); return true; }
-    catch(e) { console.warn('[LocalStorageProvider.set] falha ao gravar', key, e); return false; }
+    const k = this._chaveFisica(key);
+    try { localStorage.setItem(k, JSON.stringify(value)); return true; }
+    catch(e) { console.warn('[LocalStorageProvider.set] falha ao gravar', k, e); return false; }
   },
   remove(key) {
-    try { localStorage.removeItem(key); return true; }
-    catch(e) { console.warn('[LocalStorageProvider.remove] falha ao remover', key, e); return false; }
+    const k = this._chaveFisica(key);
+    try { localStorage.removeItem(k); return true; }
+    catch(e) { console.warn('[LocalStorageProvider.remove] falha ao remover', k, e); return false; }
   },
   exists(key) {
-    try { return localStorage.getItem(key) !== null; }
+    const k = this._chaveFisica(key);
+    try { return localStorage.getItem(k) !== null; }
     catch(e) { return false; }
   },
   clear() {
@@ -3954,6 +4002,47 @@ async function _garantirAuthAnonima(client) {
   } catch(e) {
     console.warn('[Supabase Auth] exceção no anonymous sign-in:', e);
     return null;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SPRINT YALOG-WMS-TENANT-003 — REGISTRO DA INSTALAÇÃO (RPC)
+   ═══════════════════════════════════════════════════════════════
+   Chamada uma vez por login bem-sucedido (ver _confirmarSessaoCarregada),
+   depois da sessão anônima estar garantida e antes de qualquer leitura/
+   gravação tenant-aware em wms_kv_store. Usa EXATAMENTE o mesmo client
+   singleton de _obterClienteSupabase() (o mesmo que já faz o Anonymous
+   Sign-In da Sprint WMS-006) — nenhuma instância nova, nenhum mecanismo
+   de autenticação novo. Falha aqui NUNCA apaga dado local, nunca reseta
+   o WMS, nunca bloqueia o acesso — só fica registrada no console; a
+   fila/retry existentes (SyncQueue/RetryManager) continuam cuidando das
+   tentativas de gravação normalmente, com ou sem o vínculo confirmado.
+   ═══════════════════════════════════════════════════════════════ */
+async function _registrarInstalacaoWms(companyId) {
+  try {
+    const client = _obterClienteSupabase();
+    if (!client) {
+      console.warn('[WMS TENANT] registrar_instalacao_wms não executada — cliente Supabase indisponível (modo local).');
+      return false;
+    }
+    const authUid = await _garantirAuthAnonima(client);
+    console.log(
+      '[WMS TENANT]\ncompany_id: ' + companyId +
+      '\nmodule_id: ' + WMS_MODULE_ID +
+      '\ninstallation: ' + (authUid || '—') +
+      '\nsession: ' + (authUid ? 'ok' : 'indisponível')
+    );
+    if (!authUid) return false; // sem sessão anônima, sem como chamar a RPC — segue sem bloquear
+    const { error } = await client.rpc('registrar_instalacao_wms', { p_company_id: companyId });
+    if (error) {
+      console.warn('[WMS TENANT] tenant registrado: falhou (' + (error.message || error) + ') — seguindo com cache local/fila normal, nada foi apagado.');
+      return false;
+    }
+    console.log('[WMS TENANT] tenant registrado: sucesso');
+    return true;
+  } catch(e) {
+    console.warn('[WMS TENANT] exceção ao registrar instalação — seguindo normalmente:', e);
+    return false;
   }
 }
 /* ═══════════════════════════════════════════════════════════════
@@ -4368,11 +4457,23 @@ const SupabaseProvider = {
     const client = _obterClienteSupabase();
     if (!client) return { ok:false, motivo:'sem-cliente' };
     const authUid = await _garantirAuthAnonima(client);
-    const linhas = itens.map(it => ({ key: it.key, value: it.value, updated_at: new Date().toISOString(), installation_id: authUid }));
+    // SPRINT YALOG-WMS-TENANT-003: sem empresa autenticada ainda, não há
+    // company_id para gravar — aborta com segurança (o item continua na
+    // SyncQueue, nada é perdido; o RetryManager tenta de novo depois).
+    const companyId = _companyIdLocalAtual;
+    if (!companyId) {
+      console.warn('[WMS TENANT WRITE] abortado — nenhuma empresa autenticada ainda.');
+      return { ok:false, motivo:'sem-empresa-autenticada' };
+    }
+    const linhas = itens.map(it => ({
+      key: it.key, value: it.value, updated_at: new Date().toISOString(),
+      installation_id: authUid, company_id: companyId, module_id: WMS_MODULE_ID
+    }));
+    itens.forEach(it => console.log('[WMS TENANT WRITE]\ncompany_id: ' + companyId + '\nmodule_id: ' + WMS_MODULE_ID + '\nkey: ' + it.key));
     _logSupabaseRequest('UPSERT');
     let resposta;
     try {
-      resposta = await client.from(SUPABASE_TABLE).upsert(linhas, { onConflict: 'key' });
+      resposta = await client.from(SUPABASE_TABLE).upsert(linhas, { onConflict: 'company_id,module_id,key' });
     } catch(e) {
       _logSupabaseException('UPSERT', e);
       throw e; // preserva o comportamento original (o chamador já trata exceção)
@@ -4385,10 +4486,18 @@ const SupabaseProvider = {
     const client = _obterClienteSupabase();
     if (!client) return { ok:false, motivo:'sem-cliente' };
     await _garantirAuthAnonima(client); // RLS de DELETE depende de auth.uid() já resolvido na sessão
+    // SPRINT YALOG-WMS-TENANT-003: filtro por company_id/module_id além
+    // de key — sem isso, um DELETE por key apagaria a linha de TODAS as
+    // empresas que um dia compartilharem essa mesma key.
+    const companyId = _companyIdLocalAtual;
+    if (!companyId) {
+      console.warn('[WMS TENANT WRITE] remoção abortada — nenhuma empresa autenticada ainda.');
+      return { ok:false, motivo:'sem-empresa-autenticada' };
+    }
     _logSupabaseRequest('DELETE');
     let resposta;
     try {
-      resposta = await client.from(SUPABASE_TABLE).delete().in('key', chaves);
+      resposta = await client.from(SUPABASE_TABLE).delete().eq('company_id', companyId).eq('module_id', WMS_MODULE_ID).in('key', chaves);
     } catch(e) {
       _logSupabaseException('DELETE', e);
       throw e;
@@ -4400,12 +4509,23 @@ const SupabaseProvider = {
   // Puxa o estado completo da tabela — usado pelo CacheManager na
   // sincronização inicial e na sincronização manual.
   async buscarTudo() {
+    // SPRINT YALOG-WMS-TENANT-003: sem empresa autenticada ainda (ex.:
+    // chamada pelo boot, antes do login — ver bootWMS), não há
+    // company_id para filtrar — no-op seguro, sem tentativa de rede.
+    // CacheManager.sincronizacaoInicial() é chamado de novo, já com a
+    // empresa conhecida, logo após o login (ver _confirmarSessaoCarregada).
+    const companyId = _companyIdLocalAtual;
+    if (!companyId) {
+      console.log('[WMS TENANT READ] abortado — nenhuma empresa autenticada ainda.');
+      return { ok:true, dados: [] };
+    }
     const client = _obterClienteSupabase();
     if (!client) return { ok:false, dados:[] };
     await _garantirAuthAnonima(client);
+    console.log('[WMS TENANT READ]\ncompany_id: ' + companyId + '\nmodule_id: ' + WMS_MODULE_ID);
     _logSupabaseRequest('SELECT');
     try {
-      const resposta = await client.from(SUPABASE_TABLE).select('key,value,updated_at');
+      const resposta = await client.from(SUPABASE_TABLE).select('key,value,updated_at,company_id,module_id').eq('company_id', companyId).eq('module_id', WMS_MODULE_ID);
       _logSupabaseResponse('SELECT', resposta);
       const { data, error } = resposta;
       if (error) return { ok:false, dados:[], motivo:error.message };
@@ -8842,12 +8962,43 @@ let pendingMasterCallback=null; // callback after master auth
 // só depois do login, o próximo passo é revisar as policies da tabela
 // wms_kv_store no painel do Supabase.
 let _sessaoWmsCarregada = false;
-function _confirmarSessaoCarregada(usuario){
+async function _confirmarSessaoCarregada(usuario){
   console.log('Sessão carregada');
   CoreConfig.usuarioAtual = { id:usuario.id, nome:usuario.nome, login:usuario.login, perfil:usuario.perfil };
   console.log('Usuário carregado');
   CoreConfig.instalacaoAtual = { installationId: YALOG_INSTALLATION_ID, productId: YALOG_PRODUCT_ID };
   console.log('Instalação carregada');
+
+  /* ═══════════════════════════════════════════════════════════
+     SPRINT YALOG-WMS-TENANT-003 — SEQUÊNCIA TENANT-AWARE
+     ═══════════════════════════════════════════════════════════
+     Só roda se este usuário tem company_id (todo login vindo de
+     fazerLogin() tem — ver linhas ~9002/9040/9099; o fluxo legado de
+     cadastrarMasterInicial() não tem, e é deliberadamente pulado aqui,
+     preservando seu comportamento exatamente como estava antes desta
+     sprint — ver relatório final, seção de pendências).
+     Ordem exigida pela sprint: migrar cache local → registrar
+     instalação (RPC) → só então recarregar o DB da empresa → só então
+     sincronizar. bootWMS() já carregou algo pela chave global antes do
+     login (inalterado); a partir daqui isso é substituído pelo estado
+     correto da empresa autenticada.
+     ═══════════════════════════════════════════════════════════ */
+  const companyId = usuario.company_id;
+  if (companyId) {
+    LocalStorageProvider._migrarParaEmpresa(companyId); // nunca apaga a chave antiga
+    _companyIdLocalAtual = companyId;
+    if (CoreConfig.storageProvider === 'supabase') {
+      await _registrarInstalacaoWms(companyId); // não bloqueia o login se falhar
+      try { await CacheManager.sincronizacaoInicial(); } // agora filtrado por company_id/module_id
+      catch(e) { console.warn('[WMS TENANT] sincronização pós-login falhou, seguindo com cache local:', e); }
+    }
+    try { await load(); } // recarrega DB pela chave física já correta da empresa
+    catch(e) { console.warn('[WMS TENANT] falha ao recarregar DB da empresa, mantendo estado em memória:', e); }
+    renderLogo();
+  } else {
+    console.warn('[WMS TENANT] usuário sem company_id — sequência tenant-aware pulada (fluxo legado de primeiro acesso).');
+  }
+
   _sessaoWmsCarregada = true;
   // Libera imediatamente o que ficou acumulado na fila durante o boot
   // (antes do login) — nada é perdido, só esperava a sessão existir.
@@ -8917,7 +9068,7 @@ function renderLoginUsers(){
   if(sbName){const el=document.getElementById('loginLogoName');if(el)el.textContent=sbName;}
 }
 
-function cadastrarMasterInicial(){
+async function cadastrarMasterInicial(){
   const nome=document.getElementById('fa_nome').value.trim();
   const login=document.getElementById('fa_login').value.trim();
   const senha=document.getElementById('fa_senha').value;
@@ -8939,7 +9090,7 @@ function cadastrarMasterInicial(){
   document.getElementById('loginOverlay').style.display='none';
   updateUserPill();
   updateNavByPerfil();
-  _confirmarSessaoCarregada(master);
+  await _confirmarSessaoCarregada(master);
   requestAnimationFrame(()=>requestAnimationFrame(()=>{renderHome();console.log('Dashboard iniciado');}));
   showT('Bem-vindo, '+nome+'! Conta Master criada.','ok');
 }
@@ -9129,7 +9280,7 @@ async function fazerLogin(){
     document.getElementById('loginSenha').value='';
     updateUserPill();
     updateNavByPerfil();
-    _confirmarSessaoCarregada(usuario);
+    await _confirmarSessaoCarregada(usuario);
     // Sprint YALOG-WMS-013, item 6: identificador exato pedido, com
     // Company ID/Login/Perfil/Data/Hora.
     {
