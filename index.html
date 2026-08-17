@@ -5137,11 +5137,22 @@ const SmartSyncManager = {
   async _buscarIncremental() {
     const client = _obterClienteSupabase();
     if (!client) return { ok:false, motivo:'sem-cliente', linhas:[] };
+    // SPRINT YALOG-PLATFORM-001: esta consulta é independente de
+    // SupabaseProvider.buscarTudo() (já filtrado desde a TENANT-003) —
+    // sem este filtro, o ciclo periódico do SmartSyncManager buscava
+    // linhas de TODAS as empresas a cada ~30s e as gravava sob a chave
+    // física da empresa atualmente logada, contaminando o cache local
+    // (e, se salvo em seguida, o próprio Supabase) com dados de outro
+    // tenant. Sem empresa autenticada ainda, não há o que buscar aqui.
+    const companyId = _companyIdLocalAtual;
+    if (!companyId) return { ok:true, linhas: [] };
     await _garantirAuthAnonima(client);
     const desde = CacheManager.lastSync();
     _logSupabaseRequest('SELECT (incremental)');
     try {
-      let query = client.from(SUPABASE_TABLE).select('key,value,updated_at').limit(CoreConfig.syncMaxRecords ?? 200);
+      let query = client.from(SUPABASE_TABLE).select('key,value,updated_at')
+        .eq('company_id', companyId).eq('module_id', WMS_MODULE_ID)
+        .limit(CoreConfig.syncMaxRecords ?? 200);
       if (desde) query = query.gt('updated_at', desde);
       const resposta = await query;
       _logSupabaseResponse('SELECT (incremental)', resposta);
