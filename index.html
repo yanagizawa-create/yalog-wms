@@ -8989,6 +8989,19 @@ async function _confirmarSessaoCarregada(usuario){
     _companyIdLocalAtual = companyId;
     if (CoreConfig.storageProvider === 'supabase') {
       await _registrarInstalacaoWms(companyId); // não bloqueia o login se falhar
+      // SPRINT YALOG-WMS-TENANT-HOTFIX-004: meta.checksums é compartilhado
+      // por chave lógica (não por empresa) — uma entrada antiga (boot,
+      // teste manual, sessão anterior) pode ter um timestamp local mais
+      // recente que o updated_at real do Supabase, fazendo
+      // _aplicarComResolucaoDeConflito descartar o valor recém-buscado
+      // mesmo com buscarTudo() correto. Invalidar aqui garante que o
+      // fetch pós-login seja sempre tratado como autoritativo para o DB
+      // operacional — reaproveita CacheManager.invalidarCache (já
+      // existente); CacheManager em si não foi alterado. Continua seguro:
+      // se houver uma escrita local pendente na fila, o próprio
+      // _aplicarComResolucaoDeConflito (via SyncQueue._pendentes) ainda
+      // a protege, independente desta invalidação.
+      CacheManager.invalidarCache(DBKEY);
       try { await CacheManager.sincronizacaoInicial(); } // agora filtrado por company_id/module_id
       catch(e) { console.warn('[WMS TENANT] sincronização pós-login falhou, seguindo com cache local:', e); }
     }
