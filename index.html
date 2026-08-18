@@ -5798,6 +5798,104 @@ async function load(){
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   SPRINT YALOG-WMS-PROD-001 — DIAGNÓSTICO FINAL DE PRODUÇÃO
+   ═══════════════════════════════════════════════════════════════
+   Só leitura — nunca escreve em wms_kv_store, nunca altera DB, nunca
+   toca o value histórico. Reaproveita exatamente o que já existe
+   (_companyIdLocalAtual, WMS_MODULE_ID, DBKEY, _obterClienteSupabase,
+   _garantirAuthAnonima, LocalStorageProvider._chaveFisica) — nenhuma
+   arquitetura nova. Os itens que exigem interação real (salvar sem F5,
+   refresh, logout/login, dois usuários, dois dispositivos) NÃO podem
+   ser confirmados por uma função síncrona rodando sozinha no console —
+   são reportados como REQUER_TESTE_MANUAL em vez de um PASS forjado.
+   ═══════════════════════════════════════════════════════════════ */
+async function diagnosticarWMSProduction(){
+  const MANUAL = 'REQUER_TESTE_MANUAL (ver seção de testes obrigatórios)';
+  const resultado = {
+    supabaseOnline: CoreConfig.storageProvider === 'supabase',
+    companyId: _companyIdLocalAtual,
+    moduleId: WMS_MODULE_ID,
+    historicalKey: DBKEY,
+    historicalValueFound: false,
+    historicalValueLength: null,
+    updatedAt: null,
+    installationId: null,
+    estruturas: {},
+    tenantIsolation: null,
+  };
+
+  // Verificação direta no Supabase do registro histórico — SELECT puro,
+  // nunca um UPDATE/UPSERT; o value em si não é reescrito nem inspecionado
+  // campo a campo aqui, só existência e tamanho serializado.
+  if (resultado.supabaseOnline && _companyIdLocalAtual) {
+    try {
+      const client = _obterClienteSupabase();
+      if (client) {
+        await _garantirAuthAnonima(client);
+        const { data, error } = await client.from(SUPABASE_TABLE)
+          .select('key,value,company_id,module_id,updated_at,installation_id')
+          .eq('company_id', _companyIdLocalAtual).eq('module_id', WMS_MODULE_ID).eq('key', DBKEY);
+        if (error) {
+          console.warn('[WMS DIAGNOSTIC] SELECT do histórico falhou:', error.message||error);
+        } else if (data && data.length) {
+          const row = data[0];
+          resultado.historicalValueFound = row.value !== null && row.value !== undefined;
+          resultado.historicalValueLength = resultado.historicalValueFound ? JSON.stringify(row.value).length : 0;
+          resultado.updatedAt = row.updated_at;
+          resultado.installationId = row.installation_id;
+        }
+      }
+    } catch(e) { console.warn('[WMS DIAGNOSTIC] exceção ao consultar histórico:', e); }
+  }
+
+  // Estruturas em memória — o DB já carregado nesta sessão (pós-login).
+  // ESTOQUE reaproveita DB.produtos (não existe array separado de
+  // "estoque" na estrutura atual — produtos já é a estrutura de estoque).
+  const campos = {
+    ENDERECOS: DB.enderecos, PRODUTOS: DB.produtos, CLIENTES: DB.clientes,
+    PALETES: DB.paletes, ESTOQUE: DB.produtos, MOVIMENTOS: DB.movimentos,
+    USUARIOS: DB.usuarios,
+  };
+  Object.entries(campos).forEach(([nome, arr]) => {
+    resultado.estruturas[nome] = (Array.isArray(arr) && arr.length > 0) ? 'FOUND' : 'EMPTY';
+  });
+
+  // Isolamento de tenant — checagem estrutural do código (confirma que a
+  // chave física local é sempre prefixada pela empresa autenticada).
+  // NÃO substitui o teste real do item 16 com duas empresas de verdade.
+  resultado.tenantIsolation = _companyIdLocalAtual
+    ? (LocalStorageProvider._chaveFisica(DBKEY) === ('wms:'+_companyIdLocalAtual+':'+DBKEY) ? 'PASS' : 'FAIL')
+    : 'FAIL (nenhuma empresa autenticada)';
+
+  console.log('================================================');
+  console.log('[YALOG WMS PRODUCTION DIAGNOSTIC]');
+  console.log('================================================');
+  console.log('SUPABASE:', resultado.supabaseOnline ? 'ONLINE' : 'OFFLINE');
+  console.log('COMPANY_ID:', resultado.companyId || '(nenhuma empresa autenticada nesta sessão)');
+  console.log('MODULE_ID:', resultado.moduleId);
+  console.log('HISTORICAL KEY:', resultado.historicalKey);
+  console.log('HISTORICAL VALUE:', resultado.historicalValueFound ? 'FOUND' : 'EMPTY');
+  console.log('VALUE LENGTH:', resultado.historicalValueLength);
+  console.log('UPDATED_AT:', resultado.updatedAt);
+  console.log('INSTALLATION_ID:', resultado.installationId);
+  console.log('');
+  Object.entries(resultado.estruturas).forEach(([k,v])=>console.log(k+':', v));
+  console.log('');
+  console.log('TENANT ISOLATION:', resultado.tenantIsolation);
+  console.log('PERSISTENCE:', MANUAL);
+  console.log('POST-SAVE UI:', MANUAL);
+  console.log('REFRESH:', MANUAL);
+  console.log('LOGOUT/LOGIN:', MANUAL);
+  console.log('MULTIUSER:', MANUAL);
+  console.log('MULTIDEVICE:', MANUAL);
+  console.log('AUTO-SEED: OFF (auditoria estática de código — ver relatório da sprint, nenhum ponto encontrado que crie dado fictício quando o Supabase retorna vazio)');
+  const automaticoOk = resultado.supabaseOnline && !!resultado.companyId && resultado.historicalValueFound && resultado.tenantIsolation==='PASS';
+  console.log('PRODUCTION READY:', automaticoOk ? 'PARCIAL — itens verificáveis automaticamente OK; falta confirmar os marcados REQUER_TESTE_MANUAL' : 'NO');
+  console.log('================================================');
+  return resultado;
+}
+
 // ══════════════════════════════════════════════════════════════
 // HELPERS
 // ══════════════════════════════════════════════════════════════
