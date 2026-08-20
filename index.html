@@ -9081,11 +9081,18 @@ async function _validarSessaoModuloYalog(token){
       p_modulo: 'wms'
     });
     if(error){
+      console.error('[SSO ERROR]', error.message||error);
       console.warn('[WMS SSO] falha ao validar sessão do módulo:', error.message||error);
       return null;
     }
-    return Array.isArray(data) ? (data[0]||null) : null;
+    const identidade = Array.isArray(data) ? (data[0]||null) : null;
+    if(identidade){
+      console.log('[SSO] module session revalidada — usuário carregado:', identidade.login);
+      console.log('[SSO] tenant carregado:', identidade.company_id);
+    }
+    return identidade;
   }catch(e){
+    console.error('[SSO ERROR]', e);
     console.warn('[WMS SSO] exceção ao validar sessão do módulo:', e);
     return null;
   }
@@ -9104,6 +9111,10 @@ async function _entrarWmsPorIdentidadeSSO(identidade, moduleSessionToken){
   else if(['ADMINISTRATIVO'].includes(perfilBruto)) perfil='administrativo';
   else if(['CONFERENTE'].includes(perfilBruto)) perfil='conferente';
   else if(['OPERADOR','OPERACIONAL'].includes(perfilBruto)) perfil='operador';
+
+  console.log('[SSO] usuário carregado:', identidade.login);
+  console.log('[SSO] tenant carregado:', identidade.company_id);
+  console.log('[SSO] permissões carregadas — perfil YALog:', identidade.perfil, '| perfil WMS mapeado:', perfil);
 
   usuarioAtual={
     id:(perfil==='master'?'master-':'sso-')+identidade.company_id+'-'+identidade.login,
@@ -9132,6 +9143,7 @@ async function _entrarWmsPorIdentidadeSSO(identidade, moduleSessionToken){
   updateUserPill();
   updateNavByPerfil();
   await _confirmarSessaoCarregada(usuarioAtual);
+  console.log('[SSO] entrada autorizada — Dashboard iniciado automaticamente');
   requestAnimationFrame(()=>requestAnimationFrame(()=>{renderHome();console.log('[WMS SSO] Dashboard iniciado automaticamente');}));
   showT('Acesso autorizado — '+usuarioAtual.nome,'ok');
   return true;
@@ -9152,35 +9164,43 @@ async function _aguardarClienteSupabaseSSO(timeoutMs=8000){
 // p_handoff_token / p_session_token) foi removida: era útil durante a
 // transição, mas não pertence à arquitetura definitiva. Frontend e
 // backend agora têm um único contrato (ver YALOG-SSO-006-FINAL.sql).
-
-// Retorna: 'success' | 'no-handoff' | 'failed' — item 14 precisa
-// distinguir "não tinha handoff" (segue fluxo normal) de "tinha
-// handoff e falhou" (nunca cai no login manual, mostra erro específico).
+//
+// SPRINT SSO-007, item 11: logs de diagnóstico temporários com as tags
+// exatas pedidas — [SSO] no caminho feliz, [SSO ERROR] em qualquer
+// falha, sempre com a mensagem real (nunca só "erro genérico").
+//
+// Retorna: 'success' | 'no-handoff' | 'failed' — item 14 (SSO-006)
+// precisa distinguir "não tinha handoff" (segue fluxo normal) de
+// "tinha handoff e falhou" (nunca cai no login manual).
 async function _tentarSSOHandoffWms(){
   const params=new URLSearchParams(window.location.search);
   const handoff=params.get('handoff');
   if(!handoff) return 'no-handoff';
+  console.log('[SSO] handoff encontrado na URL');
 
   // O acesso vindo do Ecosystem tem prioridade absoluta e não pode cair
   // prematuramente no login manual por uma corrida de inicialização.
   try{
     const client=await _aguardarClienteSupabaseSSO(8000);
     if(!client){
-      console.error('[WMS SSO] cliente Supabase não ficou disponível para o handoff.');
+      console.error('[SSO ERROR] cliente Supabase não ficou disponível para validar o handoff (timeout de 8s).');
       return 'failed';
     }
 
+    console.log('[SSO] token enviado para validar_handoff_modulo');
     const {data,error}=await client.rpc('validar_handoff_modulo',{p_token:handoff});
     if(error){
-      console.error('[WMS SSO] falha ao validar handoff:',error);
+      console.error('[SSO ERROR]', {code:error.code, message:error.message, details:error.details, hint:error.hint});
       return 'failed';
     }
 
     const identidade=Array.isArray(data)?(data[0]||null):data;
     if(!identidade || !identidade.module_session_token){
-      console.error('[WMS SSO] handoff recusado pelo servidor: token inválido, expirado, já utilizado ou sem autorização.');
+      console.error('[SSO ERROR] handoff recusado pelo servidor: token inválido, expirado, já utilizado ou sem autorização (RPC retornou sem module_session_token).');
       return 'failed';
     }
+    console.log('[SSO] handoff validado');
+    console.log('[SSO] module session criada:', identidade.module_session_token.slice(0,8)+'…');
 
     // O token é de uso único. Só removemos da URL depois da validação do servidor.
     try{
@@ -9191,7 +9211,7 @@ async function _tentarSSOHandoffWms(){
     const entrou = await _entrarWmsPorIdentidadeSSO(identidade,identidade.module_session_token);
     return entrou ? 'success' : 'failed';
   }catch(e){
-    console.error('[WMS SSO] exceção no handoff:',e);
+    console.error('[SSO ERROR] exceção não tratada no handoff:', e);
     return 'failed';
   }
 }
@@ -9207,27 +9227,33 @@ async function _tentarRestaurarSessaoWms(){
 }
 
 // SSO + persistência definitiva da sessão do WMS.
-// Ordem:
-// 1) handoff vindo do Ecosystem;
-// 2) sessão do módulo persistida após F5;
+// Ordem EXATA pedida na SPRINT SSO-007, item 5:
+// 1) sessão do módulo já válida (F5/reabertura) — prioridade máxima;
+// 2) handoff vindo do Ecosystem, só se não havia sessão válida;
 // 3) login manual tradicional.
 async function initLogin(){
   const overlay=document.getElementById('loadingOverlay');
-  // Enquanto houver handoff na URL, o login manual fica bloqueado até o SSO
-  // terminar. Isso elimina a corrida que fazia o WMS mostrar a tela de login
-  // mesmo quando o Ecosystem já tinha autenticado o usuário.
   const hasHandoff=new URLSearchParams(window.location.search).has('handoff');
   if(overlay) overlay.style.display=hasHandoff?'flex':'none';
 
-  // 1. Acesso vindo do Ecosystem — não exibir login manual.
+  // 1. Sessão do módulo já válida — entra direto, nem olha o handoff
+  // (se vier um na URL, ele simplesmente expira sem uso — 2 minutos —
+  // sem risco, e a URL ainda é limpa pelo próprio handoff se chegar a
+  // ser consumido depois; aqui nem chega a esse ponto).
+  if(await _tentarRestaurarSessaoWms()){
+    if(overlay) overlay.style.display='none';
+    return;
+  }
+
+  // 2. Acesso vindo do Ecosystem — não exibir login manual.
   const resultadoSSO = await _tentarSSOHandoffWms();
   if(resultadoSSO==='success') return;
   if(resultadoSSO==='failed'){
     // item 14 (SPRINT SSO-006), PONTO CRÍTICO: existia ?handoff= na URL
     // e a validação falhou — NUNCA cair silenciosamente no login manual
     // (isso mascararia falhas reais de integração). Mostra a tela
-    // específica e para aqui — nem tenta restaurar sessão antiga, nem
-    // mostra Company ID/Usuário/Senha.
+    // específica e para aqui — nem tenta login manual, nem mostra
+    // Company ID/Usuário/Senha.
     if(overlay) overlay.style.display='none';
     document.getElementById('loginOverlay').style.display='none';
     document.getElementById('ssoHandoffErrorOverlay').style.display='flex';
@@ -9235,10 +9261,8 @@ async function initLogin(){
   }
   // resultadoSSO === 'no-handoff': segue o fluxo normal abaixo.
 
-  // 2. F5/reabertura da mesma aba — validar sessão no Supabase.
-  if(await _tentarRestaurarSessaoWms()) return;
-
-  // Sessão ausente/expirada/revogada: somente aqui mostrar login manual.
+  // 3. Sessão ausente/expirada/revogada e sem handoff: mostrar login manual.
+  if(overlay) overlay.style.display='none';
   usuarioAtual=null;
   Core.sessionRemove(SESSAO_KEY);
   document.getElementById('loginBoxFirstAccess').style.display='none';
