@@ -2642,6 +2642,14 @@ a{color:inherit;text-decoration:none;}
   <div style="width:120px;height:3px;background:#1a1a1a;border-radius:2px;overflow:hidden;"><div style="width:40%;height:100%;background:#FB923C;border-radius:2px;animation:wmsLoadBar 1.2s ease-in-out infinite alternate;"></div></div>
   <div id="loadingMsg" style="font-size:11px;color:#555;font-family:monospace;letter-spacing:.1em;">CARREGANDO DADOS...</div>
 </div>
+<!-- item 14 (SPRINT SSO-006): falha de handoff NUNCA cai silenciosamente
+     no login manual — tela própria, sempre visível até o usuário decidir. -->
+<div id="ssoHandoffErrorOverlay" style="display:none;position:fixed;inset:0;background:#111;z-index:99999;align-items:center;justify-content:center;flex-direction:column;gap:18px;text-align:center;padding:24px;">
+  <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:28px;color:#FB923C;font-style:italic;">WMS</div>
+  <div style="font-size:15px;color:#f87171;font-weight:600;max-width:420px;">Não foi possível validar o acesso vindo do YALog Ecosystem.</div>
+  <div style="font-size:12px;color:#888;max-width:420px;">O link de acesso pode ter expirado ou já ter sido utilizado. Volte ao Ecosystem e clique em Acessar novamente.</div>
+  <a href="https://yanagizawa-create.github.io/yalog-ecosystem/" style="margin-top:8px;padding:11px 22px;background:#FB923C;color:#111;text-decoration:none;font-weight:600;border-radius:4px;font-size:13px;">Voltar ao Ecosystem</a>
+</div>
 <div class="toast" id="toast"></div>
 
 <!-- ════ MODAL CANCELAR TAREFA INVENTÁRIO ════ -->
@@ -9139,34 +9147,19 @@ async function _aguardarClienteSupabaseSSO(timeoutMs=8000){
   return _obterClienteSupabase();
 }
 
-async function _rpcHandoffResiliente(client,handoff){
-  // O banco teve versões do RPC com nomes de parâmetro diferentes durante a evolução
-  // do SSO. O frontend aceita apenas a assinatura que realmente existir no projeto.
-  const tentativas=[
-    {p_token:handoff},
-    {p_handoff_token:handoff},
-    {p_session_token:handoff}
-  ];
-  let ultimoErro=null;
-  for(const args of tentativas){
-    try{
-      const r=await client.rpc('validar_handoff_modulo',args);
-      if(!r.error) return r;
-      ultimoErro=r.error;
-      const msg=String(r.error.message||'').toLowerCase();
-      // Só tenta outra assinatura quando o PostgREST disser que a assinatura não existe.
-      if(!(r.error.code==='PGRST202' || r.error.code==='42883' || msg.includes('function') && msg.includes('does not exist'))){
-        return r;
-      }
-    }catch(e){ ultimoErro=e; }
-  }
-  return {data:null,error:ultimoErro||new Error('RPC validar_handoff_modulo indisponível')};
-}
+// SPRINT SSO-006, item 11: contrato ÚNICO e definitivo — p_token.
+// A estratégia resiliente de múltiplas assinaturas (p_token /
+// p_handoff_token / p_session_token) foi removida: era útil durante a
+// transição, mas não pertence à arquitetura definitiva. Frontend e
+// backend agora têm um único contrato (ver YALOG-SSO-006-FINAL.sql).
 
+// Retorna: 'success' | 'no-handoff' | 'failed' — item 14 precisa
+// distinguir "não tinha handoff" (segue fluxo normal) de "tinha
+// handoff e falhou" (nunca cai no login manual, mostra erro específico).
 async function _tentarSSOHandoffWms(){
   const params=new URLSearchParams(window.location.search);
   const handoff=params.get('handoff');
-  if(!handoff) return false;
+  if(!handoff) return 'no-handoff';
 
   // O acesso vindo do Ecosystem tem prioridade absoluta e não pode cair
   // prematuramente no login manual por uma corrida de inicialização.
@@ -9174,19 +9167,19 @@ async function _tentarSSOHandoffWms(){
     const client=await _aguardarClienteSupabaseSSO(8000);
     if(!client){
       console.error('[WMS SSO] cliente Supabase não ficou disponível para o handoff.');
-      return false;
+      return 'failed';
     }
 
-    const {data,error}=await _rpcHandoffResiliente(client,handoff);
+    const {data,error}=await client.rpc('validar_handoff_modulo',{p_token:handoff});
     if(error){
-      console.error('[WMS SSO] falha definitiva ao validar handoff:',error);
-      return false;
+      console.error('[WMS SSO] falha ao validar handoff:',error);
+      return 'failed';
     }
 
     const identidade=Array.isArray(data)?(data[0]||null):data;
     if(!identidade || !identidade.module_session_token){
-      console.error('[WMS SSO] handoff recusado pelo servidor: token inválido, expirado ou sem licença.');
-      return false;
+      console.error('[WMS SSO] handoff recusado pelo servidor: token inválido, expirado, já utilizado ou sem autorização.');
+      return 'failed';
     }
 
     // O token é de uso único. Só removemos da URL depois da validação do servidor.
@@ -9195,10 +9188,11 @@ async function _tentarSSOHandoffWms(){
       window.history.replaceState({},document.title,cleanUrl);
     }catch(e){}
 
-    return await _entrarWmsPorIdentidadeSSO(identidade,identidade.module_session_token);
+    const entrou = await _entrarWmsPorIdentidadeSSO(identidade,identidade.module_session_token);
+    return entrou ? 'success' : 'failed';
   }catch(e){
     console.error('[WMS SSO] exceção no handoff:',e);
-    return false;
+    return 'failed';
   }
 }
 
@@ -9226,7 +9220,20 @@ async function initLogin(){
   if(overlay) overlay.style.display=hasHandoff?'flex':'none';
 
   // 1. Acesso vindo do Ecosystem — não exibir login manual.
-  if(await _tentarSSOHandoffWms()) return;
+  const resultadoSSO = await _tentarSSOHandoffWms();
+  if(resultadoSSO==='success') return;
+  if(resultadoSSO==='failed'){
+    // item 14 (SPRINT SSO-006), PONTO CRÍTICO: existia ?handoff= na URL
+    // e a validação falhou — NUNCA cair silenciosamente no login manual
+    // (isso mascararia falhas reais de integração). Mostra a tela
+    // específica e para aqui — nem tenta restaurar sessão antiga, nem
+    // mostra Company ID/Usuário/Senha.
+    if(overlay) overlay.style.display='none';
+    document.getElementById('loginOverlay').style.display='none';
+    document.getElementById('ssoHandoffErrorOverlay').style.display='flex';
+    return;
+  }
+  // resultadoSSO === 'no-handoff': segue o fluxo normal abaixo.
 
   // 2. F5/reabertura da mesma aba — validar sessão no Supabase.
   if(await _tentarRestaurarSessaoWms()) return;
