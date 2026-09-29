@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WMS · v2.0.0</title>
+<meta name="yalog-wms-version" content="2.1.0">
+<title>WMS · v2.1.0</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,500;0,600;0,700;0,800;1,600;1,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -536,7 +537,7 @@ a{color:inherit;text-decoration:none;}
     <div class="nav-grp">Conta</div>
     <div class="ni" onclick="go('minhaConta')"><span class="ni-ic"><i data-lucide="user-cog"></i></span> Minha Conta</div>
   </nav>
-  <div class="sb-foot">WMS • v2.0.0<br>YALOG-WMS-001 • v2.0.0 Build 001</div>
+  <div class="sb-foot">WMS • <span data-wms-version>v2.1.0 Build 002</span><br>YALOG-WMS-001 • <span data-wms-version>v2.1.0 Build 002</span></div>
 </aside>
 
 <!-- ══ MAIN ══ -->
@@ -1523,7 +1524,7 @@ a{color:inherit;text-decoration:none;}
 
     <div class="end-import-help" style="margin-bottom:14px;">
       <strong>Fluxo:</strong> baixe o template → preencha os endereços → faça o upload → confira a prévia → processe a carga.<br>
-      <strong>Obrigatórios:</strong> SITE e ENDERECO. AREA, MODULO e NIVEL podem ser informados; quando ausentes, o sistema tenta derivá-los do código do endereço.<br>
+      <strong>Obrigatórios:</strong> UNIDADE (tipo da unidade) e SITE (nome exato da Unidade Logística cadastrada), além de ENDERECO. AREA, MODULO e NIVEL podem ser informados; quando ausentes, o sistema tenta derivá-los do código do endereço.<br>
       <strong>Segurança:</strong> endereços já existentes não são sobrescritos por padrão. Você escolhe entre <em>ignorar</em> ou <em>atualizar</em> duplicados antes de processar.
     </div>
 
@@ -1556,7 +1557,7 @@ a{color:inherit;text-decoration:none;}
       <div id="endImpStats" class="end-import-stat"></div>
       <div class="end-import-table-wrap">
         <table class="end-import-table">
-          <thead><tr><th>#</th><th>Site</th><th>Área</th><th>Módulo</th><th>Nível</th><th>Endereço</th><th>Tipo</th><th>Status</th><th>Cap. PP</th><th>Situação</th></tr></thead>
+          <thead><tr><th>#</th><th>Unidade</th><th>Site</th><th>Área</th><th>Módulo</th><th>Nível</th><th>Endereço</th><th>Tipo</th><th>Status</th><th>Cap. PP</th><th>Situação</th></tr></thead>
           <tbody id="endImpBody"></tbody>
         </table>
       </div>
@@ -3220,7 +3221,7 @@ a{color:inherit;text-decoration:none;}
     </div>
     <div class="login-sub" style="margin-bottom:6px;">PRIMEIRO ACESSO · CONFIGURAÇÃO INICIAL</div>
     <div style="background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.25);padding:12px 14px;margin-bottom:20px;font-size:11px;color:var(--w70);line-height:1.6;">
-      Bem-vindo ao <strong style="color:var(--orange2);">WMS · v2.0.0</strong>! Configure agora o seu <strong style="color:var(--orange2);">usuário Master</strong> — o administrador principal do sistema. Ele poderá criar usuários, aprovar ajustes e ter controle total da operação.
+      Bem-vindo ao <strong style="color:var(--orange2);">WMS · v2.1.0</strong>! Configure agora o seu <strong style="color:var(--orange2);">usuário Master</strong> — o administrador principal do sistema. Ele poderá criar usuários, aprovar ajustes e ter controle total da operação.
     </div>
     <div class="fg" style="margin-bottom:12px;">
       <label>Nome Completo do Administrador <span class="req">*</span></label>
@@ -8954,6 +8955,23 @@ function injectDemo(){
 // INIT — sistema limpo para distribuição
 // ══════════════════════════════════════════════════════════════
 (function(){const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='flex';})();
+// ══════════════════════════════════════════════════════════════
+// YALOG WMS · VERSIONAMENTO CENTRALIZADO
+// Atualize SOMENTE estes valores a cada publicação. O refresh da
+// página preserva a sessão autenticada; a versão não é usada como
+// critério de logout.
+// ══════════════════════════════════════════════════════════════
+const YALOG_WMS_VERSION = '2.1.0';
+const YALOG_WMS_BUILD = '002';
+const YALOG_WMS_RELEASE = `v${YALOG_WMS_VERSION} Build ${YALOG_WMS_BUILD}`;
+
+function aplicarVersaoWMS(){
+  try{
+    document.title = `WMS · v${YALOG_WMS_VERSION}`;
+    document.querySelectorAll('[data-wms-version]').forEach(el=>el.textContent=YALOG_WMS_RELEASE);
+  }catch(e){}
+}
+
 (async function bootWMS(){
   // SPRINT YALOG-WMS-SUPA-004B: inicializarSupabaseNoBoot() é o ÚNICO
   // lugar que decide o provider no boot — só promove para 'supabase'
@@ -8971,6 +8989,7 @@ function injectDemo(){
   catch(e){ console.warn('[WMS Boot] falha na sincronização inicial, seguindo com cache local:',e); }
   try{await load();}catch(e){console.warn('[WMS Boot]',e);}
   garantirLicencaDemoPadrao();
+  aplicarVersaoWMS();
   renderLogo();updateDate();checkResp();
   const logoEl=document.getElementById('logoN');if(logoEl)logoEl.value=DB.logo.nome;
   // Sprint YALOG-WMS-007: se a validação de licença/módulo na Platform
@@ -9302,10 +9321,22 @@ async function _tentarRestaurarSessaoWms(){
   const salva=Core.sessionGet(SESSAO_KEY);
   if(!salva || !salva.module_session_token) return false;
 
-  const identidade=await _validarSessaoModuloYalog(salva.module_session_token);
-  if(!identidade) return false;
-
-  return await _entrarWmsPorIdentidadeSSO(identidade,salva.module_session_token);
+  // Publicações no GitHub Pages podem coincidir com um refresh enquanto
+  // o Supabase ainda está inicializando. Não transformar uma falha
+  // transitória de rede em logout. A sessão só cai para o login quando
+  // todas as tentativas de revalidação falharem. A versão/build nunca
+  // invalida a sessão.
+  for(let tentativa=1;tentativa<=3;tentativa++){
+    const identidade=await _validarSessaoModuloYalog(salva.module_session_token);
+    if(identidade){
+      return await _entrarWmsPorIdentidadeSSO(identidade,salva.module_session_token);
+    }
+    if(tentativa<3){
+      await new Promise(r=>setTimeout(r,800*tentativa));
+    }
+  }
+  console.warn('[WMS SSO] não foi possível restaurar a sessão após 3 tentativas; somente então o login manual será exibido.');
+  return false;
 }
 
 // SSO + persistência definitiva da sessão do WMS.
@@ -12501,7 +12532,7 @@ function imprimirEtiquetasEndereco(enderecos, larg, altu){
 <body>
 <div class="toolbar">
   <div>
-    <h2>Etiquetas de Endereço · WMS · v2.0.0</h2>
+    <h2>Etiquetas de Endereço · WMS · v2.1.0</h2>
     <div class="toolbar-info">${enderecos.length} etiqueta(s) · ${larg}×${altu}mm</div>
   </div>
   <div>
@@ -20062,8 +20093,13 @@ function prepararImportacaoEnderecos(rows){
     const area=String(get('AREA','RUA','RUAAREA','NOMEAREA')).trim().toUpperCase()||deriv.area;
     const modulo=_endImpInt(get('MODULO','MOD','POSICAOMODULO'),deriv.modulo);
     const nivel=_endImpInt(get('NIVEL','NIV','ALTURA','NIVELPOSICAO'),deriv.nivel);
-    const siteRaw=String(get('SITE','UNIDADE','UNIDADELOGISTICA','ARMAZEM','DEPOSITO','CD')).trim();
+    const unidadeRaw=String(get('UNIDADE','TIPOUNIDADE','TIPO_UNIDADE','TIPOLOGISTICA')).trim();
+    const siteRaw=String(get('SITE','UNIDADELOGISTICA','ARMAZEM','DEPOSITO','CD','NOME_SITE')).trim();
     const siteId=siteRaw?(map.get(_endImpNorm(siteRaw))||''):sitePadrao;
+    const siteObj=siteId?(DB.sites||[]).find(s=>s.id===siteId):null;
+    const unidadeNormalizada=_endImpNorm(unidadeRaw);
+    const tipoSiteNormalizado=_endImpNorm(siteObj?.tipo||'');
+    const tipoUnidadeCompativel=!unidadeNormalizada || !tipoSiteNormalizado || tipoSiteNormalizado===unidadeNormalizada || (unidadeNormalizada==='CD'&&tipoSiteNormalizado.includes('CENTRO DE DISTRIBUICAO'));
     const tipoArea=_endImpTipo(get('TIPOAREA','TIPO','TIPODEAREA'));
     const status=_endImpStatus(get('STATUS','SITUACAO'));
     const capacidade=_endImpInt(get('CAPACIDADEPP','CAPACIDADE','PP','QTDPP'),1);
@@ -20072,6 +20108,7 @@ function prepararImportacaoEnderecos(rows){
     const errors=[],warnings=[];
     if(!addr)errors.push('ENDERECO não informado');
     if(!siteId && (DB.sites||[]).length)errors.push(siteRaw?`SITE "${siteRaw}" não encontrado`:'SITE não informado');
+    if(siteId && unidadeRaw && !tipoUnidadeCompativel)errors.push(`UNIDADE "${unidadeRaw}" não corresponde ao tipo cadastrado do SITE "${siteObj?.nome||siteRaw}" (${siteObj?.tipo||'não informado'})`);
     if(addr&&seen.has(key))errors.push('Endereço repetido no próprio arquivo');
     if(addr)seen.add(key);
     if(!['livre','ocupado','reservado','bloqueado'].includes(status))errors.push('STATUS inválido');
@@ -20080,7 +20117,7 @@ function prepararImportacaoEnderecos(rows){
     if(existente)warnings.push(`Já cadastrado${existente.siteId?' em '+_endImpSiteName(existente.siteId):''}`);
     if(!get('AREA','RUA','RUAAREA','NOMEAREA'))warnings.push('AREA derivada do endereço');
     if(get('MODULO','MOD','POSICAOMODULO')===''||get('NIVEL','NIV','ALTURA','NIVELPOSICAO')==='')warnings.push('Módulo/Nível derivados quando possível');
-    return{linha:idx+2,raw,siteRaw,siteId,siteNome:_endImpSiteName(siteId),area,modulo,nivel,nivelLabel:nivel===0?'Térreo':`Nível ${nivel}`,addr,tipoArea,status,capacidadePP:capacidade,obs,existente,errors,warnings,valid:errors.length===0};
+    return{linha:idx+2,raw,unidadeRaw,siteRaw,siteId,siteNome:_endImpSiteName(siteId),siteTipo:siteObj?.tipo||'',area,modulo,nivel,nivelLabel:nivel===0?'Térreo':`Nível ${nivel}`,addr,tipoArea,status,capacidadePP:capacidade,obs,existente,errors,warnings,valid:errors.length===0};
   });
   renderImportacaoEnderecos();
 }
@@ -20095,7 +20132,7 @@ function renderImportacaoEnderecos(){
   body.innerHTML=endImportRows.map(r=>{
     const cls=r.valid?(r.existente?'warn':'ok'):'err';
     const situ=r.errors.length?`<span class="end-import-status err">ERRO · ${_endImpEscape(r.errors.join(' · '))}</span>`:r.existente?`<span class="end-import-status warn">DUPLICADO · ${_endImpEscape(r.warnings.join(' · '))}</span>`:`<span class="end-import-status ok">OK</span>`;
-    return`<tr class="${cls}"><td class="mn">${r.linha}</td><td>${_endImpEscape(r.siteNome)}</td><td>${_endImpEscape(r.area)}</td><td class="mn">${r.modulo}</td><td class="mn">${r.nivel}</td><td class="mn" style="color:var(--orange2);font-weight:700;">${_endImpEscape(r.addr)}</td><td>${r.tipoArea}</td><td>${r.status}</td><td class="mn">${r.capacidadePP}</td><td>${situ}</td></tr>`;
+    return`<tr class="${cls}"><td class="mn">${r.linha}</td><td>${_endImpEscape(r.unidadeRaw||r.siteTipo||'—')}</td><td>${_endImpEscape(r.siteNome)}</td><td>${_endImpEscape(r.area)}</td><td class="mn">${r.modulo}</td><td class="mn">${r.nivel}</td><td class="mn" style="color:var(--orange2);font-weight:700;">${_endImpEscape(r.addr)}</td><td>${r.tipoArea}</td><td>${r.status}</td><td class="mn">${r.capacidadePP}</td><td>${situ}</td></tr>`;
   }).join('');
   res.innerHTML=`Arquivo: <strong style="color:var(--w70);">${_endImpEscape(endImportFileName)}</strong> · ${valid} linha(s) pronta(s) para processamento${dup?' · '+dup+' duplicado(s) dependem da regra selecionada':''}.`;
   const btn=document.getElementById('btnProcessarEnderecos');
@@ -20149,15 +20186,33 @@ function processarCargaEnderecos(){
 }
 
 function baixarTemplateEnderecos(fmt='xlsx'){
-  const headers=['SITE','AREA','MODULO','NIVEL','ENDERECO','TIPO_AREA','STATUS','CAPACIDADE_PP','OBSERVACAO'];
+  // UNIDADE = tipo cadastrado (Matriz, Filial, CD etc.)
+  // SITE     = nome EXATO da Unidade Logística cadastrada no WMS.
+  // O vínculo real é feito pelo SITE -> DB.sites.id; UNIDADE serve para
+  // validação humana e para evitar carregar uma Filial em um SITE cadastrado
+  // como Matriz, por exemplo.
+  const headers=['UNIDADE','SITE','AREA','MODULO','NIVEL','ENDERECO','TIPO_AREA','STATUS','CAPACIDADE_PP','OBSERVACAO'];
+  const sitesCadastrados=(DB.sites||[]).map(s=>`${s.nome} | ${s.tipo||'Tipo não informado'}`).join(' ; ');
   const instr=[
-    'Nome ou ID da Unidade Logística. Obrigatório quando houver sites cadastrados.','Rua/Área física. Se vazio, o sistema tenta derivar do ENDERECO.','Número do módulo/posição. Opcional se o código permitir derivação.','Nível. 0 = Térreo. Opcional se o código permitir derivação.','Código único do endereço físico. Obrigatório. Ex.: RUA-01-001-00','PRATELEIRA ou BLOCAGEM. Padrão: PRATELEIRA.','LIVRE, OCUPADO, RESERVADO ou BLOQUEADO. Padrão: LIVRE.','Capacidade em PP. Padrão: 1.','Observação ou motivo de bloqueio/reserva.'
+    'Tipo da Unidade Logística cadastrado no WMS. Ex.: Matriz, Filial, Centro de Distribuição (CD).',
+    'Nome EXATO da Unidade Logística cadastrada no menu Unidades Logísticas. Este campo cria o vínculo com o cadastro.',
+    'Rua/Área física. Se vazio, o sistema tenta derivar do ENDERECO.',
+    'Número do módulo/posição. Opcional se o código permitir derivação.',
+    'Nível. 0 = Térreo. Opcional se o código permitir derivação.',
+    'Código único do endereço físico. Obrigatório. Ex.: RUA-01-001-00',
+    'PRATELEIRA ou BLOCAGEM. Padrão: PRATELEIRA.',
+    'LIVRE, OCUPADO, RESERVADO ou BLOQUEADO. Padrão: LIVRE.',
+    'Capacidade em PP. Padrão: 1.',
+    'Observação ou motivo de bloqueio/reserva.'
   ];
-  const exemplos=[
-    ['MATRIZ','RUA-01',1,0,'RUA-01-001-00','PRATELEIRA','LIVRE',1,''],
-    ['MATRIZ','RUA-01',1,1,'RUA-01-001-01','PRATELEIRA','LIVRE',1,''],
-    ['MATRIZ','RUA-02',10,0,'RUA-02-010-00','PRATELEIRA','BLOQUEADO',1,'Manutenção'],
-    ['BSS','PATIO-01',1,0,'PATIO-01-001','BLOCAGEM','LIVRE',1,'Área de blocagem']
+  const primeiroSite=(DB.sites||[])[0];
+  const exemplos=primeiroSite ? [
+    [primeiroSite.tipo||'Matriz',primeiroSite.nome,'RUA-01',1,0,'RUA-01-001-00','PRATELEIRA','LIVRE',1,''],
+    [primeiroSite.tipo||'Matriz',primeiroSite.nome,'RUA-01',1,1,'RUA-01-001-01','PRATELEIRA','LIVRE',1,''],
+    [primeiroSite.tipo||'Matriz',primeiroSite.nome,'RUA-02',10,0,'RUA-02-010-00','PRATELEIRA','BLOQUEADO',1,'Manutenção']
+  ] : [
+    ['Matriz','NOME EXATO DO SITE','RUA-01',1,0,'RUA-01-001-00','PRATELEIRA','LIVRE',1,''],
+    ['Filial','NOME EXATO DO SITE','RUA-01',1,1,'RUA-01-001-01','PRATELEIRA','LIVRE',1,'']
   ];
   if(fmt==='csv'){
     const lines=[headers,instr,['EXEMPLOS — APAGAR ANTES DE IMPORTAR'],...exemplos].map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';'));
@@ -20165,10 +20220,11 @@ function baixarTemplateEnderecos(fmt='xlsx'){
     const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='YALog_Template_Carga_Enderecos.csv';a.click();URL.revokeObjectURL(url);return;
   }
   const ws1=XLSX.utils.aoa_to_sheet([headers,instr,...exemplos]);
-  ws1['!cols']=headers.map((h,i)=>({wch:[18,18,10,10,24,16,16,16,30][i]}));
+  ws1['!cols']=headers.map((h,i)=>({wch:[24,28,18,10,10,24,16,16,16,30][i]}));
   const ws2=XLSX.utils.aoa_to_sheet([
     ['CAMPO','OBRIGATÓRIO','REGRA'],
-    ['SITE','SIM*','Nome ou ID da Unidade Logística. *Pode usar Site padrão na tela.'],
+    ['UNIDADE','SIM*','Tipo da Unidade Logística. Deve corresponder ao tipo cadastrado no SITE. Ex.: Matriz, Filial, Centro de Distribuição (CD).'],
+    ['SITE','SIM*','Nome EXATO da Unidade Logística cadastrada no WMS. É o campo usado para criar o vínculo com DB.sites. *Pode usar Site padrão na tela.'],
     ['AREA','NÃO','Rua/Área física; derivada do ENDERECO se não informada.'],
     ['MODULO','NÃO','Número da posição; derivado do ENDERECO quando possível.'],
     ['NIVEL','NÃO','0 = Térreo; derivado do ENDERECO quando possível.'],
@@ -20177,14 +20233,15 @@ function baixarTemplateEnderecos(fmt='xlsx'){
     ['STATUS','NÃO','LIVRE, OCUPADO, RESERVADO ou BLOQUEADO.'],
     ['CAPACIDADE_PP','NÃO','Quantidade de PP; padrão 1.'],
     ['OBSERVACAO','NÃO','Texto livre / motivo de bloqueio ou reserva.'],
+    ['VÍNCULO','','SITE é relacionado ao cadastro de Unidades Logísticas pelo nome; o WMS grava o ID interno da unidade.'],
+    ['SITES CADASTRADOS','',''+(sitesCadastrados||'Nenhuma unidade cadastrada ainda.')],
     ['ATENÇÃO','','Apague as linhas de exemplo antes de importar.'],
     ['DUPLICADOS','','A tela permite escolher IGNORAR ou ATUALIZAR.']
   ]);
-  ws2['!cols']=[{wch:22},{wch:16},{wch:70}];
+  ws2['!cols']=[{wch:24},{wch:16},{wch:100}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws1,'CARGA_ENDERECOS');XLSX.utils.book_append_sheet(wb,ws2,'INSTRUCOES');
   XLSX.writeFile(wb,'YALog_Template_Carga_Enderecos.xlsx');
-  showT('Template de endereços baixado','ok');
-}
-</script>
+  showT('Template de endereços baixado com UNIDADE + SITE','ok');
+}</script>
 </body>
 </html>
