@@ -433,6 +433,32 @@ a{color:inherit;text-decoration:none;}
 .btn-p{box-shadow:0 4px 14px rgba(251,146,60,0.25);}
 .toast{border-radius:var(--radius-md);}
 .mo .md{border-radius:var(--radius-lg);}
+
+/* ══ CARGA EM MASSA DE ENDEREÇOS · YALOG-WMS-002 ══ */
+.end-import-help{background:rgba(59,130,246,.07);border:1px solid rgba(96,165,250,.25);padding:12px 14px;line-height:1.65;font-size:10px;color:var(--w70);}
+.end-import-help strong{color:var(--b2);}
+.end-import-drop{border:2px dashed var(--border2);background:var(--bg3);padding:28px 18px;text-align:center;cursor:pointer;transition:all .2s;}
+.end-import-drop:hover,.end-import-drop.over{border-color:var(--orange);background:rgba(251,146,60,.06);}
+.end-import-drop .ico{font-size:30px;margin-bottom:8px;display:block;}
+.end-import-drop .ttl{font-size:12px;font-weight:700;color:var(--w);margin-bottom:4px;}
+.end-import-drop .sub{font-size:9px;color:var(--w40);font-family:var(--mono);}
+.end-import-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0;}
+.end-import-stat{display:flex;gap:18px;flex-wrap:wrap;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);margin-bottom:10px;}
+.end-import-stat .v{font-family:var(--serif);font-style:italic;font-size:20px;line-height:1;}
+.end-import-stat .l{font:8px var(--mono);color:var(--w40);text-transform:uppercase;letter-spacing:.1em;margin-top:3px;}
+.end-import-table-wrap{max-height:330px;overflow:auto;border:1px solid var(--border);}
+.end-import-table{min-width:980px;width:100%;border-collapse:collapse;}
+.end-import-table th{position:sticky;top:0;background:var(--bg3);z-index:2;font:8px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--w40);padding:8px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;}
+.end-import-table td{font-size:10px;color:var(--w70);padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.035);white-space:nowrap;}
+.end-import-table tr.ok td{background:rgba(74,222,128,.035);}
+.end-import-table tr.err td{background:rgba(248,113,113,.055);}
+.end-import-table tr.warn td{background:rgba(251,191,36,.045);}
+.end-import-status{font:8px var(--mono);font-weight:700;padding:2px 6px;display:inline-block;}
+.end-import-status.ok{color:#4ade80;background:rgba(74,222,128,.1);}
+.end-import-status.err{color:#f87171;background:rgba(248,113,113,.1);}
+.end-import-status.warn{color:#fbbf24;background:rgba(251,191,36,.1);}
+.end-import-sticky{position:sticky;bottom:0;background:var(--bg2);border-top:1px solid var(--border);padding-top:12px;margin-top:12px;display:flex;justify-content:flex-end;gap:8px;}
+
 </style>
 </head>
 <body>
@@ -1488,11 +1514,67 @@ a{color:inherit;text-decoration:none;}
   <div id="cargaResultado" style="display:none;margin-top:16px;"></div>
 </div>
 
+<!-- ════ MODAL · CARGA EM MASSA DE ENDEREÇOS ════ -->
+<div class="mo" id="mImportEnderecos">
+  <div class="md md-xl" style="max-width:1120px;">
+    <button class="mc" onclick="fecharImportacaoEnderecos()">✕</button>
+    <div class="mt">Carga de Endereços</div>
+    <div class="ms">Importe a estrutura física de um armazém por Excel ou CSV · validação antes da gravação</div>
+
+    <div class="end-import-help" style="margin-bottom:14px;">
+      <strong>Fluxo:</strong> baixe o template → preencha os endereços → faça o upload → confira a prévia → processe a carga.<br>
+      <strong>Obrigatórios:</strong> SITE e ENDERECO. AREA, MODULO e NIVEL podem ser informados; quando ausentes, o sistema tenta derivá-los do código do endereço.<br>
+      <strong>Segurança:</strong> endereços já existentes não são sobrescritos por padrão. Você escolhe entre <em>ignorar</em> ou <em>atualizar</em> duplicados antes de processar.
+    </div>
+
+    <div class="end-import-toolbar">
+      <button class="btn btn-g btn-sm" onclick="baixarTemplateEnderecos('xlsx')">⬇ Template Excel (.xlsx)</button>
+      <button class="btn btn-o btn-sm" onclick="baixarTemplateEnderecos('csv')">⬇ Template CSV</button>
+      <div style="flex:1;min-width:180px;"></div>
+      <div class="fg" style="min-width:210px;">
+        <label>Site padrão (se o arquivo não informar)</label>
+        <select id="endImpSitePadrao" style="background:var(--bg3);border:1px solid var(--border2);color:var(--w);padding:8px 10px;font-size:11px;"></select>
+      </div>
+      <div class="fg" style="min-width:210px;">
+        <label>Duplicados encontrados</label>
+        <select id="endImpDuplicados" style="background:var(--bg3);border:1px solid var(--border2);color:var(--w);padding:8px 10px;font-size:11px;">
+          <option value="ignorar">Ignorar e manter cadastro atual</option>
+          <option value="atualizar">Atualizar cadastro existente</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="endImpDrop" class="end-import-drop" onclick="document.getElementById('endImpFile').click()" ondragover="endImpDragOver(event)" ondragleave="endImpDragLeave(event)" ondrop="endImpDropFile(event)">
+      <span class="ico">📥</span>
+      <div class="ttl">Clique para selecionar ou arraste o arquivo aqui</div>
+      <div class="sub">Formatos aceitos: .XLSX · .XLS · .CSV</div>
+      <input id="endImpFile" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="processarArquivoEnderecos(this.files[0])">
+    </div>
+
+    <div id="endImpMsg" style="margin-top:10px;"></div>
+    <div id="endImpPreview" style="display:none;margin-top:14px;">
+      <div id="endImpStats" class="end-import-stat"></div>
+      <div class="end-import-table-wrap">
+        <table class="end-import-table">
+          <thead><tr><th>#</th><th>Site</th><th>Área</th><th>Módulo</th><th>Nível</th><th>Endereço</th><th>Tipo</th><th>Status</th><th>Cap. PP</th><th>Situação</th></tr></thead>
+          <tbody id="endImpBody"></tbody>
+        </table>
+      </div>
+      <div id="endImpResumo" style="font:9px var(--mono);color:var(--w40);margin-top:8px;"></div>
+      <div class="end-import-sticky">
+        <button class="btn btn-o" onclick="limparImportacaoEnderecos()">Limpar</button>
+        <button class="btn btn-p" id="btnProcessarEnderecos" onclick="processarCargaEnderecos()">✓ Processar e Gravar Endereços</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ════ ENDEREÇOS ════ -->
 <div class="screen" id="s-enderecos">
   <div class="ph"><div><div class="ph-eye">Carga & Estrutura</div><div class="ph-title">Gestão de <em>Endereços</em></div></div>
     <div class="ph-acts">
       <button class="btn btn-p" onclick="populateEndSites();openM('mNovoEndereco')">+ Criar Endereço(s)</button>
+      <button class="btn btn-b" onclick="abrirImportacaoEnderecos()">⬆ Carga de Endereços</button>
       <button class="btn btn-b" onclick="openM('mNovaArea')">+ Nova Área / Rua</button>
       <button class="btn btn-r btn-sm" id="btnExcluirSel" style="display:none;" onclick="excluirSelecionados()">🗑 Excluir Selecionados</button>
     </div>
@@ -19871,6 +19953,237 @@ function imprimirEtqSelecionados(area){
   const altu=parseInt(document.getElementById('etqAltu')?.value)||30;
   closeM('mEtiqAreaLayout');
   imprimirEtiquetasEndereco(ends,larg,altu);
+}
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// YALOG-WMS-002 · CARGA EM MASSA DE ENDEREÇOS
+// Importação XLSX/XLS/CSV + template + pré-validação + gravação segura.
+// Não altera a carga de estoque existente.
+// ═══════════════════════════════════════════════════════════════════════
+let endImportRows=[];
+let endImportFileName='';
+
+function _endImpNorm(v){
+  return String(v==null?'':v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim().replace(/\s+/g,' ');
+}
+function _endImpHeader(v){return _endImpNorm(v).replace(/[^A-Z0-9]/g,'');}
+function _endImpNum(v,def=0){
+  if(v===null||v===undefined||String(v).trim()==='')return def;
+  if(typeof v==='number'&&isFinite(v))return v;
+  const s=String(v).trim().replace(/\./g,'').replace(',','.');
+  const n=Number(s);return isFinite(n)?n:def;
+}
+function _endImpInt(v,def=0){const n=_endImpNum(v,def);return Number.isFinite(n)?Math.trunc(n):def;}
+function _endImpSiteMap(){
+  const map=new Map();
+  (DB.sites||[]).forEach(s=>{
+    map.set(_endImpNorm(s.id),s.id);
+    map.set(_endImpNorm(s.nome),s.id);
+    if(s.codigo)map.set(_endImpNorm(s.codigo),s.id);
+  });
+  return map;
+}
+function _endImpSiteName(id){return id?(DB.sites||[]).find(s=>s.id===id)?.nome||id:'—';}
+function _endImpDerivar(addr){
+  const a=String(addr||'').trim().toUpperCase();
+  const m=a.match(/^(.*)-(\d+)-(\d+)$/);
+  if(m)return {area:m[1],modulo:parseInt(m[2],10)||0,nivel:parseInt(m[3],10)||0};
+  const m2=a.match(/^(.*)-(\d+)$/);
+  if(m2)return {area:m2[1],modulo:parseInt(m2[2],10)||0,nivel:0};
+  return {area:a,modulo:0,nivel:0};
+}
+function _endImpStatus(v){
+  const s=_endImpNorm(v).toLowerCase();
+  if(['livre','free','disponivel','disponível'].includes(s))return 'livre';
+  if(['ocupado','ocupada'].includes(s))return 'ocupado';
+  if(['reservado','reservada'].includes(s))return 'reservado';
+  if(['bloqueado','bloqueada','bloq'].includes(s))return 'bloqueado';
+  return s||'livre';
+}
+function _endImpTipo(v){
+  const s=_endImpNorm(v).toLowerCase();
+  if(s.includes('bloc'))return 'blocagem';
+  return 'prateleira';
+}
+function _endImpEscape(v){return String(v==null?'':v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
+function abrirImportacaoEnderecos(){
+  if(!canAccess('estoquista')){showT('Sem permissão para carregar endereços','err');return;}
+  const sel=document.getElementById('endImpSitePadrao');
+  if(sel)sel.innerHTML='<option value="">— Sem site padrão —</option>'+(DB.sites||[]).map(s=>`<option value="${_endImpEscape(s.id)}">${_endImpEscape(s.nome)}</option>`).join('');
+  limparImportacaoEnderecos();
+  openM('mImportEnderecos');
+}
+function fecharImportacaoEnderecos(){closeM('mImportEnderecos');}
+function limparImportacaoEnderecos(){
+  endImportRows=[];endImportFileName='';
+  const f=document.getElementById('endImpFile');if(f)f.value='';
+  const p=document.getElementById('endImpPreview');if(p)p.style.display='none';
+  const m=document.getElementById('endImpMsg');if(m)m.innerHTML='';
+  const b=document.getElementById('btnProcessarEnderecos');if(b){b.disabled=false;b.style.opacity='1';}
+}
+function endImpDragOver(e){e.preventDefault();document.getElementById('endImpDrop')?.classList.add('over');}
+function endImpDragLeave(e){e.preventDefault();document.getElementById('endImpDrop')?.classList.remove('over');}
+function endImpDropFile(e){e.preventDefault();document.getElementById('endImpDrop')?.classList.remove('over');const f=e.dataTransfer.files?.[0];if(f)processarArquivoEnderecos(f);}
+
+function processarArquivoEnderecos(file){
+  if(!file)return;
+  if(!canAccess('estoquista')){showT('Sem permissão para carregar endereços','err');return;}
+  endImportFileName=file.name;
+  const msg=document.getElementById('endImpMsg');
+  msg.innerHTML='<div style="color:var(--a2);font:10px var(--mono);">⏳ Lendo e validando arquivo...</div>';
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array',cellDates:false,raw:true});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});
+      if(!rows.length)throw new Error('A primeira aba não possui linhas de dados.');
+      prepararImportacaoEnderecos(rows);
+    }catch(err){
+      msg.innerHTML=`<div style="color:#f87171;font:10px var(--mono);">✕ Não foi possível ler o arquivo: ${_endImpEscape(err.message)}</div>`;
+    }
+  };
+  reader.onerror=()=>{msg.innerHTML='<div style="color:#f87171;font:10px var(--mono);">✕ Falha ao abrir o arquivo.</div>';};
+  reader.readAsArrayBuffer(file);
+}
+
+function prepararImportacaoEnderecos(rows){
+  const map=_endImpSiteMap();
+  const sitePadrao=document.getElementById('endImpSitePadrao')?.value||'';
+  const seen=new Set();
+  endImportRows=rows.map((raw,idx)=>{
+    const r={};Object.keys(raw||{}).forEach(k=>r[_endImpHeader(k)]=raw[k]);
+    const get=(...keys)=>{for(const k of keys){if(r[k]!==undefined&&String(r[k]).trim()!=='')return r[k];}return '';};
+    let addr=String(get('ENDERECO','END','ADDR','POSICAO','LOCALIZACAO')).trim().toUpperCase();
+    const deriv=_endImpDerivar(addr);
+    const area=String(get('AREA','RUA','RUAAREA','NOMEAREA')).trim().toUpperCase()||deriv.area;
+    const modulo=_endImpInt(get('MODULO','MOD','POSICAOMODULO'),deriv.modulo);
+    const nivel=_endImpInt(get('NIVEL','NIV','ALTURA','NIVELPOSICAO'),deriv.nivel);
+    const siteRaw=String(get('SITE','UNIDADE','UNIDADELOGISTICA','ARMAZEM','DEPOSITO','CD')).trim();
+    const siteId=siteRaw?(map.get(_endImpNorm(siteRaw))||''):sitePadrao;
+    const tipoArea=_endImpTipo(get('TIPOAREA','TIPO','TIPODEAREA'));
+    const status=_endImpStatus(get('STATUS','SITUACAO'));
+    const capacidade=_endImpInt(get('CAPACIDADEPP','CAPACIDADE','PP','QTDPP'),1);
+    const obs=String(get('OBS','OBSERVACAO','OBSERVACOES')).trim();
+    const key=addr;
+    const errors=[],warnings=[];
+    if(!addr)errors.push('ENDERECO não informado');
+    if(!siteId && (DB.sites||[]).length)errors.push(siteRaw?`SITE "${siteRaw}" não encontrado`:'SITE não informado');
+    if(addr&&seen.has(key))errors.push('Endereço repetido no próprio arquivo');
+    if(addr)seen.add(key);
+    if(!['livre','ocupado','reservado','bloqueado'].includes(status))errors.push('STATUS inválido');
+    if(capacidade<1)errors.push('CAPACIDADE_PP deve ser ≥ 1');
+    const existente=addr?DB.enderecos.find(e=>e.addr===addr):null;
+    if(existente)warnings.push(`Já cadastrado${existente.siteId?' em '+_endImpSiteName(existente.siteId):''}`);
+    if(!get('AREA','RUA','RUAAREA','NOMEAREA'))warnings.push('AREA derivada do endereço');
+    if(get('MODULO','MOD','POSICAOMODULO')===''||get('NIVEL','NIV','ALTURA','NIVELPOSICAO')==='')warnings.push('Módulo/Nível derivados quando possível');
+    return{linha:idx+2,raw,siteRaw,siteId,siteNome:_endImpSiteName(siteId),area,modulo,nivel,nivelLabel:nivel===0?'Térreo':`Nível ${nivel}`,addr,tipoArea,status,capacidadePP:capacidade,obs,existente,errors,warnings,valid:errors.length===0};
+  });
+  renderImportacaoEnderecos();
+}
+function renderImportacaoEnderecos(){
+  const p=document.getElementById('endImpPreview'),body=document.getElementById('endImpBody'),stats=document.getElementById('endImpStats'),res=document.getElementById('endImpResumo');
+  if(!p||!body||!stats)return;
+  p.style.display='block';
+  const valid=endImportRows.filter(r=>r.valid).length;
+  const invalid=endImportRows.length-valid;
+  const dup=endImportRows.filter(r=>r.valid&&r.existente).length;
+  stats.innerHTML=`<div><div class="v" style="color:#fff;">${endImportRows.length}</div><div class="l">Linhas lidas</div></div><div><div class="v" style="color:#4ade80;">${valid}</div><div class="l">Válidas</div></div><div><div class="v" style="color:#f87171;">${invalid}</div><div class="l">Com erro</div></div><div><div class="v" style="color:#fbbf24;">${dup}</div><div class="l">Duplicados</div></div>`;
+  body.innerHTML=endImportRows.map(r=>{
+    const cls=r.valid?(r.existente?'warn':'ok'):'err';
+    const situ=r.errors.length?`<span class="end-import-status err">ERRO · ${_endImpEscape(r.errors.join(' · '))}</span>`:r.existente?`<span class="end-import-status warn">DUPLICADO · ${_endImpEscape(r.warnings.join(' · '))}</span>`:`<span class="end-import-status ok">OK</span>`;
+    return`<tr class="${cls}"><td class="mn">${r.linha}</td><td>${_endImpEscape(r.siteNome)}</td><td>${_endImpEscape(r.area)}</td><td class="mn">${r.modulo}</td><td class="mn">${r.nivel}</td><td class="mn" style="color:var(--orange2);font-weight:700;">${_endImpEscape(r.addr)}</td><td>${r.tipoArea}</td><td>${r.status}</td><td class="mn">${r.capacidadePP}</td><td>${situ}</td></tr>`;
+  }).join('');
+  res.innerHTML=`Arquivo: <strong style="color:var(--w70);">${_endImpEscape(endImportFileName)}</strong> · ${valid} linha(s) pronta(s) para processamento${dup?' · '+dup+' duplicado(s) dependem da regra selecionada':''}.`;
+  const btn=document.getElementById('btnProcessarEnderecos');
+  if(btn){btn.disabled=!valid;btn.style.opacity=valid?'1':'.45';}
+  const msg=document.getElementById('endImpMsg');
+  if(msg)msg.innerHTML=invalid?`<div style="color:#fbbf24;font:10px var(--mono);">⚠ Existem ${invalid} linha(s) com erro. Elas serão ignoradas; corrija o arquivo e reimporte se quiser processá-las.</div>`:`<div style="color:#4ade80;font:10px var(--mono);">✓ Arquivo validado. Confira a prévia antes de gravar.</div>`;
+}
+
+function processarCargaEnderecos(){
+  if(!canAccess('estoquista')){showT('Sem permissão para carregar endereços','err');return;}
+  const valid=endImportRows.filter(r=>r.valid);
+  if(!valid.length){showT('Nenhum endereço válido para gravar','err');return;}
+  const modo=document.getElementById('endImpDuplicados')?.value||'ignorar';
+  const sitePadrao=document.getElementById('endImpSitePadrao')?.value||'';
+  if(!valid.every(r=>r.siteId||sitePadrao||!(DB.sites||[]).length)){showT('Existem linhas sem Unidade Logística válida','err');return;}
+  let criados=0,atualizados=0,ignorados=0;
+  const bloqueados=[];
+  valid.forEach(r=>{
+    const siteId=r.siteId||sitePadrao||null;
+    const existente=DB.enderecos.find(e=>e.addr===r.addr);
+    if(existente){
+      if(modo!=='atualizar'){ignorados++;return;}
+      // Nunca altera endereço ocupado para outro código; a atualização aqui é estrutural.
+      existente.area=r.area;existente.modulo=r.modulo;existente.nivel=r.nivel;existente.nivelLabel=r.nivelLabel;
+      existente.siteId=siteId;existente.tipoArea=r.tipoArea;existente.capacidadePP=r.capacidadePP;existente.obsCarga=r.obs||'';
+      if(r.status==='bloqueado'){
+        existente.status='bloqueado';
+        existente.bloqueioManual=existente.bloqueioManual||{motivo:'Bloqueio importado',motivoOutro:r.obs||'',usuario:usuarioAtual?.nome||'Sistema',perfil:usuarioAtual?.perfil||'Sistema',data:now()};
+      } else if(!existente.bloqueioManual){
+        existente.status=r.status;
+      }
+      atualizados++;return;
+    }
+    const obj={id:`end-${Date.now()}-${criados+atualizados+1}`,area:r.area,modulo:r.modulo,nivel:r.nivel,nivelLabel:r.nivelLabel,addr:r.addr,status:r.status,siteId,tipoArea:r.tipoArea,capacidadePP:r.capacidadePP,obsCarga:r.obs||'',origemCarga:'IMPORTACAO_ENDERECOS',dataCarga:now()};
+    if(r.status==='bloqueado')obj.bloqueioManual={motivo:'Bloqueio importado',motivoOutro:r.obs||'',usuario:usuarioAtual?.nome||'Sistema',perfil:usuarioAtual?.perfil||'Sistema',data:now()};
+    if(r.status==='reservado')obj.reservado={operacao:r.obs||'Importado'};
+    DB.enderecos.push(obj);criados++;
+  });
+  try{
+    const ok=save();
+    if(ok===false)throw new Error('A camada de persistência recusou a gravação.');
+  }catch(err){
+    showT('Falha ao salvar a carga: '+err.message,'err');
+    return;
+  }
+  renderEnderecos();
+  populateFiltrosEnd();
+  closeM('mImportEnderecos');
+  showT(`Carga concluída: ${criados} novo(s), ${atualizados} atualizado(s), ${ignorados} ignorado(s).`,'ok');
+  logAuditoria('Carga de endereços',`Arquivo ${endImportFileName}`,{criados,atualizados,ignorados,perfil:usuarioAtual?.perfil||'—',resultado:'sucesso'});
+}
+
+function baixarTemplateEnderecos(fmt='xlsx'){
+  const headers=['SITE','AREA','MODULO','NIVEL','ENDERECO','TIPO_AREA','STATUS','CAPACIDADE_PP','OBSERVACAO'];
+  const instr=[
+    'Nome ou ID da Unidade Logística. Obrigatório quando houver sites cadastrados.','Rua/Área física. Se vazio, o sistema tenta derivar do ENDERECO.','Número do módulo/posição. Opcional se o código permitir derivação.','Nível. 0 = Térreo. Opcional se o código permitir derivação.','Código único do endereço físico. Obrigatório. Ex.: RUA-01-001-00','PRATELEIRA ou BLOCAGEM. Padrão: PRATELEIRA.','LIVRE, OCUPADO, RESERVADO ou BLOQUEADO. Padrão: LIVRE.','Capacidade em PP. Padrão: 1.','Observação ou motivo de bloqueio/reserva.'
+  ];
+  const exemplos=[
+    ['MATRIZ','RUA-01',1,0,'RUA-01-001-00','PRATELEIRA','LIVRE',1,''],
+    ['MATRIZ','RUA-01',1,1,'RUA-01-001-01','PRATELEIRA','LIVRE',1,''],
+    ['MATRIZ','RUA-02',10,0,'RUA-02-010-00','PRATELEIRA','BLOQUEADO',1,'Manutenção'],
+    ['BSS','PATIO-01',1,0,'PATIO-01-001','BLOCAGEM','LIVRE',1,'Área de blocagem']
+  ];
+  if(fmt==='csv'){
+    const lines=[headers,instr,['EXEMPLOS — APAGAR ANTES DE IMPORTAR'],...exemplos].map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';'));
+    const blob=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+    const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='YALog_Template_Carga_Enderecos.csv';a.click();URL.revokeObjectURL(url);return;
+  }
+  const ws1=XLSX.utils.aoa_to_sheet([headers,instr,...exemplos]);
+  ws1['!cols']=headers.map((h,i)=>({wch:[18,18,10,10,24,16,16,16,30][i]}));
+  const ws2=XLSX.utils.aoa_to_sheet([
+    ['CAMPO','OBRIGATÓRIO','REGRA'],
+    ['SITE','SIM*','Nome ou ID da Unidade Logística. *Pode usar Site padrão na tela.'],
+    ['AREA','NÃO','Rua/Área física; derivada do ENDERECO se não informada.'],
+    ['MODULO','NÃO','Número da posição; derivado do ENDERECO quando possível.'],
+    ['NIVEL','NÃO','0 = Térreo; derivado do ENDERECO quando possível.'],
+    ['ENDERECO','SIM','Código único do endereço.'],
+    ['TIPO_AREA','NÃO','PRATELEIRA ou BLOCAGEM.'],
+    ['STATUS','NÃO','LIVRE, OCUPADO, RESERVADO ou BLOQUEADO.'],
+    ['CAPACIDADE_PP','NÃO','Quantidade de PP; padrão 1.'],
+    ['OBSERVACAO','NÃO','Texto livre / motivo de bloqueio ou reserva.'],
+    ['ATENÇÃO','','Apague as linhas de exemplo antes de importar.'],
+    ['DUPLICADOS','','A tela permite escolher IGNORAR ou ATUALIZAR.']
+  ]);
+  ws2['!cols']=[{wch:22},{wch:16},{wch:70}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws1,'CARGA_ENDERECOS');XLSX.utils.book_append_sheet(wb,ws2,'INSTRUCOES');
+  XLSX.writeFile(wb,'YALog_Template_Carga_Enderecos.xlsx');
+  showT('Template de endereços baixado','ok');
 }
 </script>
 </body>
