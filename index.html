@@ -516,7 +516,7 @@ a{color:inherit;text-decoration:none;}
     <div class="nav-grp">Carga & Estrutura</div>
     <div class="ni" onclick="go('cargaEstoque')"><span class="ni-ic"><i data-lucide="upload"></i></span> Carga de Estoque</div>
     <div class="ni" onclick="go('enderecos')"><span class="ni-ic"><i data-lucide="grid-3x3"></i></span> Endereços</div>
-    <div class="ni" onclick="go('capArmazem')" style="color:var(--b2);"><span class="ni-ic"><i data-lucide="map"></i></span> Capacidade do Armazém</div>
+    <div class="ni" onclick="go('capArmazem')" style="color:var(--b2);"><span class="ni-ic"><i data-lucide="map"></i></span> Configuração de Área Blocada</div>
     <div class="ni" onclick="go('matrizPP')" style="color:var(--orange2);"><span class="ni-ic"><i data-lucide="layout-grid"></i></span> Matriz de Capacidade PP</div>
     <div class="ni" onclick="abrirReimpressao()" title="Reimprimir etiquetas por Cód. Palete ou WMS"><span class="ni-ic"><i data-lucide="printer"></i></span> Etiquetas</div>
     <div class="ni" onclick="go('clientes')"><span class="ni-ic"><i data-lucide="building-2"></i></span> Clientes</div>
@@ -537,7 +537,7 @@ a{color:inherit;text-decoration:none;}
     <div class="nav-grp">Conta</div>
     <div class="ni" onclick="go('minhaConta')"><span class="ni-ic"><i data-lucide="user-cog"></i></span> Minha Conta</div>
   </nav>
-  <div class="sb-foot">WMS • <span data-wms-version>v2.1.2 Build 004</span><br>YALOG-WMS-001 • <span data-wms-version>v2.1.2 Build 004</span></div>
+  <div class="sb-foot">WMS • <span data-wms-version>v2.1.2 Build 005</span><br>YALOG-WMS-001 • <span data-wms-version>v2.1.2 Build 005</span></div>
 </aside>
 
 <!-- ══ MAIN ══ -->
@@ -2474,12 +2474,12 @@ a{color:inherit;text-decoration:none;}
 <div class="screen" id="s-capArmazem">
   <div class="ph"><div>
     <div class="ph-eye">Carga &amp; Estrutura</div>
-    <div class="ph-title">Capacidade do <em>Armazém</em></div>
+    <div class="ph-title">Configuração de Área <em>Blocada</em></div>
   </div></div>
 
   <div style="margin-bottom:18px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <div class="clbl">Limites de PP — Áreas de Blocagem / Chão</div>
+      <div class="clbl">Configuração de Área Blocada — Limites de PP</div>
       <span id="capAreaCount" style="font-size:10px;color:var(--w40);font-family:var(--mono);"></span>
     </div>
     <div id="capBlocagemCards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;"></div>
@@ -5917,7 +5917,7 @@ function barcode(num){let h='<div class="barcode-wrap"><div class="barcode-bars"
 // ══════════════════════════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════════════════════════
-const TITLES={capArmazem:'Capacidade do Armazém',home:'Visão Geral',recUpload:'Entrada de Mercadoria',recTarefas:'Conferências',estoqueList:'Produtos em Estoque',estoqueMapa:'Mapa do Armazém',curvaABC:'Curva ABC',bloqueios:'Posições Bloqueadas',sepUpload:'Solicitação de Separação',sepTarefas:'Tarefas de Separação',expedicao:'Expedição',devolucao:'Devoluções de Clientes',alertasValidade:'Alertas de Validade',ageingReport:'Ageing Report',custoArmazem:'Custo de Armazenagem',invList:'Inventários',historico:'Movimentações',cargaEstoque:'Carga de Estoque',enderecos:'Endereços',ajusteEstoque:'Ajuste de Estoque',masterAceite:'Aceites Master',usuarios:'Usuários',armazenagem:'Tarefas de Armazenagem',movimentar:'Movimentação entre Endereços',relSaida:'Relatório de Saída',relEstoque:'Relatório de Estoque',relRecebimento:'Relatório de Recebimento',tarefasMov:'Tarefas de Movimentação',paletes:'Rastreabilidade de Paletes',sites:'Unidades Logísticas',clientes:'Cadastro de Clientes',matrizPP:'Matriz Capacidade PP',limparEstoque:'Limpar / Excluir Estoque',backup:'Backup do Estoque',configGeral:'Configurações Gerais',minhaConta:'Minha Conta'};
+const TITLES={capArmazem:'Configuração de Área Blocada',home:'Visão Geral',recUpload:'Entrada de Mercadoria',recTarefas:'Conferências',estoqueList:'Produtos em Estoque',estoqueMapa:'Mapa do Armazém',curvaABC:'Curva ABC',bloqueios:'Posições Bloqueadas',sepUpload:'Solicitação de Separação',sepTarefas:'Tarefas de Separação',expedicao:'Expedição',devolucao:'Devoluções de Clientes',alertasValidade:'Alertas de Validade',ageingReport:'Ageing Report',custoArmazem:'Custo de Armazenagem',invList:'Inventários',historico:'Movimentações',cargaEstoque:'Carga de Estoque',enderecos:'Endereços',ajusteEstoque:'Ajuste de Estoque',masterAceite:'Aceites Master',usuarios:'Usuários',armazenagem:'Tarefas de Armazenagem',movimentar:'Movimentação entre Endereços',relSaida:'Relatório de Saída',relEstoque:'Relatório de Estoque',relRecebimento:'Relatório de Recebimento',tarefasMov:'Tarefas de Movimentação',paletes:'Rastreabilidade de Paletes',sites:'Unidades Logísticas',clientes:'Cadastro de Clientes',matrizPP:'Matriz Capacidade PP',limparEstoque:'Limpar / Excluir Estoque',backup:'Backup do Estoque',configGeral:'Configurações Gerais',minhaConta:'Minha Conta'};
 function go(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById('s-'+id).classList.add('active');
@@ -6542,8 +6542,11 @@ function renderCapArmazem(){
       sel.innerHTML=opts; sel.value=curSite;
     }
 
-    // Conta 1 PP por endereço físico ocupado. A área cadastrada pode ser
-    // específica (ex.: CR-RUA 11) ou genérica (CR), sem perder o vínculo.
+    // REGRA DE CONTAGEM — ÁREA BLOQUEADA / CHÃO:
+    // 1 ID_PALETE_UZ real = 1 PP, independentemente da quantidade de SKUs,
+    // linhas ou endereços associados ao mesmo palete.
+    // A área cadastrada pode ser específica (ex.: CR-RUA 11) ou genérica
+    // (ex.: CR), preservando o vínculo existente.
     var produtos=(DB.produtos||[]).filter(function(p){
       return (parseFloat(p.qtd)||0)>0 && p.endereco;
     });
@@ -6555,6 +6558,17 @@ function renderCapArmazem(){
       return a===s || a.startsWith(s+'-') || a.startsWith(s+'.') || a.startsWith(s+' ');
     }
 
+    function obterIdPaleteUZ(p){
+      // Compatibilidade: aceita o campo atual paleteId e, se existir em
+      // cargas futuras/legadas, também os nomes explícitos do ID UZ.
+      var raw = p && (p.idPaleteUZ ?? p.ID_PALETE_UZ ?? p.paleteId ?? '');
+      var id = String(raw ?? '').trim();
+      if(!id) return '';
+      // IDs automáticos não representam ID_PALETE_UZ informado na carga.
+      if(/^PAL-CARGA-/i.test(id)) return '';
+      return id;
+    }
+
     var cont=document.getElementById('capBlocagemCards');
     if(!cont) return;
     var htmlCards='';
@@ -6564,8 +6578,9 @@ function renderCapArmazem(){
       var ocupSet=new Set();
       produtos.forEach(function(p){
         if(siteId && p.site!==siteId) return;
-        if(addrMatchesArea(p.endereco,area.sigla))
-          ocupSet.add(String(p.endereco).trim().toUpperCase());
+        if(!addrMatchesArea(p.endereco,area.sigla)) return;
+        var pid=obterIdPaleteUZ(p);
+        if(pid) ocupSet.add(pid);
       });
 
       var atual=ocupSet.size;
@@ -6580,7 +6595,7 @@ function renderCapArmazem(){
       htmlCards+='<button class="btn btn-r btn-xs" onclick="excluirCapArea('+i+')">&#x2715;</button></div>';
       htmlCards+='<div style="display:flex;gap:12px;align-items:baseline;margin-bottom:8px;">';
       htmlCards+='<div><div style="font-size:28px;font-weight:700;font-family:var(--serif);font-style:italic;color:'+cor+';">'+atual+'</div>';
-      htmlCards+='<div style="font-size:9px;color:var(--w40);font-family:var(--mono);">ENDEREÇOS OCUPADOS</div></div>';
+      htmlCards+='<div style="font-size:9px;color:var(--w40);font-family:var(--mono);">PP OCUPADOS · ID_PALETE_UZ</div></div>';
       htmlCards+='<div style="color:var(--w20);font-size:16px;">/</div>';
       htmlCards+='<div><input type="number" min="0" value="'+(lim>0?lim:'')+'" placeholder="∞" onchange="editarLimiteArea('+i+',this.value)" style="width:80px;font-size:24px;font-weight:700;font-family:var(--serif);font-style:italic;color:'+(lim>0?'var(--g2)':'var(--w50)')+';background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:2px 6px;text-align:center;" title="Clique para editar o limite"></div>';
       htmlCards+='<div style="font-size:9px;color:var(--w40);font-family:var(--mono);">LIMITE PP (editável)</div></div>';
@@ -6650,6 +6665,7 @@ function renderDiagPP(){
   });
   html+='</table>';
   html+=`<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);color:var(--w40);font-size:10px;">
+    Regra: <strong style="color:#60a5fa;">1 ID_PALETE_UZ = 1 PP</strong> nas áreas de chão/blocagem ·
     Total produtos c/ estoque: <strong style="color:var(--w);">${prods.length}</strong> ·
     Sem ID_PALETE_UZ real: <strong style="color:${semUZ.length>0?'#f87171':'#4ade80'};">${semUZ.length}</strong> ·
     Sem endereço: <strong style="color:${semEnd.length>0?'#f87171':'#4ade80'};">${semEnd.length}</strong>
@@ -8997,13 +9013,13 @@ function injectDemo(){
 (function(){const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='flex';})();
 // ══════════════════════════════════════════════════════════════
 // YALOG WMS · VERSIONAMENTO CENTRALIZADO
-// Build 004 — PP verticalizado por endereço; CR/PA/RE por ID_PALETE_UZ; capacidade por área.
+// Atualização 005 — Configuração de Área Blocada; CR/PA/RE por ID_PALETE_UZ único; verticalizado por endereço.
 // Atualize SOMENTE estes valores a cada publicação. O refresh da
 // página preserva a sessão autenticada; a versão não é usada como
 // critério de logout.
 // ══════════════════════════════════════════════════════════════
 const YALOG_WMS_VERSION = '2.1.2';
-const YALOG_WMS_BUILD = '003';
+const YALOG_WMS_BUILD = '005';
 const YALOG_WMS_RELEASE = `v${YALOG_WMS_VERSION} Build ${YALOG_WMS_BUILD}`;
 
 function aplicarVersaoWMS(){
