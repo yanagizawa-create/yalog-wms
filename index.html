@@ -9104,14 +9104,14 @@ function injectDemo(){
 (function(){const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='flex';})();
 // ══════════════════════════════════════════════════════════════
 // YALOG WMS · VERSIONAMENTO CENTRALIZADO
-// Atualização 007 — sessão persistente entre refresh/publicação; preserva as Atualizações 005 e 006.
+// Atualização 008 — restauração de sessão local no refresh/publicação; preserva as Atualizações 005, 006 e 007.
 // Atualize SOMENTE estes valores a cada publicação. O refresh da
 // página preserva a sessão autenticada; a versão não é usada como
 // critério de logout.
 // ══════════════════════════════════════════════════════════════
 const YALOG_WMS_VERSION = '2.1.2';
-const YALOG_WMS_BUILD = '007';
-const YALOG_WMS_UPDATE = '007';
+const YALOG_WMS_BUILD = '008';
+const YALOG_WMS_UPDATE = '008';
 const YALOG_WMS_RELEASE = `v${YALOG_WMS_VERSION} Build ${YALOG_WMS_BUILD}`;
 
 function aplicarVersaoWMS(){
@@ -9468,43 +9468,91 @@ async function _tentarSSOHandoffWms(){
 }
 
 async function _tentarRestaurarSessaoWms(){
+  // Atualização 008 — RESTAURAÇÃO LOCAL PRIMEIRO.
+  // O login normal do WMS grava uma sessão local sem module_session_token.
+  // A versão anterior exigia esse token para restaurar a sessão e, por isso,
+  // F5/publicação podia cair na tela de login mesmo com a sessão persistida.
+  // Agora a existência de uma sessão persistida válida é suficiente para
+  // reconstruir o usuário localmente. Se houver module_session_token,
+  // tentamos revalidá-lo primeiro; se não houver, o WMS restaura diretamente
+  // a identidade local. Logout continua sendo o único caminho que remove
+  // explicitamente as duas cópias da sessão.
   const salva=Core.sessionGet(SESSAO_KEY);
-  if(!salva || !salva.module_session_token) return false;
+  if(!salva || !salva.company_id || !salva.login || !salva.role) return false;
 
-  // Publicações no GitHub Pages podem coincidir com um refresh enquanto
-  // o Supabase ainda está inicializando. Não transformar uma falha
-  // transitória de rede em logout. A sessão só cai para o login quando
-  // todas as tentativas de revalidação falharem. A versão/build nunca
-  // invalida a sessão.
-  for(let tentativa=1;tentativa<=3;tentativa++){
-    const identidade=await _validarSessaoModuloYalog(salva.module_session_token);
-    if(identidade){
-      return await _entrarWmsPorIdentidadeSSO(identidade,salva.module_session_token);
-    }
-    if(tentativa<3){
-      await new Promise(r=>setTimeout(r,800*tentativa));
+  // 1) Sessão SSO: se houver token, tenta revalidar no backend.
+  if(salva.module_session_token){
+    for(let tentativa=1;tentativa<=3;tentativa++){
+      const identidade=await _validarSessaoModuloYalog(salva.module_session_token);
+      if(identidade){
+        try{
+          const entrou=await _entrarWmsPorIdentidadeSSO(identidade,salva.module_session_token);
+          if(entrou) return true;
+        }catch(e){
+          console.warn('[WMS SSO] falha ao reidratar sessão SSO; usando sessão local persistida:',e);
+        }
+      }
+      if(tentativa<3) await new Promise(r=>setTimeout(r,800*tentativa));
     }
   }
-  // Atualização 006 — resiliência de sessão:
-  // refresh/publicação não deve transformar uma falha transitória de
-  // validação/rede em logout. A sessão local já validada anteriormente
-  // continua sendo usada para entrar no WMS enquanto o backend não puder
-  // ser consultado. A validação remota continua sendo tentada primeiro.
-  const identidadeLocal = salva && salva.company_id && salva.login && salva.role ? {
-    company_id: salva.company_id,
-    login: salva.login,
-    nome: salva.nome || salva.login,
-    perfil: salva.role
-  } : null;
-  const timestampSessao = Number(salva?.timestamp||0);
-  const janelaResiliencia = 12 * 60 * 60 * 1000;
-  if(identidadeLocal && timestampSessao && (Date.now()-timestampSessao) <= janelaResiliencia){
-    console.warn('[WMS SSO] validação remota indisponível; mantendo sessão local em modo resiliente.');
-    const entrou = await _entrarWmsPorIdentidadeSSO(identidadeLocal, salva.module_session_token);
-    if(entrou) return true;
+
+  // 2) Sessão LOCAL: funciona tanto para login normal quanto para Master.
+  // Reconstrói o perfil usando a mesma convenção do login, sem exigir senha
+  // novamente e sem depender da disponibilidade do Supabase.
+  const perfilBruto=String(salva.role||'').toUpperCase();
+  let perfil='conferente';
+  if(['MASTER'].includes(perfilBruto)) perfil='master';
+  else if(['LIDER','LIDERANCA','LÍDER'].includes(perfilBruto)) perfil='lider';
+  else if(['SUPERVISOR'].includes(perfilBruto)) perfil='supervisor';
+  else if(['ENCARREGADO'].includes(perfilBruto)) perfil='encarregado';
+  else if(['ANALISTA'].includes(perfilBruto)) perfil='analista';
+  else if(['ADMINISTRATIVO'].includes(perfilBruto)) perfil='administrativo';
+  else if(['CONFERENTE'].includes(perfilBruto)) perfil='conferente';
+  else if(['OPERADOR','OPERACIONAL'].includes(perfilBruto)) perfil='operador';
+
+  const usuarioLocalDB=(DB.usuarios||[]).find(u=>
+    String(u.company_id||'')===String(salva.company_id||'') &&
+    String(u.login||'').toLowerCase()===String(salva.login||'').toLowerCase()
+  );
+  const identidadeLocal={
+    id:usuarioLocalDB?.id || (perfil==='master'?'master-':'local-')+salva.company_id+'-'+salva.login,
+    company_id:salva.company_id,
+    login:salva.login,
+    nome:salva.nome || usuarioLocalDB?.nome || salva.login,
+    perfil:perfil,
+    platformRole:salva.role||perfil,
+    ativo:true,
+  };
+
+  usuarioAtual={
+    id:identidadeLocal.id,
+    nome:identidadeLocal.nome,
+    login:identidadeLocal.login,
+    perfil:identidadeLocal.perfil,
+    company_id:identidadeLocal.company_id,
+    platformRole:identidadeLocal.platformRole,
+    ativo:true,
+    _sso:false,
+  };
+  if(salva.module_session_token) usuarioAtual._moduleSessionToken=salva.module_session_token;
+
+  // Renova o timestamp sem alterar os demais dados da sessão.
+  Core.sessionSet(SESSAO_KEY,{...salva,timestamp:Date.now()});
+  document.getElementById('loginOverlay').style.display='none';
+  const senhaEl=document.getElementById('loginSenha'); if(senhaEl) senhaEl.value='';
+  updateUserPill();
+  updateNavByPerfil();
+
+  // A sessão já foi restaurada. A carga/sincronização é complementar e
+  // não pode transformar F5 em logout se houver indisponibilidade remota.
+  try{
+    await _confirmarSessaoCarregada(usuarioAtual);
+  }catch(e){
+    console.warn('[WMS SESSION] sessão restaurada localmente; sincronização pós-refresh indisponível:',e);
   }
-  console.warn('[WMS SSO] sessão não pôde ser restaurada após as tentativas de validação.');
-  return false;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{renderHome();}));
+  console.log('[WMS SESSION] sessão local restaurada após refresh/publicação:',usuarioAtual.login);
+  return true;
 }
 
 // SSO + persistência definitiva da sessão do WMS.
