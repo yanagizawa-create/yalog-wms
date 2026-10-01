@@ -5560,16 +5560,34 @@ const Core = {
   // autenticação via Supabase está explicitamente fora do escopo desta
   // Sprint (ver "NÃO IMPLEMENTAR NESTA SPRINT").
   sessionGet(key) {
-    try { const raw = sessionStorage.getItem(key); return raw ? JSON.parse(raw) : null; }
-    catch(e) { console.warn('[Core.sessionGet] falha ao ler', key, e); return null; }
+    try {
+      const rawSession = sessionStorage.getItem(key);
+      if(rawSession) return JSON.parse(rawSession);
+      if(key===SESSAO_KEY){
+        const rawPersist = localStorage.getItem(SESSAO_PERSIST_KEY);
+        if(rawPersist){
+          const parsed=JSON.parse(rawPersist);
+          try{ sessionStorage.setItem(key, JSON.stringify(parsed)); }catch(e){}
+          return parsed;
+        }
+      }
+      return null;
+    } catch(e) { console.warn('[Core.sessionGet] falha ao ler', key, e); return null; }
   },
   sessionSet(key, value) {
-    try { sessionStorage.setItem(key, JSON.stringify(value)); return true; }
-    catch(e) { console.warn('[Core.sessionSet] falha ao gravar', key, e); return false; }
+    try {
+      const raw=JSON.stringify(value);
+      sessionStorage.setItem(key, raw);
+      if(key===SESSAO_KEY) localStorage.setItem(SESSAO_PERSIST_KEY, raw);
+      return true;
+    } catch(e) { console.warn('[Core.sessionSet] falha ao gravar', key, e); return false; }
   },
   sessionRemove(key) {
-    try { sessionStorage.removeItem(key); return true; }
-    catch(e) { console.warn('[Core.sessionRemove] falha ao remover', key, e); return false; }
+    try {
+      sessionStorage.removeItem(key);
+      if(key===SESSAO_KEY) localStorage.removeItem(SESSAO_PERSIST_KEY);
+      return true;
+    } catch(e) { console.warn('[Core.sessionRemove] falha ao remover', key, e); return false; }
   },
   // ── SMART SYNC (SPRINT SUPA-003) — único ponto de acesso externo ──
   sincronizarAgora() { return SmartSyncManager.manual(); },
@@ -5583,6 +5601,10 @@ ConnectionMonitor.iniciar();
 // Chave da sessão do usuário logado — centralizada aqui (item 8:
 // padronização de constantes). Antes era um literal repetido em 6 pontos.
 const SESSAO_KEY = 'wms_user_v2026';
+// Atualização 007 — sessão persistente entre F5/publicação.
+// Mantém sessionStorage por compatibilidade e uma cópia persistente para
+// recuperar a sessão após refresh/publicação. Logout remove ambas.
+const SESSAO_PERSIST_KEY = 'wms_user_v2026_persist';
 
 // SPRINT YALOG-SUPA-HOTFIX-001: removido o antigo "MODO DUAL" (_SERVER_MODE).
 // O WMS agora é oficialmente "Supabase First" — toda persistência passa
@@ -9082,14 +9104,14 @@ function injectDemo(){
 (function(){const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='flex';})();
 // ══════════════════════════════════════════════════════════════
 // YALOG WMS · VERSIONAMENTO CENTRALIZADO
-// Atualização 006 — resiliência de sessão e proteção de dados; preserva a Atualização 005 de área blocada.
+// Atualização 007 — sessão persistente entre refresh/publicação; preserva as Atualizações 005 e 006.
 // Atualize SOMENTE estes valores a cada publicação. O refresh da
 // página preserva a sessão autenticada; a versão não é usada como
 // critério de logout.
 // ══════════════════════════════════════════════════════════════
 const YALOG_WMS_VERSION = '2.1.2';
-const YALOG_WMS_BUILD = '006';
-const YALOG_WMS_UPDATE = '006';
+const YALOG_WMS_BUILD = '007';
+const YALOG_WMS_UPDATE = '007';
 const YALOG_WMS_RELEASE = `v${YALOG_WMS_VERSION} Build ${YALOG_WMS_BUILD}`;
 
 function aplicarVersaoWMS(){
