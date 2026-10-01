@@ -537,7 +537,7 @@ a{color:inherit;text-decoration:none;}
     <div class="nav-grp">Conta</div>
     <div class="ni" onclick="go('minhaConta')"><span class="ni-ic"><i data-lucide="user-cog"></i></span> Minha Conta</div>
   </nav>
-  <div class="sb-foot">WMS • <span data-wms-version>v2.1.2 Build 005</span><br>YALOG-WMS-001 • <span data-wms-version>v2.1.2 Build 005</span></div>
+  <div class="sb-foot">WMS • <span data-wms-version>v2.1.2 Build 006</span><br>YALOG-WMS-001 • <span data-wms-version>v2.1.2 Build 006</span><br><span data-wms-update style="color:var(--orange2);">Atualização 006</span></div>
 </aside>
 
 <!-- ══ MAIN ══ -->
@@ -4740,6 +4740,40 @@ function _dividirEmLotes(lista, tamanho) {
    local ↔ StorageProvider, versão de cache, checksum e conflitos.
    ═══════════════════════════════════════ */
 const CACHE_META_KEY = 'wms_cache_meta';
+const DB_GUARD_SNAPSHOT_KEY = 'wms_db_guard_snapshot_v1';
+
+// Atualização 006 — proteção contra sobrescrita destrutiva do estoque.
+// O DB operacional é um blob único. Uma resposta remota vazia/corrompida
+// nunca pode substituir silenciosamente um DB local que possui operação.
+// A única exceção para uma zeragem total é a ação explícita de "Limpar
+// Estoque" do Master, que grava _estoqueLimpoEm antes de sincronizar.
+function _dbTemOperacao(d){
+  if(!d || typeof d!=='object') return false;
+  const campos=['produtos','movimentos','paletes','tarefasRec','tarefasSep','inventarios'];
+  return campos.some(k=>Array.isArray(d[k]) && d[k].length>0);
+}
+function _dbEhZeragemTotal(d){
+  if(!d || typeof d!=='object') return false;
+  const campos=['produtos','movimentos','paletes','tarefasRec','tarefasSep','inventarios'];
+  return campos.every(k=>Array.isArray(d[k]) && d[k].length===0);
+}
+function _salvarSnapshotGuard(d){
+  try{
+    if(!_dbTemOperacao(d)) return;
+    LocalStorageProvider.set(DB_GUARD_SNAPSHOT_KEY,{data:new Date().toISOString(),db:d});
+  }catch(e){ console.warn('[WMS DATA GUARD] não foi possível salvar snapshot de proteção:',e); }
+}
+function _restaurarSnapshotGuardSeNecessario(){
+  try{
+    if(!_dbEhZeragemTotal(DB) || DB._estoqueLimpoEm) return false;
+    const guard=LocalStorageProvider.get(DB_GUARD_SNAPSHOT_KEY);
+    if(!_dbTemOperacao(guard?.db)) return false;
+    DB={...DB,...guard.db};
+    console.warn('[WMS DATA GUARD] snapshot operacional restaurado após detectar DB vazio sem Limpar Estoque Master.');
+    return true;
+  }catch(e){ console.warn('[WMS DATA GUARD] falha na restauração do snapshot:',e); return false; }
+}
+
 const CacheManager = {
   _meta() {
     return LocalStorageProvider.get(CACHE_META_KEY) || { versao: CoreConfig.cacheVersion, ultimaSincronizacao: null, checksums: {} };
@@ -4787,6 +4821,23 @@ const CacheManager = {
       // intencionalmente mais recente que qualquer coisa vinda da nuvem
       // nesta sincronização — não a sobrescreve (evita perder edição local).
       const pendenteLocal = SyncQueue._pendentes.has(row.key);
+
+      // PROTEÇÃO CRÍTICA — nunca aceitar uma zeragem total remota sobre
+      // uma operação local existente, salvo quando a zeragem foi produzida
+      // pela função oficial de Limpar Estoque (Master).
+      if(row.key===DBKEY && remotoEhMaisNovo && !pendenteLocal){
+        const localDb=LocalStorageProvider.get(DBKEY);
+        const remotoDb=row.value;
+        if(_dbTemOperacao(localDb)) _salvarSnapshotGuard(localDb);
+        const seriaZeragemDestrutiva=_dbTemOperacao(localDb) && _dbEhZeragemTotal(remotoDb);
+        const limpezaMasterExplicitamenteRegistrada=!!(remotoDb && remotoDb._estoqueLimpoEm);
+        if(seriaZeragemDestrutiva && !limpezaMasterExplicitamenteRegistrada){
+          console.warn('[WMS DATA GUARD] sincronização remota rejeitada: DB operacional remoto zerado sem marca de Limpar Estoque Master. Dados locais preservados.');
+          SyncLogger.registrar({operacao:'sync-guard',provider:'supabase',resultado:'ignorado',erro:'zeragem remota não autorizada',quantidade:1});
+          return;
+        }
+      }
+
       if (remotoEhMaisNovo && !pendenteLocal) {
         LocalStorageProvider.set(row.key, row.value);
         meta.checksums[row.key] = { checksum: _checksum(JSON.stringify(row.value)), atualizadoEm: row.updated_at };
@@ -5656,7 +5707,20 @@ const YALOG_MODO_CONSULTA_RESERVADO = false;
 const YALOG_LOGIN_INTELIGENTE_RESERVADO = false;
 
 function save(){
-  Core.set(DBKEY, DB);
+  // Atualização 006 — nunca grava uma zeragem total silenciosa.
+  // A exclusão total só é válida quando marcada pela rotina Master
+  // "Limpar Estoque". Isso impede que um refresh/sync com cache vazio
+  // replique uma perda de dados para o Supabase.
+  if(_dbEhZeragemTotal(DB) && !DB._estoqueLimpoEm){
+    const guard=LocalStorageProvider.get(DB_GUARD_SNAPSHOT_KEY);
+    if(_dbTemOperacao(guard?.db)){
+      console.warn('[WMS DATA GUARD] save() bloqueado: DB operacional vazio sem autorização de Limpar Estoque. Snapshot preservado.');
+      return false;
+    }
+  }
+  const ok=Core.set(DBKEY, DB);
+  if(ok!==false && _dbTemOperacao(DB)) _salvarSnapshotGuard(DB);
+  return ok;
 }
 function _applyLoadedData(parsed){
   if(parsed && Object.keys(parsed).length > 0){
@@ -5886,6 +5950,11 @@ async function load(){
     _applyLoadedData(d);
   } else {
     _applyLoadedData({});
+  }
+  // Atualização 006 — recuperação automática do último snapshot operacional
+  // se um cache vazio aparecer sem ter sido produzido por Limpar Estoque.
+  if(_restaurarSnapshotGuardSeNecessario()){
+    save();
   }
 }
 
@@ -9013,19 +9082,21 @@ function injectDemo(){
 (function(){const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='flex';})();
 // ══════════════════════════════════════════════════════════════
 // YALOG WMS · VERSIONAMENTO CENTRALIZADO
-// Atualização 005 — Configuração de Área Blocada; CR/PA/RE por ID_PALETE_UZ único; verticalizado por endereço.
+// Atualização 006 — resiliência de sessão e proteção de dados; preserva a Atualização 005 de área blocada.
 // Atualize SOMENTE estes valores a cada publicação. O refresh da
 // página preserva a sessão autenticada; a versão não é usada como
 // critério de logout.
 // ══════════════════════════════════════════════════════════════
 const YALOG_WMS_VERSION = '2.1.2';
-const YALOG_WMS_BUILD = '005';
+const YALOG_WMS_BUILD = '006';
+const YALOG_WMS_UPDATE = '006';
 const YALOG_WMS_RELEASE = `v${YALOG_WMS_VERSION} Build ${YALOG_WMS_BUILD}`;
 
 function aplicarVersaoWMS(){
   try{
     document.title = `WMS · v${YALOG_WMS_VERSION}`;
     document.querySelectorAll('[data-wms-version]').forEach(el=>el.textContent=YALOG_WMS_RELEASE);
+    document.querySelectorAll('[data-wms-update]').forEach(el=>el.textContent=`Atualização ${YALOG_WMS_UPDATE}`);
   }catch(e){}
 }
 
@@ -9392,7 +9463,25 @@ async function _tentarRestaurarSessaoWms(){
       await new Promise(r=>setTimeout(r,800*tentativa));
     }
   }
-  console.warn('[WMS SSO] não foi possível restaurar a sessão após 3 tentativas; somente então o login manual será exibido.');
+  // Atualização 006 — resiliência de sessão:
+  // refresh/publicação não deve transformar uma falha transitória de
+  // validação/rede em logout. A sessão local já validada anteriormente
+  // continua sendo usada para entrar no WMS enquanto o backend não puder
+  // ser consultado. A validação remota continua sendo tentada primeiro.
+  const identidadeLocal = salva && salva.company_id && salva.login && salva.role ? {
+    company_id: salva.company_id,
+    login: salva.login,
+    nome: salva.nome || salva.login,
+    perfil: salva.role
+  } : null;
+  const timestampSessao = Number(salva?.timestamp||0);
+  const janelaResiliencia = 12 * 60 * 60 * 1000;
+  if(identidadeLocal && timestampSessao && (Date.now()-timestampSessao) <= janelaResiliencia){
+    console.warn('[WMS SSO] validação remota indisponível; mantendo sessão local em modo resiliente.');
+    const entrou = await _entrarWmsPorIdentidadeSSO(identidadeLocal, salva.module_session_token);
+    if(entrou) return true;
+  }
+  console.warn('[WMS SSO] sessão não pôde ser restaurada após as tentativas de validação.');
   return false;
 }
 
@@ -12782,6 +12871,8 @@ async function limparGeralConfirmar(){
   exportarEstoqueXLS('geral');
   setTimeout(()=>{
     DB.produtos=[];DB.movimentos=[];DB.paletes=[];DB.tarefasRec=[];DB.tarefasSep=[];DB.inventarios=[];
+    DB._estoqueLimpoEm=now();
+    DB._estoqueLimpoPor=usuarioAtual?.nome||'Master';
     DB.seqWMS=1;DB.seqRec=1;DB.seqSep=1;DB.seqInv=1;
     // Libera todos endereços (exceto os bloqueados manualmente ou reservados)
     DB.enderecos.forEach(e=>{if(!e.bloqueioManual&&!e.reservado)e.status='livre';});
