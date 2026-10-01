@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="yalog-wms-version" content="2.1.0">
-<title>WMS · v2.1.0</title>
+<meta name="yalog-wms-version" content="2.1.2">
+<title>WMS · v2.1.2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,500;0,600;0,700;0,800;1,600;1,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -537,7 +537,7 @@ a{color:inherit;text-decoration:none;}
     <div class="nav-grp">Conta</div>
     <div class="ni" onclick="go('minhaConta')"><span class="ni-ic"><i data-lucide="user-cog"></i></span> Minha Conta</div>
   </nav>
-  <div class="sb-foot">WMS • <span data-wms-version>v2.1.0 Build 002</span><br>YALOG-WMS-001 • <span data-wms-version>v2.1.0 Build 002</span></div>
+  <div class="sb-foot">WMS • <span data-wms-version>v2.1.2 Build 004</span><br>YALOG-WMS-001 • <span data-wms-version>v2.1.2 Build 004</span></div>
 </aside>
 
 <!-- ══ MAIN ══ -->
@@ -3221,7 +3221,7 @@ a{color:inherit;text-decoration:none;}
     </div>
     <div class="login-sub" style="margin-bottom:6px;">PRIMEIRO ACESSO · CONFIGURAÇÃO INICIAL</div>
     <div style="background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.25);padding:12px 14px;margin-bottom:20px;font-size:11px;color:var(--w70);line-height:1.6;">
-      Bem-vindo ao <strong style="color:var(--orange2);">WMS · v2.1.0</strong>! Configure agora o seu <strong style="color:var(--orange2);">usuário Master</strong> — o administrador principal do sistema. Ele poderá criar usuários, aprovar ajustes e ter controle total da operação.
+      Bem-vindo ao <strong style="color:var(--orange2);">WMS · v2.1.2</strong>! Configure agora o seu <strong style="color:var(--orange2);">usuário Master</strong> — o administrador principal do sistema. Ele poderá criar usuários, aprovar ajustes e ter controle total da operação.
     </div>
     <div class="fg" style="margin-bottom:12px;">
       <label>Nome Completo do Administrador <span class="req">*</span></label>
@@ -6527,72 +6527,85 @@ function downloadTemplatePP(){
 
 function renderCapArmazem(){
   try{
-  if(!DB.capacidadeArmazem) DB.capacidadeArmazem=[];
-  [{sigla:'RE',descricao:'Recebimento'},{sigla:'CR',descricao:'Corredores'},{sigla:'PA',descricao:'Pátio'}]
-    .forEach(function(a){
-      if(!DB.capacidadeArmazem.find(function(x){return x.sigla===a.sigla&&!x.siteId;}))
-        DB.capacidadeArmazem.push({sigla:a.sigla,descricao:a.descricao,limite:0,siteId:''});
-    });
-  var sel=document.getElementById('cap_site');
-  if(sel){
-    var curSite=sel.value;
-    var opts='<option value="">Todas as Unidades</option>';
-    (DB.sites||[]).forEach(function(s){opts+='<option value="'+s.id+'">'+s.nome+'</option>';});
-    sel.innerHTML=opts; sel.value=curSite;
-  }
-  // Conta por ID_PALETE_UZ único (paleteId) por área — 1 ID = 1 PP
-  var areaMap={};
-  (DB.produtos||[]).forEach(function(p){
-    if(!(parseFloat(p.qtd)||0)||!p.endereco) return;
-    var addr=(p.endereco||'').toUpperCase();
-    if(addr.startsWith('RUA')) return;
-    var prefix=addr.split('-')[0]||'SEM_END';
-    var pid=p.paleteId||p.endereco||p.wmsId||'';
-    if(!areaMap[prefix]) areaMap[prefix]=new Set();
-    areaMap[prefix].add(pid); // ID_PALETE_UZ único = 1 PP
-  });
-  var ruaSet=new Set();
-  (DB.produtos||[]).forEach(function(p){
-    if((parseFloat(p.qtd)||0)>0&&p.endereco&&(p.endereco||'').toUpperCase().startsWith('RUA'))
-      ruaSet.add(p.paleteId||p.endereco||p.wmsId||''); // ID_PALETE_UZ único RUA = 1 PP
-  });
-  var cont=document.getElementById('capBlocagemCards');
-  if(!cont) return;
-  var html='';
-  DB.capacidadeArmazem.forEach(function(area,i){
-    var atual=0;
-    Object.keys(areaMap).forEach(function(k){
-      if(k===area.sigla||k.indexOf(area.sigla+'-')===0) atual+=areaMap[k].size;
-    });
-    var lim=parseInt(area.limite)||0;
-    var pct=lim>0?Math.min(100,Math.round(atual/lim*100)):-1;
-    var cor=pct<0?'var(--w40)':pct>=90?'#f87171':pct>=70?'#fbbf24':'#4ade80';
-    html+='<div style="background:var(--bg2);border:1px solid var(--border);padding:14px;border-radius:2px;">';
-    html+='<div style="display:flex;justify-content:space-between;margin-bottom:8px;">';
-    html+='<div><div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--orange2);">'+area.sigla+'</div>';
-    html+='<div style="font-size:11px;color:var(--w60);">'+area.descricao+'</div></div>';
-    html+='<button class="btn btn-r btn-xs" onclick="excluirCapArea('+i+')">&#x2715;</button></div>';
-    html+='<div style="display:flex;gap:12px;align-items:baseline;margin-bottom:8px;">';
-    html+='<div><div style="font-size:28px;font-weight:700;font-family:var(--serif);font-style:italic;color:'+cor+';">'+atual+'</div>';
-    html+='<div style="font-size:9px;color:var(--w40);font-family:var(--mono);">OCUPADO</div></div>';
-    html+='<div style="color:var(--w20);font-size:16px;">/</div>';
-    html+='<div><input type="number" min="0" value="'+(lim>0?lim:'')+'" placeholder="&infin;" onchange="editarLimiteArea('+i+',this.value)" style="width:80px;font-size:24px;font-weight:700;font-family:var(--serif);font-style:italic;color:'+(lim>0?'var(--g2)':'var(--w50)')+';background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:2px 6px;text-align:center;" title="Clique para editar o limite"></div>';
-    html+='<div style="font-size:9px;color:var(--w40);font-family:var(--mono);">LIMITE PP (editável)</div></div>';
-    if(pct>=0) html+='<div style="margin-left:auto;"><div style="font-size:22px;font-weight:700;color:'+cor+';font-family:var(--mono);">'+pct+'%</div><div style="font-size:9px;color:var(--w40);">USO</div></div>';
-    html+='</div>';
-    if(pct>=0) html+='<div style="height:4px;background:var(--border);border-radius:2px;"><div style="height:100%;width:'+pct+'%;background:'+cor+';border-radius:2px;"></div></div>';
-    else html+='<div style="font-size:9px;color:var(--w30);font-family:var(--mono);">Cadastre o limite para ver %</div>';
-    html+='</div>';
-  });
-  cont.innerHTML=html||'<div style="color:var(--w40);padding:14px;font-size:11px;">Use o formulário abaixo.</div>';
-  var ruaEl=document.getElementById('capRuaResumo');
-  if(ruaEl){
-    var ruaEnds=(DB.enderecos||[]).filter(function(e){return(e.addr||'').toUpperCase().startsWith('RUA');}).length;
-    ruaEl.innerHTML='<span style="font-size:28px;font-family:var(--serif);font-style:italic;color:#60a5fa;">'+ruaSet.size+'</span>'
-      +'<span style="font-size:10px;color:var(--w40);font-family:var(--mono);margin-left:8px;">PP ocupados em RUA / '+ruaEnds+' endereços cadastrados</span>';
-  }
-  try{renderDiagPP();}catch(e){}
+    if(!DB.capacidadeArmazem) DB.capacidadeArmazem=[];
+    [{sigla:'RE',descricao:'Recebimento'},{sigla:'CR',descricao:'Corredores'},{sigla:'PA',descricao:'Pátio'}]
+      .forEach(function(a){
+        if(!DB.capacidadeArmazem.find(function(x){return x.sigla===a.sigla&&!x.siteId;}))
+          DB.capacidadeArmazem.push({sigla:a.sigla,descricao:a.descricao,limite:0,siteId:''});
+      });
 
+    var sel=document.getElementById('cap_site');
+    if(sel){
+      var curSite=sel.value;
+      var opts='<option value="">Todas as Unidades</option>';
+      (DB.sites||[]).forEach(function(s){opts+='<option value="'+s.id+'">'+s.nome+'</option>';});
+      sel.innerHTML=opts; sel.value=curSite;
+    }
+
+    // Conta 1 PP por endereço físico ocupado. A área cadastrada pode ser
+    // específica (ex.: CR-RUA 11) ou genérica (CR), sem perder o vínculo.
+    var produtos=(DB.produtos||[]).filter(function(p){
+      return (parseFloat(p.qtd)||0)>0 && p.endereco;
+    });
+
+    function addrMatchesArea(addr,sigla){
+      var a=String(addr||'').trim().toUpperCase();
+      var s=String(sigla||'').trim().toUpperCase();
+      if(!a||!s) return false;
+      return a===s || a.startsWith(s+'-') || a.startsWith(s+'.') || a.startsWith(s+' ');
+    }
+
+    var cont=document.getElementById('capBlocagemCards');
+    if(!cont) return;
+    var htmlCards='';
+
+    DB.capacidadeArmazem.forEach(function(area,i){
+      var siteId=area.siteId||'';
+      var ocupSet=new Set();
+      produtos.forEach(function(p){
+        if(siteId && p.site!==siteId) return;
+        if(addrMatchesArea(p.endereco,area.sigla))
+          ocupSet.add(String(p.endereco).trim().toUpperCase());
+      });
+
+      var atual=ocupSet.size;
+      var lim=parseInt(area.limite)||0;
+      var pct=lim>0?Math.min(100,Math.round(atual/lim*100)):-1;
+      var cor=pct<0?'var(--w40)':pct>=90?'#f87171':pct>=70?'#fbbf24':'#4ade80';
+
+      htmlCards+='<div style="background:var(--bg2);border:1px solid var(--border);padding:14px;border-radius:2px;">';
+      htmlCards+='<div style="display:flex;justify-content:space-between;margin-bottom:8px;">';
+      htmlCards+='<div><div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--orange2);">'+area.sigla+'</div>';
+      htmlCards+='<div style="font-size:11px;color:var(--w60);">'+(area.descricao||area.sigla)+'</div></div>';
+      htmlCards+='<button class="btn btn-r btn-xs" onclick="excluirCapArea('+i+')">&#x2715;</button></div>';
+      htmlCards+='<div style="display:flex;gap:12px;align-items:baseline;margin-bottom:8px;">';
+      htmlCards+='<div><div style="font-size:28px;font-weight:700;font-family:var(--serif);font-style:italic;color:'+cor+';">'+atual+'</div>';
+      htmlCards+='<div style="font-size:9px;color:var(--w40);font-family:var(--mono);">ENDEREÇOS OCUPADOS</div></div>';
+      htmlCards+='<div style="color:var(--w20);font-size:16px;">/</div>';
+      htmlCards+='<div><input type="number" min="0" value="'+(lim>0?lim:'')+'" placeholder="∞" onchange="editarLimiteArea('+i+',this.value)" style="width:80px;font-size:24px;font-weight:700;font-family:var(--serif);font-style:italic;color:'+(lim>0?'var(--g2)':'var(--w50)')+';background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:2px 6px;text-align:center;" title="Clique para editar o limite"></div>';
+      htmlCards+='<div style="font-size:9px;color:var(--w40);font-family:var(--mono);">LIMITE PP (editável)</div></div>';
+      if(pct>=0) htmlCards+='<div style="margin-left:auto;"><div style="font-size:22px;font-weight:700;color:'+cor+';font-family:var(--mono);">'+pct+'%</div><div style="font-size:9px;color:var(--w40);">USO</div></div>';
+      else htmlCards+='<div style="margin-left:auto;font-size:9px;color:var(--w40);font-family:var(--mono);">SEM LIMITE</div>';
+      htmlCards+='</div>';
+      if(pct>=0) htmlCards+='<div style="height:4px;background:var(--border);border-radius:2px;"><div style="height:100%;width:'+pct+'%;background:'+cor+';border-radius:2px;"></div></div>';
+      else htmlCards+='<div style="font-size:9px;color:var(--w30);font-family:var(--mono);">Cadastre o limite para ver %</div>';
+      htmlCards+='</div>';
+    });
+
+    cont.innerHTML=htmlCards||'<div style="color:var(--w40);padding:14px;font-size:11px;">Use o formulário abaixo.</div>';
+
+    var ruaEl=document.getElementById('capRuaResumo');
+    if(ruaEl){
+      var ruaEnds=(DB.enderecos||[]).filter(function(e){return /^\d/.test(String(e.addr||'').trim().toUpperCase());}).length;
+      var ruaOcup=new Set();
+      (DB.produtos||[]).forEach(function(p){
+        if((parseFloat(p.qtd)||0)>0 && /^\d/.test(String(p.endereco||'').trim().toUpperCase()))
+          ruaOcup.add(String(p.endereco).trim().toUpperCase());
+      });
+      ruaEl.innerHTML='<span style="font-size:28px;font-family:var(--serif);font-style:italic;color:#60a5fa;">'+ruaOcup.size+'</span>'
+        +'<span style="font-size:10px;color:var(--w40);font-family:var(--mono);margin-left:8px;">PP/end. ocupados em RUA / '+ruaEnds+' endereços cadastrados</span>';
+    }
+    try{renderDiagPP();}catch(e){}
   }catch(e){
     console.error('renderCapArmazem ERRO:',e);
     var c=document.getElementById('capBlocagemCards');
@@ -6687,22 +6700,37 @@ function excluirCapArea(idx){
 
 // Verifica limite antes de alocar produto (chamado na armazenagem e otimização)
 function verificarLimiteArea(enderecoAlvo){
-  if(!DB.capacidadeArmazem?.length) return {ok:true};
-  const prefixo=(enderecoAlvo||'').toUpperCase().split('-')[0];
-  const capArea=DB.capacidadeArmazem.find(a=>a.sigla===prefixo);
-  if(!capArea||!capArea.limite) return {ok:true};
-  const atual=(DB.produtos||[]).filter(p=>{
-    if(!(parseFloat(p.qtd)||0)) return false;
-    const areaP=(p.endereco||'').toUpperCase().split('-')[0];
-    return areaP===prefixo||areaP.startsWith(prefixo+'-');
-  }).length;
-  return {
-    ok: atual < capArea.limite,
-    atual, limite: capArea.limite,
-    pct: Math.round(atual/capArea.limite*100),
-    sigla: prefixo,
-    msg: `Área ${prefixo} em ${Math.round(atual/capArea.limite*100)}% da capacidade (${atual}/${capArea.limite} PP)`
-  };
+  if(!DB.capacidadeArmazem?.length)return {ok:true};
+  const addr=String(enderecoAlvo||'').trim().toUpperCase();
+  const caps=(DB.capacidadeArmazem||[]).filter(a=>{
+    const sig=String(a.sigla||'').trim().toUpperCase();
+    return addr===sig||addr.startsWith(sig+'-')||addr.startsWith(sig+'.')||addr.startsWith(sig+' ');
+  }).sort((a,b)=>String(b.sigla||'').length-String(a.sigla||'').length);
+  const capArea=caps[0];
+  if(!capArea||!capArea.limite)return {ok:true};
+  const sig=String(capArea.sigla||'').trim().toUpperCase();
+  const isChao=/^(CR|PA|RE)(?:[-. ]|$)/.test(sig);
+  let atual=0;
+  if(isChao){
+    const ids=new Set();
+    (DB.produtos||[]).forEach(p=>{
+      if(!(parseFloat(p.qtd)||0))return;
+      const a=String(p.endereco||'').trim().toUpperCase();
+      if(!(a===sig||a.startsWith(sig+'-')||a.startsWith(sig+'.')||a.startsWith(sig+' ')))return;
+      const pid=String(p.paleteId||p.wmsId||'').trim();
+      if(pid)ids.add(pid);
+    });
+    atual=ids.size;
+  }else{
+    const addrs=new Set();
+    (DB.produtos||[]).forEach(p=>{
+      if(!(parseFloat(p.qtd)||0))return;
+      const a=String(p.endereco||'').trim().toUpperCase();
+      if(a===sig||a.startsWith(sig+'-')||a.startsWith(sig+'.')||a.startsWith(sig+' '))addrs.add(a);
+    });
+    atual=addrs.size;
+  }
+  return {ok:atual<capArea.limite,atual,limite:capArea.limite,pct:Math.round(atual/capArea.limite*100),sigla:sig,msg:`Área ${sig} em ${Math.round(atual/capArea.limite*100)}% da capacidade (${atual}/${capArea.limite} PP)`};
 }
 
 function renderHome(){
@@ -6736,29 +6764,33 @@ function renderHome(){
   const expPend=DB.tarefasSep.filter(t=>t.status==='CONCLUIDO').length;
   const palAguard=(DB.paletes||[]).filter(p=>p.status==='aguardando').length;
 
-  // ── PP por paleteId único — regra definitiva ─────────────────
-  // VERTICALIZADO = qualquer endereço RUA (independente de nível)
-  // CHÃO/BLOCAGEM = qualquer endereço não-RUA (RE, CR, PA, PV, etc.)
-  // PP = ID_PALETE_UZ único (quando disponível) ou endereço único como fallback
-  // Produtos com mesmo paleteId = mesmo palete físico (misto = 1 PP)
-  // PP = ID_PALETE_UZ único (paleteId real) quando disponível
-  // Se não houver ID_PALETE_UZ, usa paleteId gerado ('PAL-CARGA-WMS-X') — cada linha = 1 PP
-  const _palVertSet=new Set();
-  const _palChaoSet=new Set();
-  prods.forEach(p=>{
+  // ── OCUPAÇÃO FÍSICA / PP ─────────────────────────────────────
+  // VERTICALIZADO = 1 PP por endereço físico ocupado iniciado por número.
+  // CR / PA / RE (blocagem/chão) = 1 PP por ID_PALETE_UZ único com estoque.
+  // O mesmo ID_PALETE_UZ em várias linhas/SKUs continua representando 1 PP.
+  // EXP é área operacional de expedição e não entra no verticalizado/chão.
+  const _addrOcupSet=new Set(), _addrVertSet=new Set(), _addrExpSet=new Set();
+  const _chaoPidPorArea={CR:new Set(),PA:new Set(),RE:new Set()};
+  const _chaoPidFallbackPorArea={CR:new Set(),PA:new Set(),RE:new Set()};
+  prods.forEach((p,i)=>{
     if(!(parseFloat(p.qtd)||0)) return;
-    // paleteId real (ID_PALETE_UZ) se não for o auto-gerado; senão usa o próprio paleteId
-    const pid=p.paleteId||p.endereco||p.wmsId||'';
-    if(!pid) return;
-    const addr=(p.endereco||'').toUpperCase();
-    if(addr.startsWith('RUA'))
-      _palVertSet.add(pid);
-    else
-      _palChaoSet.add(pid);
+    const addr=String(p.endereco||'').trim().toUpperCase();
+    if(!addr) return;
+    _addrOcupSet.add(addr);
+    if(/^\d/.test(addr)){_addrVertSet.add(addr);return;}
+    if(addr.startsWith('EXP')){_addrExpSet.add(addr);return;}
+    const m=addr.match(/^(CR|PA|RE)(?:[-. ]|$)/);
+    if(!m)return;
+    const area=m[1];
+    const pid=String(p.paleteId||'').trim();
+    if(pid)_chaoPidPorArea[area].add(pid);
+    else _chaoPidFallbackPorArea[area].add(String(p.wmsId||`SEM-ID-${area}-${i}`));
   });
-  const ppVert=_palVertSet.size;
-  const ppChao=_palChaoSet.size;
-  const ppTotal=ppVert+ppChao;
+  const ppVert=_addrVertSet.size;
+  const ppChao=Object.values(_chaoPidPorArea).reduce((n,set)=>n+set.size,0)
+    +Object.values(_chaoPidFallbackPorArea).reduce((n,set)=>n+set.size,0);
+  const ppExp=_addrExpSet.size;
+  const ppTotalOcupados=_addrOcupSet.size;
 
   const ppCalc=calcTotalPPEstoque(prods);
   const ppFechado=ppCalc.fechados;
@@ -6768,9 +6800,9 @@ function renderHome(){
   document.getElementById('homeKpis').innerHTML=`
     <div class="kc"><span class="ki"><i data-lucide="package"></i></span><div class="kv">${fN(totalQtd)}</div><div class="kl">Unidades em Estoque</div></div>
     <div class="kc kte"><span class="ki"><i data-lucide="dollar-sign"></i></span><div class="kv" style="font-size:18px;">R$&nbsp;${fM(totalVal)}</div><div class="kl">Valor Total Estoque</div></div>
-    <div class="kc" style="border-left:2px solid #60a5fa;"><span class="ki"><i data-lucide="ruler"></i></span><div class="kv" style="color:#60a5fa;">${ppVert}</div><div class="kl">PP Verticalizado<br><span style="font-size:9px;font-family:var(--mono);color:var(--w40);">RUA (todos os níveis)</span></div></div>
-    <div class="kc" style="border-left:2px solid #f59e0b;"><span class="ki"><i data-lucide="square"></i></span><div class="kv" style="color:#f59e0b;">${ppChao}</div><div class="kl">PP Blocagem/Chão<br><span style="font-size:9px;font-family:var(--mono);color:var(--w40);">RE · CR · PA · RUA tér</span></div></div>
-    <div class="kc" style="border-left:2px solid #a78bfa;"><span class="ki"><i data-lucide="layout-grid"></i></span><div class="kv" style="color:#a78bfa;">${ppTotal}</div><div class="kl">PP Total Armazém</div></div>
+    <div class="kc" style="border-left:2px solid #60a5fa;"><span class="ki"><i data-lucide="ruler"></i></span><div class="kv" style="color:#60a5fa;">${ppVert}</div><div class="kl">PP Verticalizado<br><span style="font-size:9px;font-family:var(--mono);color:var(--w40);">endereços ocupados · início numérico</span></div></div>
+    <div class="kc" style="border-left:2px solid #f59e0b;"><span class="ki"><i data-lucide="square"></i></span><div class="kv" style="color:#f59e0b;">${ppChao}</div><div class="kl">PP Blocagem/Chão<br><span style="font-size:9px;font-family:var(--mono);color:var(--w40);">RE · CR · PA · ID_PALETE_UZ único</span></div></div>
+    <div class="kc" style="border-left:2px solid #a78bfa;"><span class="ki"><i data-lucide="layout-grid"></i></span><div class="kv" style="color:#a78bfa;">${ppTotalOcupados}</div><div class="kl">PP Ocupados no Armazém<br><span style="font-size:9px;font-family:var(--mono);color:var(--w40);">endereços físicos únicos</span></div></div>
     <div class="kc" style="border-left:2px solid #34d399;"><span class="ki"><i data-lucide="book-open"></i></span><div class="kv" style="color:#34d399;">${ppFechado}</div><div class="kl">Paletes Fechados</div></div>
     <div class="kc" style="border-left:2px solid #60a5fa;"><span class="ki"><i data-lucide="book-open"></i></span><div class="kv" style="color:#60a5fa;">${ppMisto}</div><div class="kl">Paletes Mistos</div></div>
     <div class="kc kam"><span class="ki"><i data-lucide="check-square"></i></span><div class="kv am">${recPend}</div><div class="kl">Conf. Pendentes</div></div>
@@ -6804,22 +6836,30 @@ function renderHome(){
   const blocEnd   = endBase.filter(e=>e.status==='bloqueado').length;
   const pctOcup=totalEnd?Math.round((ocupEnd+blocEnd)/totalEnd*100):0;  // inclui bloqueados
   const capColor=pctOcup>=90?'#f87171':pctOcup>=70?'#fbbf24':'#4ade80';
-  // Endereços RUA (verticalizado) e capacidade blocagem
-  const totalRuaEnd=endBase.filter(e=>(e.addr||'').toUpperCase().startsWith('RUA')).length;
-  const pctVert=totalRuaEnd?Math.round(ppVert/totalRuaEnd*100):0;
-  const totalLimChao=(DB.capacidadeArmazem||[]).reduce((a,x)=>a+(parseInt(x.limite)||0),0);
+  // Capacidade física por endereço.
+  // Verticalizado = endereços numéricos; blocagem/chão = RE/CR/PA.
+  // EXP é expedição e não consome capacidade de verticalizado/chão.
+  const totalRuaEnd=endBase.filter(e=>/^\d/.test(String(e.addr||'').trim().toUpperCase())).length;
+  // Capacidade de blocagem/chão = somente áreas cadastradas como CR, PA ou RE.
+  // Ex.: CR, CR-RUA 11, CR-RUA 13, PA, RE. O cadastro é a fonte do limite.
+  const _capsChao=(DB.capacidadeArmazem||[]).filter(x=>{
+    if(x.siteId&&x.siteId!==siteFilter)return false;
+    const sig=String(x.sigla||'').trim().toUpperCase();
+    return /^(CR|PA|RE)(?:[-. ]|$)/.test(sig);
+  });
+  const totalLimChao=_capsChao.reduce((a,x)=>a+(parseInt(x.limite)||0),0);
+  const pctVert=totalRuaEnd?Math.min(100,Math.round(ppVert/totalRuaEnd*100)):0;
   const pctChao=totalLimChao?Math.min(100,Math.round(ppChao/totalLimChao*100)):null;
-  const vertColor=pctVert>=90?'#f87171':pctVert>=70?'#fbbf24':'#4ade80';
   const chaoColor=pctChao===null?'var(--w40)':pctChao>=90?'#f87171':pctChao>=70?'#fbbf24':'#4ade80';
   document.getElementById('homeCapacidade').innerHTML=totalEnd?`
     <div class="card" style="padding:20px;">
       <div class="clbl" style="margin-bottom:14px;">Capacidade do Armazém</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px;">
         <div>
-          <div style="font-size:10px;font-family:var(--mono);color:var(--w40);margin-bottom:6px;">📐 VERTICALIZADO — RUA</div>
+          <div style="font-size:10px;font-family:var(--mono);color:var(--w40);margin-bottom:6px;">📐 VERTICALIZADO — ENDEREÇOS NUMÉRICOS</div>
           <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px;">
             <span style="font-family:var(--serif);font-style:italic;font-size:26px;color:${vertColor};">${ppVert}</span>
-            <span style="font-size:11px;color:var(--w40);">/ ${fN(totalRuaEnd)} PP</span>
+            <span style="font-size:11px;color:var(--w40);">/ ${fN(totalRuaEnd)} end.</span>
             <span style="font-family:var(--mono);font-size:20px;font-weight:700;color:${vertColor};margin-left:auto;">${pctVert}%</span>
           </div>
           <div style="height:6px;background:var(--w06);border-radius:3px;">
@@ -6827,7 +6867,7 @@ function renderHome(){
           </div>
         </div>
         <div>
-          <div style="font-size:10px;font-family:var(--mono);color:var(--w40);margin-bottom:6px;">🔲 BLOCAGEM/CHÃO — RE·CR·PA</div>
+          <div style="font-size:10px;font-family:var(--mono);color:var(--w40);margin-bottom:6px;">🔲 BLOCAGEM/CHÃO — RE·CR·PA · ID_PALETE_UZ</div>
           <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px;">
             <span style="font-family:var(--serif);font-style:italic;font-size:26px;color:${chaoColor};">${ppChao}</span>
             <span style="font-size:11px;color:var(--w40);">/ ${totalLimChao>0?fN(totalLimChao)+' PP':'∞ (cadastre limite)'}</span>
@@ -8957,12 +8997,13 @@ function injectDemo(){
 (function(){const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='flex';})();
 // ══════════════════════════════════════════════════════════════
 // YALOG WMS · VERSIONAMENTO CENTRALIZADO
+// Build 004 — PP verticalizado por endereço; CR/PA/RE por ID_PALETE_UZ; capacidade por área.
 // Atualize SOMENTE estes valores a cada publicação. O refresh da
 // página preserva a sessão autenticada; a versão não é usada como
 // critério de logout.
 // ══════════════════════════════════════════════════════════════
-const YALOG_WMS_VERSION = '2.1.0';
-const YALOG_WMS_BUILD = '002';
+const YALOG_WMS_VERSION = '2.1.2';
+const YALOG_WMS_BUILD = '003';
 const YALOG_WMS_RELEASE = `v${YALOG_WMS_VERSION} Build ${YALOG_WMS_BUILD}`;
 
 function aplicarVersaoWMS(){
@@ -12532,7 +12573,7 @@ function imprimirEtiquetasEndereco(enderecos, larg, altu){
 <body>
 <div class="toolbar">
   <div>
-    <h2>Etiquetas de Endereço · WMS · v2.1.0</h2>
+    <h2>Etiquetas de Endereço · WMS · v2.1.2</h2>
     <div class="toolbar-info">${enderecos.length} etiqueta(s) · ${larg}×${altu}mm</div>
   </div>
   <div>
