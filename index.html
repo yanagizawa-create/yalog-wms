@@ -1904,11 +1904,13 @@ a{color:inherit;text-decoration:none;}
         </div>
       </div>
       <div id="cliPP_form_area" style="display:none;background:var(--bg3);border:1px solid var(--border);padding:12px;margin-bottom:12px;">
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:10px;align-items:end;">
           <div><label style="font-size:9px;color:var(--w40);font-family:var(--mono);">SKU</label>
             <input id="cliPP_f_sku" type="text" class="btn btn-o" style="width:100%;" placeholder="Ex: AGRO-001"></div>
           <div><label style="font-size:9px;color:var(--w40);font-family:var(--mono);">DESCRIÇÃO</label>
             <input id="cliPP_f_desc" type="text" class="btn btn-o" style="width:100%;" placeholder="Nome do produto"></div>
+          <div><label style="font-size:9px;color:var(--w40);font-family:var(--mono);">UNIDADE DE MEDIDA <span style="color:var(--orange2);">*</span></label>
+            <input id="cliPP_f_um" type="text" class="btn btn-o" style="width:100%;" placeholder="UN / KG / L / SC / CX" list="datalistUnidades" maxlength="10"></div>
           <div><label style="font-size:9px;color:var(--w40);font-family:var(--mono);">MÁX. QTD / PALETE <span style="color:var(--orange2);">*</span></label>
             <input id="cliPP_f_max" type="number" class="btn btn-o" style="width:100%;" placeholder="480" min="1"></div>
           <div style="display:flex;gap:6px;">
@@ -1923,6 +1925,7 @@ a{color:inherit;text-decoration:none;}
         <table class="dt">
           <thead><tr>
             <th>SKU / Cód. Cliente</th><th>Descrição</th>
+            <th class="ct">UM</th>
             <th class="ct" style="color:var(--g2);">Máx. Qtd/Palete</th>
             <th class="ct">Estoque Atual</th>
             <th class="ct" style="color:var(--orange2);">PP Real</th>
@@ -2417,7 +2420,7 @@ a{color:inherit;text-decoration:none;}
       <div class="ph-eye">Carga &amp; Estrutura</div>
       <div class="ph-title">Matriz de <em>Capacidade PP</em></div>
     </div>
-    <div style="font-size:11px;color:var(--w40);font-family:var(--mono);margin-top:4px;">Quantidade máxima por palete por SKU — base para cálculo real de PP</div>
+    <div style="font-size:11px;color:var(--w40);font-family:var(--mono);margin-top:4px;">Quantidade máxima por palete por SKU + Unidade de Medida — base para cálculo real de PP</div>
   </div>
 
   <!-- Barra de ações -->
@@ -2434,11 +2437,13 @@ a{color:inherit;text-decoration:none;}
 
   <!-- Formulário inline (colapsável) -->
   <div id="pp_form_area" style="display:none;background:var(--panel);border:1px solid var(--border);padding:14px;margin-bottom:14px;border-radius:2px;">
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end;">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:10px;align-items:end;">
       <div><label style="font-size:10px;color:var(--w40);font-family:var(--mono);">SKU / CÓD. CLIENTE</label>
         <input id="pp_f_sku" type="text" class="btn btn-o" style="width:100%;" placeholder="Ex: AGRO-001"></div>
       <div><label style="font-size:10px;color:var(--w40);font-family:var(--mono);">DESCRIÇÃO</label>
         <input id="pp_f_desc" type="text" class="btn btn-o" style="width:100%;" placeholder="Nome do produto"></div>
+      <div><label style="font-size:10px;color:var(--w40);font-family:var(--mono);">UNIDADE DE MEDIDA <span style="color:var(--orange2);">*</span></label>
+        <input id="pp_f_um" type="text" class="btn btn-o" style="width:100%;" placeholder="UN / KG / L / SC / CX" list="datalistUnidades" maxlength="10"></div>
       <div><label style="font-size:10px;color:var(--w40);font-family:var(--mono);">MÁX. QTD / PALETE <span style="color:var(--orange2);">*</span></label>
         <input id="pp_f_max" type="number" class="btn btn-o" style="width:100%;" placeholder="Ex: 480" min="1"></div>
       <div style="display:flex;gap:6px;">
@@ -2455,6 +2460,7 @@ a{color:inherit;text-decoration:none;}
       <thead><tr>
         <th>SKU / Cód. Cliente</th>
         <th>Descrição</th>
+        <th class="ct">UM</th>
         <th class="ct">Máx. Qtd/Palete</th>
         <th class="ct">Estoque Atual</th>
         <th class="ct" style="color:var(--orange2);">PP Real</th>
@@ -6112,12 +6118,29 @@ function saveLogo(){
 if(!DB.matrizCapacidade) DB.matrizCapacidade={};
   if(!DB.capacidadeArmazem) DB.capacidadeArmazem=[];
 
-function calcPPReal(clienteId, sku, qtd){
+function _normMatrizUM(um){
+  const v=String(um??'').trim().toUpperCase();
+  return v||'UN';
+}
+
+function _matrizKey(sku,um){
+  return `${String(sku||'').trim().toUpperCase()}¦${_normMatrizUM(um)}`;
+}
+
+function _matrizItemUM(item){
+  // Registros antigos não possuíam UM; por compatibilidade, são tratados como UN.
+  return _normMatrizUM(item?.um);
+}
+
+function calcPPReal(clienteId, sku, qtd, um){
   const matriz=(DB.matrizCapacidade[clienteId]||[]);
-  const entry=matriz.find(e=>e.sku&&e.sku.toUpperCase()===String(sku||'').toUpperCase());
+  const skuNorm=String(sku||'').trim().toUpperCase();
+  const umNorm=_normMatrizUM(um);
+  // 1º: regra exata SKU + UM. 2º: legado sem UM (equivale a UN).
+  const entry=matriz.find(e=>e.sku&&String(e.sku).trim().toUpperCase()===skuNorm&&_matrizItemUM(e)===umNorm);
   const maxPP=entry?.maxQtdPP||0;
-  if(!maxPP||!qtd) return{pp:1,maxQtdPP:0,temMatriz:false};
-  return{pp:Math.ceil(qtd/maxPP), maxQtdPP:maxPP, temMatriz:true};
+  if(!maxPP||!qtd) return{pp:1,maxQtdPP:0,temMatriz:false,um:umNorm};
+  return{pp:Math.ceil(qtd/maxPP), maxQtdPP:maxPP, temMatriz:true, um:umNorm};
 }
 
 function calcTotalPPEstoque(prodsFiltrados){
@@ -6180,7 +6203,7 @@ function renderClientes(){
       <td style="font-weight:700;">${c.nome}</td>
       <td class="mn">${c.cnpj||'—'}</td>
       <td style="font-size:10px;">${sitesNomes.length?sitesNomes.join(', '):'<span style="color:var(--w40);">—</span>'}</td>
-      <td class="ct"><span class="bg ${ppCount?'bg-or':'bg-wh'}">${ppCount} SKU${ppCount!==1?'s':''}</span></td>
+      <td class="ct"><span class="bg ${ppCount?'bg-or':'bg-wh'}">${ppCount} regra${ppCount!==1?'s':''}</span></td>
       <td class="ct"><span class="bg ${prodCount?'bg-gr':'bg-wh'}">${prodCount}</span></td>
       <td style="white-space:nowrap;">
         <button class="btn btn-o btn-xs" onclick="editarCliente('${c.id}')">✎ Editar</button>
@@ -6295,23 +6318,26 @@ function renderCliMatrizPP(cliId){
   const prodsCliente=DB.produtos.filter(p=>p.clienteId===cliId);
   const estoqBySku={};
   prodsCliente.forEach(p=>{
-    if(!estoqBySku[p.codCliente]) estoqBySku[p.codCliente]={qtd:0};
-    estoqBySku[p.codCliente].qtd+=(parseFloat(p.qtd)||0);
+    const key=_matrizKey(p.codCliente,p.um);
+    if(!estoqBySku[key]) estoqBySku[key]={qtd:0};
+    estoqBySku[key].qtd+=(parseFloat(p.qtd)||0);
   });
   const count=document.getElementById('cliPPCount');
-  if(count) count.textContent=`${matriz.length} SKU${matriz.length!==1?'s':''} na matriz`;
+  if(count) count.textContent=`${matriz.length} regra${matriz.length!==1?'s':''} na matriz`;
   const tb=document.getElementById('tbCliMatrizPP');
   if(!tb) return;
   if(!matriz.length){
-    tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--w40);font-family:var(--mono);">Nenhuma regra cadastrada. Importe o Excel ou adicione manualmente.</td></tr>';
+    tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--w40);font-family:var(--mono);">Nenhuma regra cadastrada. Importe o Excel ou adicione manualmente.</td></tr>';
     return;
   }
   tb.innerHTML=matriz.map((item,i)=>{
-    const qtdEst=(estoqBySku[item.sku]?.qtd)||0;
+    const um=_matrizItemUM(item);
+    const qtdEst=(estoqBySku[_matrizKey(item.sku,um)]?.qtd)||0;
     const ppReal=item.maxQtdPP>0?Math.ceil(qtdEst/item.maxQtdPP):qtdEst;
     return`<tr>
       <td style="color:var(--orange2);font-weight:700;">${item.sku||'—'}</td>
       <td>${item.descricao||'—'}</td>
+      <td class="ct" style="color:var(--teal);font-weight:700;">${um}</td>
       <td class="ct" style="color:var(--g2);font-weight:700;">${item.maxQtdPP||'—'}</td>
       <td class="ct">${qtdEst>0?fN(qtdEst):'—'}</td>
       <td class="ct" style="color:var(--orange2);font-weight:700;">${qtdEst>0?ppReal:'—'}</td>
@@ -6326,7 +6352,7 @@ function renderCliMatrizPP(cliId){
 function abrirFormPPCliente(){
   const id=document.getElementById('cliEditId')?.value;
   if(!id){showT('Salve o cliente primeiro','err');return;}
-  ['cliPP_f_sku','cliPP_f_desc','cliPP_f_max','cliPP_f_edit_idx'].forEach(el=>{const e=document.getElementById(el);if(e)e.value='';});
+  ['cliPP_f_sku','cliPP_f_desc','cliPP_f_um','cliPP_f_max','cliPP_f_edit_idx'].forEach(el=>{const e=document.getElementById(el);if(e)e.value='';});
   document.getElementById('cliPP_form_area').style.display='';
   document.getElementById('cliPP_f_sku').focus();
 }
@@ -6336,18 +6362,21 @@ function salvarItemPPCliente(){
   if(!cliId){showT('Salve o cliente primeiro','err');return;}
   const sku=(document.getElementById('cliPP_f_sku')?.value||'').trim().toUpperCase();
   const desc=(document.getElementById('cliPP_f_desc')?.value||'').trim();
+  const umRaw=(document.getElementById('cliPP_f_um')?.value||'').trim();
+  const um=_normMatrizUM(umRaw);
   const maxQtdPP=parseInt(document.getElementById('cliPP_f_max')?.value||'0');
   if(!sku){showT('SKU obrigatório','err');return;}
+  if(!umRaw){showT('Unidade de medida obrigatória','err');return;}
   if(!maxQtdPP||maxQtdPP<1){showT('Quantidade máxima inválida','err');return;}
   if(!DB.matrizCapacidade[cliId]) DB.matrizCapacidade[cliId]=[];
   const editIdx=document.getElementById('cliPP_f_edit_idx')?.value;
   if(editIdx!==''&&editIdx!==undefined&&!isNaN(parseInt(editIdx))){
-    DB.matrizCapacidade[cliId][parseInt(editIdx)]={sku,descricao:desc,maxQtdPP};
+    DB.matrizCapacidade[cliId][parseInt(editIdx)]={sku,descricao:desc,um,maxQtdPP};
     showT('✓ Atualizado!','ok');
   } else {
-    const dup=DB.matrizCapacidade[cliId].findIndex(e=>e.sku===sku);
-    if(dup>=0) DB.matrizCapacidade[cliId][dup]={sku,descricao:desc,maxQtdPP};
-    else DB.matrizCapacidade[cliId].push({sku,descricao:desc,maxQtdPP});
+    const dup=DB.matrizCapacidade[cliId].findIndex(e=>e.sku===sku&&_matrizItemUM(e)===um);
+    if(dup>=0) DB.matrizCapacidade[cliId][dup]={sku,descricao:desc,um,maxQtdPP};
+    else DB.matrizCapacidade[cliId].push({sku,descricao:desc,um,maxQtdPP});
     showT('✓ SKU adicionado!','ok');
   }
   document.getElementById('cliPP_form_area').style.display='none';
@@ -6361,6 +6390,7 @@ function editarItemPPCli(cliId,idx){
   if(!item) return;
   document.getElementById('cliPP_f_sku').value=item.sku||'';
   document.getElementById('cliPP_f_desc').value=item.descricao||'';
+  document.getElementById('cliPP_f_um').value=_matrizItemUM(item);
   document.getElementById('cliPP_f_max').value=item.maxQtdPP||'';
   document.getElementById('cliPP_f_edit_idx').value=idx;
   document.getElementById('cliPP_form_area').style.display='';
@@ -6393,11 +6423,12 @@ function uploadMatrizPPCliente(input){
     rows.forEach(r=>{
       const sku=(mapC(r,['SKU','COD','CODIGO','CODCLIENTE'])||'').trim().toUpperCase();
       const desc=(mapC(r,['DESC','DESCRICAO','PRODUTO','NOME'])||'').trim();
+      const um=_normMatrizUM(mapC(r,['UNIDADEMEDIDA','UNIDADE','UM','UND','MEDIDA'])||'');
       const maxQtdPP=parseInt(String(mapC(r,['MAXQTD','MAXPALETE','MAXQTDPALETE','CAPACIDADE','MAX','QTDMAX'])||'0').replace(/\D/g,''))||0;
       if(!sku||!maxQtdPP) return;
-      const ei=DB.matrizCapacidade[cliId].findIndex(e=>e.sku===sku);
-      if(ei>=0){DB.matrizCapacidade[cliId][ei]={sku,descricao:desc||DB.matrizCapacidade[cliId][ei].descricao,maxQtdPP};upd++;}
-      else{DB.matrizCapacidade[cliId].push({sku,descricao:desc,maxQtdPP});add++;}
+      const ei=DB.matrizCapacidade[cliId].findIndex(e=>e.sku===sku&&_matrizItemUM(e)===um);
+      if(ei>=0){DB.matrizCapacidade[cliId][ei]={sku,descricao:desc||DB.matrizCapacidade[cliId][ei].descricao,um,maxQtdPP};upd++;}
+      else{DB.matrizCapacidade[cliId].push({sku,descricao:desc,um,maxQtdPP});add++;}
     });
     input.value='';
     save();
@@ -6429,7 +6460,7 @@ function renderMatrizPP(){
   const countEl=document.getElementById('pp_matriz_count');
   if(!cliId){
     const tb=document.getElementById('tb_matriz_pp');
-    if(tb) tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--w40);font-family:var(--mono);">Selecione um cliente para gerenciar a matriz.</td></tr>';
+    if(tb) tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--w40);font-family:var(--mono);">Selecione um cliente para gerenciar a matriz.</td></tr>';
     if(countEl) countEl.textContent='';
     document.getElementById('pp_resumo').innerHTML='';
     infoEl.innerHTML='';
@@ -6457,20 +6488,22 @@ function renderMatrizPP(){
   const prodsCliente=DB.produtos.filter(p=>p.clienteId===cliId);
   const tb=document.getElementById('tb_matriz_pp');
   if(!tb) return;
-  if(countEl) countEl.textContent=`${matriz.length} SKUs na matriz`;
+  if(countEl) countEl.textContent=`${matriz.length} regras na matriz`;
   const estoqBySku={};
   prodsCliente.forEach(p=>{
-    if(!estoqBySku[p.codCliente]) estoqBySku[p.codCliente]={qtd:0};
-    estoqBySku[p.codCliente].qtd+=(parseFloat(p.qtd)||0);
+    const key=_matrizKey(p.codCliente,p.um);
+    if(!estoqBySku[key]) estoqBySku[key]={qtd:0};
+    estoqBySku[key].qtd+=(parseFloat(p.qtd)||0);
   });
   if(!matriz.length){
-    tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--w40);">Nenhuma matriz cadastrada. Use "+ Novo Item" ou importe.</td></tr>';
+    tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--w40);">Nenhuma matriz cadastrada. Use "+ Novo Item" ou importe.</td></tr>';
     document.getElementById('pp_resumo').innerHTML='';
     return;
   }
   let totalPPReal=0, totalPPSem=0;
   tb.innerHTML=matriz.map((item,i)=>{
-    const qtdEst=(estoqBySku[item.sku]?.qtd)||0;
+    const um=_matrizItemUM(item);
+    const qtdEst=(estoqBySku[_matrizKey(item.sku,um)]?.qtd)||0;
     const ppReal=item.maxQtdPP>0?Math.ceil(qtdEst/item.maxQtdPP):qtdEst;
     const ppSem=qtdEst>0?qtdEst:0;
     totalPPReal+=ppReal; totalPPSem+=ppSem;
@@ -6478,6 +6511,7 @@ function renderMatrizPP(){
     return`<tr>
       <td style="color:var(--orange2);font-weight:700;">${item.sku||'—'}</td>
       <td>${item.descricao||'—'}</td>
+      <td class="ct" style="color:var(--teal);font-weight:700;">${um}</td>
       <td class="ct" style="color:var(--g2);font-weight:700;">${item.maxQtdPP||'—'}</td>
       <td class="ct">${qtdEst>0?fN(qtdEst):'—'}</td>
       <td class="ct" style="color:var(--orange2);font-weight:700;">${qtdEst>0?ppReal:'—'}</td>
@@ -6504,7 +6538,7 @@ function renderMatrizPP(){
 function abrirFormPP(){
   const cliId=document.getElementById('ppMatrizCli')?.value;
   if(!cliId){showT('Selecione um cliente primeiro','err');return;}
-  ['pp_f_sku','pp_f_desc','pp_f_max','pp_f_edit_idx'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['pp_f_sku','pp_f_desc','pp_f_um','pp_f_max','pp_f_edit_idx'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('pp_form_area').style.display='';
   document.getElementById('pp_f_sku').focus();
 }
@@ -6514,6 +6548,7 @@ function editarItemPP(cliId,idx){
   if(!item) return;
   document.getElementById('pp_f_sku').value=item.sku||'';
   document.getElementById('pp_f_desc').value=item.descricao||'';
+  document.getElementById('pp_f_um').value=_matrizItemUM(item);
   document.getElementById('pp_f_max').value=item.maxQtdPP||'';
   document.getElementById('pp_f_edit_idx').value=idx;
   document.getElementById('pp_form_area').style.display='';
@@ -6525,18 +6560,21 @@ function salvarItemPP(){
   if(!cliId){showT('Selecione um cliente','err');return;}
   const sku=(document.getElementById('pp_f_sku')?.value||'').trim().toUpperCase();
   const desc=(document.getElementById('pp_f_desc')?.value||'').trim();
+  const umRaw=(document.getElementById('pp_f_um')?.value||'').trim();
+  const um=_normMatrizUM(umRaw);
   const maxQtdPP=parseInt(document.getElementById('pp_f_max')?.value||'0');
   if(!sku){showT('SKU obrigatório','err');return;}
+  if(!umRaw){showT('Unidade de medida obrigatória','err');return;}
   if(!maxQtdPP||maxQtdPP<1){showT('Quantidade máxima inválida','err');return;}
   if(!DB.matrizCapacidade[cliId]) DB.matrizCapacidade[cliId]=[];
   const editIdx=document.getElementById('pp_f_edit_idx')?.value;
   if(editIdx!==''&&editIdx!==undefined&&!isNaN(parseInt(editIdx))){
-    DB.matrizCapacidade[cliId][parseInt(editIdx)]={sku,descricao:desc,maxQtdPP};
+    DB.matrizCapacidade[cliId][parseInt(editIdx)]={sku,descricao:desc,um,maxQtdPP};
     showT('✓ Atualizado!','ok');
   } else {
-    const dup=DB.matrizCapacidade[cliId].findIndex(e=>e.sku===sku);
-    if(dup>=0) DB.matrizCapacidade[cliId][dup]={sku,descricao:desc,maxQtdPP};
-    else DB.matrizCapacidade[cliId].push({sku,descricao:desc,maxQtdPP});
+    const dup=DB.matrizCapacidade[cliId].findIndex(e=>e.sku===sku&&_matrizItemUM(e)===um);
+    if(dup>=0) DB.matrizCapacidade[cliId][dup]={sku,descricao:desc,um,maxQtdPP};
+    else DB.matrizCapacidade[cliId].push({sku,descricao:desc,um,maxQtdPP});
     showT('✓ SKU adicionado!','ok');
   }
   document.getElementById('pp_form_area').style.display='none';
@@ -6568,11 +6606,12 @@ function uploadMatrizPP(input){
     rows.forEach(r=>{
       const sku=(mapC(r,['SKU','COD','CODIGO','CODCLIENTE'])||'').trim().toUpperCase();
       const desc=(mapC(r,['DESC','DESCRICAO','PRODUTO','NOME'])||'').trim();
+      const um=_normMatrizUM(mapC(r,['UNIDADEMEDIDA','UNIDADE','UM','UND','MEDIDA'])||'');
       const maxQtdPP=parseInt(String(mapC(r,['MAXQTD','MAXPALETE','MAXQTDPALETE','CAPACIDADE','MAX','QTDMAX'])||'0').replace(/\D/g,''))||0;
       if(!sku||!maxQtdPP) return;
-      const ei=DB.matrizCapacidade[cliId].findIndex(e=>e.sku===sku);
-      if(ei>=0){DB.matrizCapacidade[cliId][ei]={sku,descricao:desc||DB.matrizCapacidade[cliId][ei].descricao,maxQtdPP};upd++;}
-      else{DB.matrizCapacidade[cliId].push({sku,descricao:desc,maxQtdPP});add++;}
+      const ei=DB.matrizCapacidade[cliId].findIndex(e=>e.sku===sku&&_matrizItemUM(e)===um);
+      if(ei>=0){DB.matrizCapacidade[cliId][ei]={sku,descricao:desc||DB.matrizCapacidade[cliId][ei].descricao,um,maxQtdPP};upd++;}
+      else{DB.matrizCapacidade[cliId].push({sku,descricao:desc,um,maxQtdPP});add++;}
     });
     input.value='';
     renderMatrizPP();
@@ -6582,20 +6621,21 @@ function uploadMatrizPP(input){
 }
 
 function downloadTemplatePP(){
-  const COLS=['SKU_CLIENTE','DESCRICAO','MAX_QTD_PALETE'];
-  const INSTR=['Código do produto (igual ao campo SKU na carga)','Descrição (opcional)','Qtd máxima por palete (obrigatório)'];
-  const EX=[['AGRO-001','Fertilizante NPK SC 20kg','60'],['AGRO-002','Herbicida 5L','48'],['AGRO-003','Inseticida 250ml','120']];
+  const COLS=['SKU_CLIENTE','DESCRICAO','UNIDADE_MEDIDA','MAX_QTD_PALETE'];
+  const INSTR=['Código do produto (igual ao campo SKU na carga)','Descrição (opcional)','Unidade de medida do SKU (obrigatório)','Qtd máxima por palete para esta UM (obrigatório)'];
+  const EX=[['AGRO-001','Fertilizante NPK SC 20kg','SC','60'],['AGRO-001','Fertilizante NPK SC 20kg','KG','1200'],['AGRO-002','Herbicida 5L','L','48'],['AGRO-003','Inseticida 250ml','UN','120']];
   if(typeof XLSX!=='undefined'){
     const wb=XLSX.utils.book_new();
     const ws=XLSX.utils.aoa_to_sheet([COLS,INSTR,...EX]);
-    ws['!cols']=[{wch:18},{wch:38},{wch:18}];
+    ws['!cols']=[{wch:18},{wch:38},{wch:18},{wch:22}];
     const wsI=XLSX.utils.aoa_to_sheet([
       ['CAMPO','DESCRIÇÃO','OBRIGATÓRIO'],
       ['SKU_CLIENTE','Mesmo código usado na carga de estoque (maiúsculo)','Sim'],
       ['DESCRICAO','Nome do produto — apenas referência','Não'],
-      ['MAX_QTD_PALETE','Capacidade máxima em unidades por palete','Sim'],
+      ['UNIDADE_MEDIDA','Unidade de medida comercial do SKU (ex.: UN, KG, L, SC, CX)','Sim'],
+      ['MAX_QTD_PALETE','Capacidade máxima por palete para a combinação SKU + UM','Sim'],
       ['','',''],
-      ['CÁLCULO:','PP Real = ⌈ Quantidade em Estoque ÷ MAX_QTD_PALETE ⌉',''],
+      ['CÁLCULO:','PP Real = ⌈ Quantidade em Estoque (mesma UM) ÷ MAX_QTD_PALETE da combinação SKU + UM ⌉',''],
       ['','Arredondamento para cima (ceiling)',''],
     ]);
     wsI['!cols']=[{wch:16},{wch:50},{wch:10}];
@@ -7825,7 +7865,7 @@ function renderEstoque(){
       </td>
       <td class="mn ct">${fN(p.qtd)}</td>
       <td class="mn ct" style="color:var(--b2);">${p.um||'UN'}</td>
-      <td class="mn ct" style="color:var(--orange2);font-weight:700;">${(()=>{const r=calcPPReal(p.clienteId,p.codCliente,p.qtd);return r.temMatriz?r.pp:'—';})()}</td>
+      <td class="mn ct" style="color:var(--orange2);font-weight:700;">${(()=>{const r=calcPPReal(p.clienteId,p.codCliente,p.qtd,p.um);return r.temMatriz?r.pp:'—';})()}</td>
       <td class="mn ri">R$ ${fM(p.valorUnit)}</td>
       <td class="ct">${statusSp(p.status)}</td>
       <td>
@@ -9110,8 +9150,8 @@ function injectDemo(){
 // critério de logout.
 // ══════════════════════════════════════════════════════════════
 const YALOG_WMS_VERSION = '2.1.2';
-const YALOG_WMS_BUILD = '008';
-const YALOG_WMS_UPDATE = '008';
+const YALOG_WMS_BUILD = '009';
+const YALOG_WMS_UPDATE = '009';
 const YALOG_WMS_RELEASE = `v${YALOG_WMS_VERSION} Build ${YALOG_WMS_BUILD}`;
 
 function aplicarVersaoWMS(){
@@ -18228,7 +18268,7 @@ function renderOcupacao(){
   // Cada produto contribui com calcPPReal para saber quanto PP ele ocupa
   const fatorPorProd={};
   prodsSnap.forEach(p=>{
-    const {pp,temMatriz}=calcPPReal(p.clienteId,p.codCliente,p.qtd||0);
+    const {pp,temMatriz}=calcPPReal(p.clienteId,p.codCliente,p.qtd||0,p.um);
     const qtd=parseFloat(p.qtd)||0;
     fatorPorProd[p.wmsId]=qtd>0?pp/qtd:0; // PP por unidade para este produto
   });
@@ -18596,7 +18636,7 @@ function renderOcupacao(){
   const cliAgg={};
   prodsSnap.forEach(p=>{
     const nome=(DB.clientes||[]).find(c=>c.id===p.clienteId)?.nome||p.clienteId||'Sem cliente';
-    const {pp}=calcPPReal(p.clienteId,p.codCliente,p.qtd||0);
+    const {pp}=calcPPReal(p.clienteId,p.codCliente,p.qtd||0,p.um);
     cliAgg[nome]=(cliAgg[nome]||0)+pp;
   });
   const cliKeys=Object.keys(cliAgg).slice(0,8);
@@ -18662,7 +18702,7 @@ function exportarOcupacao(){
     const fatorMedioExp=totalUnidExp>0?(totalPaletesExp/totalUnidExp):1;
     const fatorPorProdExp={};
     prodsSnap.forEach(p=>{
-      const {pp}=calcPPReal(p.clienteId,p.codCliente,p.qtd||0);
+      const {pp}=calcPPReal(p.clienteId,p.codCliente,p.qtd||0,p.um);
       const q=parseFloat(p.qtd)||0;
       fatorPorProdExp[p.wmsId]=q>0?pp/q:0;
     });
