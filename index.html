@@ -3961,13 +3961,27 @@ const LocalStorageProvider = {
   // chave antiga, nunca sobrescreve uma chave nova já existente.
   _migrarParaEmpresa(companyId) {
     try {
-      const antigo = localStorage.getItem(DBKEY);
-      if (!antigo) return;
+      const antigoRaw = localStorage.getItem(DBKEY);
       const novaChave = 'wms:' + companyId + ':' + DBKEY;
-      if (localStorage.getItem(novaChave) !== null) return; // já migrado antes
-      localStorage.setItem(novaChave, antigo);
-      console.log('[WMS TENANT] cache local existente migrado para a empresa ' + companyId + ' (chave antiga preservada, não removida).');
-    } catch(e) { console.warn('[WMS TENANT] falha ao migrar cache local para a empresa', companyId, e); }
+      const novoRaw = localStorage.getItem(novaChave);
+      if (!antigoRaw && !novoRaw) return;
+      const antigo = antigoRaw ? JSON.parse(antigoRaw) : null;
+      const novo = novoRaw ? JSON.parse(novoRaw) : null;
+      // Se a chave tenant já existir, nunca a trata como autoridade cega:
+      // preserva o estado mais rico e faz merge com o legado/global.
+      if(antigo && novo){
+        const merge=_mesclarDBSemPerda(antigo,novo);
+        if(_dbPontuacao(merge)>=Math.max(_dbPontuacao(antigo),_dbPontuacao(novo))){
+          localStorage.setItem(novaChave,JSON.stringify(merge));
+          console.log('[WMS TENANT] cache local tenant reconciliado sem perda de dados.');
+        }
+        return;
+      }
+      if(antigo && !novo){
+        localStorage.setItem(novaChave, JSON.stringify(antigo));
+        console.log('[WMS TENANT] cache local existente migrado para a empresa ' + companyId + ' (chave antiga preservada).');
+      }
+    } catch(e) { console.warn('[WMS TENANT] falha ao migrar/reconciliar cache local para a empresa', companyId, e); }
   },
   get(key) {
     const k = this._chaveFisica(key);
@@ -4746,13 +4760,27 @@ function _dividirEmLotes(lista, tamanho) {
    local ↔ StorageProvider, versão de cache, checksum e conflitos.
    ═══════════════════════════════════════ */
 const CACHE_META_KEY = 'wms_cache_meta';
-const DB_GUARD_SNAPSHOT_KEY = 'wms_db_guard_snapshot_v1';
+const DB_GUARD_SNAPSHOT_KEY = 'wms_db_guard_snapshot_v2';
+const DB_GUARD_VERSION = 2;
+function _dbGuardFisicaKey(){ return DB_GUARD_SNAPSHOT_KEY + ':' + (_companyIdLocalAtual || 'global'); }
 
-// Atualização 006 — proteção contra sobrescrita destrutiva do estoque.
-// O DB operacional é um blob único. Uma resposta remota vazia/corrompida
-// nunca pode substituir silenciosamente um DB local que possui operação.
-// A única exceção para uma zeragem total é a ação explícita de "Limpar
-// Estoque" do Master, que grava _estoqueLimpoEm antes de sincronizar.
+// ═══════════════════════════════════════════════════════════════
+// DATA CONTINUITY GUARD — PROTEÇÃO DEFINITIVA CONTRA PERDA DE DADOS
+// Regra: atualização de código NUNCA pode substituir um estado local
+// mais rico por um estado remoto vazio/incompleto. Exclusões definitivas
+// somente passam pelo marcador explícito de ação autorizada do MASTER.
+// ═══════════════════════════════════════════════════════════════
+function _cloneSeguro(v){
+  try{return JSON.parse(JSON.stringify(v));}catch(e){return null;}
+}
+function _dbTemDadosProtegidos(d){
+  if(!d || typeof d!=='object') return false;
+  const colecoes=['clientes','sites','enderecos','produtos','movimentos','tarefasRec','tarefasMov','tarefasSep','inventarios','paletes','transportadoras','docas','contratos','devolucoes','usuarios','ajustes','auditoria'];
+  if(colecoes.some(k=>Array.isArray(d[k])&&d[k].length>0)) return true;
+  if(d.matrizCapacidade && Object.values(d.matrizCapacidade).some(v=>Array.isArray(v)&&v.length>0)) return true;
+  if(Array.isArray(d.capacidadeArmazem)&&d.capacidadeArmazem.length>0) return true;
+  return !!(d.logo && (d.logo.nome||d.logo.img));
+}
 function _dbTemOperacao(d){
   if(!d || typeof d!=='object') return false;
   const campos=['produtos','movimentos','paletes','tarefasRec','tarefasSep','inventarios'];
@@ -4760,24 +4788,101 @@ function _dbTemOperacao(d){
 }
 function _dbEhZeragemTotal(d){
   if(!d || typeof d!=='object') return false;
-  const campos=['produtos','movimentos','paletes','tarefasRec','tarefasSep','inventarios'];
-  return campos.every(k=>Array.isArray(d[k]) && d[k].length===0);
+  const campos=['clientes','sites','enderecos','produtos','movimentos','tarefasRec','tarefasMov','tarefasSep','inventarios','paletes','transportadoras','docas','contratos','devolucoes','usuarios','ajustes','auditoria'];
+  const matrVazia=!d.matrizCapacidade || !Object.values(d.matrizCapacidade).some(v=>Array.isArray(v)&&v.length>0);
+  const capVazia=!Array.isArray(d.capacidadeArmazem)||d.capacidadeArmazem.length===0;
+  return campos.every(k=>Array.isArray(d[k])&&d[k].length===0) && matrVazia && capVazia;
 }
-function _salvarSnapshotGuard(d){
+function _dbContagens(d){
+  const r={};
+  if(!d||typeof d!=='object')return r;
+  ['clientes','sites','enderecos','produtos','movimentos','tarefasRec','tarefasMov','tarefasSep','inventarios','paletes','transportadoras','docas','contratos','devolucoes','usuarios','ajustes','auditoria'].forEach(k=>r[k]=Array.isArray(d[k])?d[k].length:0);
+  r.matrizCapacidade=Object.values(d.matrizCapacidade||{}).reduce((n,v)=>n+(Array.isArray(v)?v.length:0),0);
+  r.capacidadeArmazem=Array.isArray(d.capacidadeArmazem)?d.capacidadeArmazem.length:0;
+  return r;
+}
+function _dbPontuacao(d){
+  const c=_dbContagens(d); return Object.values(c).reduce((a,b)=>a+(Number(b)||0),0);
+}
+function _dbSnapshotAtual(){
   try{
-    if(!_dbTemOperacao(d)) return;
-    LocalStorageProvider.set(DB_GUARD_SNAPSHOT_KEY,{data:new Date().toISOString(),db:d});
-  }catch(e){ console.warn('[WMS DATA GUARD] não foi possível salvar snapshot de proteção:',e); }
+    const atual=LocalStorageProvider.get(_dbGuardFisicaKey());
+    return atual&&atual.db?_cloneSeguro(atual.db):null;
+  }catch(e){return null;}
+}
+function _salvarSnapshotGuard(d, motivo='save'){
+  try{
+    if(!_dbTemDadosProtegidos(d)) return false;
+    LocalStorageProvider.set(_dbGuardFisicaKey(),{version:DB_GUARD_VERSION,data:new Date().toISOString(),motivo,db:_cloneSeguro(d)});
+    return true;
+  }catch(e){ console.warn('[WMS DATA GUARD] snapshot não salvo:',e); return false; }
+}
+function _chaveRegistro(item,colecao){
+  if(!item||typeof item!=='object') return null;
+  const ids={clientes:'id',sites:'id',enderecos:'id',produtos:'wmsId',tarefasRec:'id',tarefasMov:'id',tarefasSep:'id',inventarios:'id',paletes:'id',transportadoras:'id',docas:'id',contratos:'id',devolucoes:'id',usuarios:'id',ajustes:'id',auditoria:'id'};
+  const k=ids[colecao];
+  if(k&&item[k]!=null&&String(item[k])!=='') return String(item[k]);
+  if(colecao==='movimentos') return [item.id,item.data,item.tipo,item.wmsId,item.ref,item.qtd,item.resp].map(x=>String(x??'')).join('¦');
+  if(colecao==='capacidadeArmazem') return [item.sigla,item.siteId||''].map(x=>String(x??'')).join('¦');
+  return null;
+}
+function _mesclarArrayProtegido(localArr,remotoArr,colecao){
+  const l=Array.isArray(localArr)?localArr:[]; const r=Array.isArray(remotoArr)?remotoArr:[];
+  if(!l.length) return _cloneSeguro(r)||[];
+  if(!r.length) return _cloneSeguro(l)||[];
+  const mapa=new Map(); const semId=[];
+  l.forEach(x=>{const k=_chaveRegistro(x,colecao); if(k) mapa.set(k,x); else semId.push(x);});
+  r.forEach(x=>{const k=_chaveRegistro(x,colecao); if(k) mapa.set(k,{...(mapa.get(k)||{}),...x}); else semId.push(x);});
+  const vistos=new Set(), saida=[];
+  mapa.forEach(v=>{const k=_chaveRegistro(v,colecao)||JSON.stringify(v); if(!vistos.has(k)){vistos.add(k);saida.push(v);}});
+  semId.forEach(v=>{const k=JSON.stringify(v);if(!vistos.has(k)){vistos.add(k);saida.push(v);}});
+  return saida;
+}
+function _mesclarMatriz(localM,remotaM){
+  const out={..._cloneSeguro(localM||{})};
+  Object.entries(remotaM||{}).forEach(([cli,arr])=>{
+    const base=Array.isArray(out[cli])?out[cli]:[];
+    const mapa=new Map();
+    base.forEach(x=>mapa.set(_matrizKey(x?.sku,_matrizItemUM(x)),x));
+    (Array.isArray(arr)?arr:[]).forEach(x=>mapa.set(_matrizKey(x?.sku,_matrizItemUM(x)),{...(mapa.get(_matrizKey(x?.sku,_matrizItemUM(x)))||{}),...x}));
+    out[cli]=Array.from(mapa.values());
+  });
+  return out;
+}
+function _mesclarDBSemPerda(localDb,remotoDb){
+  const l=_cloneSeguro(localDb)||{}; const r=_cloneSeguro(remotoDb)||{};
+  const out={...l};
+  const colecoes=['clientes','sites','enderecos','produtos','movimentos','tarefasRec','tarefasMov','tarefasSep','inventarios','paletes','transportadoras','docas','contratos','devolucoes','usuarios','ajustes','auditoria'];
+  colecoes.forEach(k=>{out[k]=_mesclarArrayProtegido(l[k],r[k],k);});
+  out.matrizCapacidade=_mesclarMatriz(l.matrizCapacidade,r.matrizCapacidade);
+  out.capacidadeArmazem=_mesclarArrayProtegido(l.capacidadeArmazem,r.capacidadeArmazem,'capacidadeArmazem');
+  // Campos escalares: remoto atualiza somente quando possui valor definido.
+  Object.keys(r).forEach(k=>{
+    if(colecoes.includes(k)||k==='matrizCapacidade'||k==='capacidadeArmazem')return;
+    if(r[k]!==undefined && r[k]!==null) out[k]=r[k];
+  });
+  return out;
 }
 function _restaurarSnapshotGuardSeNecessario(){
   try{
-    if(!_dbEhZeragemTotal(DB) || DB._estoqueLimpoEm) return false;
-    const guard=LocalStorageProvider.get(DB_GUARD_SNAPSHOT_KEY);
-    if(!_dbTemOperacao(guard?.db)) return false;
-    DB={...DB,...guard.db};
-    console.warn('[WMS DATA GUARD] snapshot operacional restaurado após detectar DB vazio sem Limpar Estoque Master.');
-    return true;
-  }catch(e){ console.warn('[WMS DATA GUARD] falha na restauração do snapshot:',e); return false; }
+    const guard=_dbSnapshotAtual();
+    if(!guard) return false;
+    if(!_dbTemDadosProtegidos(DB) && _dbTemDadosProtegidos(guard)){
+      DB=_cloneSeguro(guard); console.warn('[WMS DATA GUARD] snapshot integral restaurado: estado atual vazio.'); return true;
+    }
+    const merge=_mesclarDBSemPerda(DB,guard);
+    if(_dbPontuacao(merge)>_dbPontuacao(DB)){
+      DB=merge; console.warn('[WMS DATA GUARD] snapshot integral restaurado/mesclado para preservar dados anteriores.'); return true;
+    }
+  }catch(e){ console.warn('[WMS DATA GUARD] falha na restauração:',e); }
+  return false;
+}
+function _marcarExclusaoMaster(scope,detalhe=''){
+  DB._masterDataDeletion={at:now(),by:usuarioAtual?.login||usuarioAtual?.nome||'MASTER',scope,detalhe};
+}
+function _removerMarcadorExclusaoMasterSeNecessario(d){
+  if(d&&d._masterDataDeletion) return d._masterDataDeletion;
+  return null;
 }
 
 const CacheManager = {
@@ -4828,24 +4933,40 @@ const CacheManager = {
       // nesta sincronização — não a sobrescreve (evita perder edição local).
       const pendenteLocal = SyncQueue._pendentes.has(row.key);
 
-      // PROTEÇÃO CRÍTICA — nunca aceitar uma zeragem total remota sobre
-      // uma operação local existente, salvo quando a zeragem foi produzida
-      // pela função oficial de Limpar Estoque (Master).
-      if(row.key===DBKEY && remotoEhMaisNovo && !pendenteLocal){
+      // PROTEÇÃO DEFINITIVA — DBKEY é um agregado operacional inteiro.
+      // Uma atualização remota nunca pode apagar registros locais apenas
+      // porque a versão remota é mais nova ou veio de outra publicação.
+      // Sem marcador explícito de exclusão MASTER, fazemos merge aditivo.
+      if (row.key===DBKEY && remotoEhMaisNovo && !pendenteLocal) {
         const localDb=LocalStorageProvider.get(DBKEY);
         const remotoDb=row.value;
-        if(_dbTemOperacao(localDb)) _salvarSnapshotGuard(localDb);
-        const seriaZeragemDestrutiva=_dbTemOperacao(localDb) && _dbEhZeragemTotal(remotoDb);
-        const limpezaMasterExplicitamenteRegistrada=!!(remotoDb && remotoDb._estoqueLimpoEm);
-        if(seriaZeragemDestrutiva && !limpezaMasterExplicitamenteRegistrada){
-          console.warn('[WMS DATA GUARD] sincronização remota rejeitada: DB operacional remoto zerado sem marca de Limpar Estoque Master. Dados locais preservados.');
-          SyncLogger.registrar({operacao:'sync-guard',provider:'supabase',resultado:'ignorado',erro:'zeragem remota não autorizada',quantidade:1});
+        if(_dbTemDadosProtegidos(localDb)) _salvarSnapshotGuard(localDb,'antes-sync-remoto');
+        const exclusaoMaster=!!(remotoDb&&remotoDb._masterDataDeletion);
+        const limpezaMaster=!!(remotoDb&&remotoDb._estoqueLimpoEm);
+        if((exclusaoMaster||limpezaMaster) && remotoDb){
+          LocalStorageProvider.set(row.key, remotoDb);
+          _salvarSnapshotGuard(remotoDb,'exclusao-master-autorizada');
+          meta.checksums[row.key] = { checksum:_checksum(JSON.stringify(remotoDb)), atualizadoEm:row.updated_at };
           return;
+        }
+        if(_dbTemDadosProtegidos(localDb) && remotoDb){
+          const mesclado=_mesclarDBSemPerda(localDb,remotoDb);
+          const localScore=_dbPontuacao(localDb), remotoScore=_dbPontuacao(remotoDb), mergeScore=_dbPontuacao(mesclado);
+          if(mergeScore>=Math.max(localScore,remotoScore)){
+            LocalStorageProvider.set(row.key,mesclado);
+            _salvarSnapshotGuard(mesclado,'sync-merge-sem-perda');
+            const mergeDiferente=_checksum(JSON.stringify(mesclado))!==_checksum(JSON.stringify(remotoDb));
+            if(mergeDiferente) SyncQueue.enfileirar('set',row.key,mesclado);
+            meta.checksums[row.key]={checksum:_checksum(JSON.stringify(mesclado)),atualizadoEm:new Date().toISOString()};
+            SyncLogger.registrar({operacao:'sync-guard',provider:'supabase',resultado:'sucesso',erro:'merge sem perda de dados',quantidade:1});
+            return;
+          }
         }
       }
 
       if (remotoEhMaisNovo && !pendenteLocal) {
         LocalStorageProvider.set(row.key, row.value);
+        if(row.key===DBKEY) _salvarSnapshotGuard(row.value,'sync-remoto');
         meta.checksums[row.key] = { checksum: _checksum(JSON.stringify(row.value)), atualizadoEm: row.updated_at };
       }
     });
@@ -5735,20 +5856,19 @@ const YALOG_MODO_CONSULTA_RESERVADO = false;
 const YALOG_LOGIN_INTELIGENTE_RESERVADO = false;
 
 function save(){
-  // Atualização 006 — nunca grava uma zeragem total silenciosa.
-  // A exclusão total só é válida quando marcada pela rotina Master
-  // "Limpar Estoque". Isso impede que um refresh/sync com cache vazio
-  // replique uma perda de dados para o Supabase.
-  if(_dbEhZeragemTotal(DB) && !DB._estoqueLimpoEm){
-    const guard=LocalStorageProvider.get(DB_GUARD_SNAPSHOT_KEY);
-    if(_dbTemOperacao(guard?.db)){
-      console.warn('[WMS DATA GUARD] save() bloqueado: DB operacional vazio sem autorização de Limpar Estoque. Snapshot preservado.');
+  // REGRA DEFINITIVA: toda gravação válida gera snapshot integral antes do
+  // envio ao provider. Isso inclui clientes/cadastros, mesmo sem estoque.
+  // Uma publicação/refresh jamais deve depender do HTML para reconstruir dados.
+  if(_dbEhZeragemTotal(DB) && !DB._estoqueLimpoEm && !DB._masterDataDeletion){
+    const guard=_dbSnapshotAtual();
+    if(_dbTemDadosProtegidos(guard)){
+      console.warn('[WMS DATA GUARD] save() bloqueado: DB vazio sem autorização Master.');
+      DB=_cloneSeguro(guard);
       return false;
     }
   }
-  const ok=Core.set(DBKEY, DB);
-  if(ok!==false && _dbTemOperacao(DB)) _salvarSnapshotGuard(DB);
-  return ok;
+  _salvarSnapshotGuard(DB,'save');
+  return Core.set(DBKEY, DB);
 }
 function _applyLoadedData(parsed){
   if(parsed && Object.keys(parsed).length > 0){
@@ -5974,16 +6094,23 @@ function _applyLoadedData(parsed){
 
 async function load(){
   const d = Core.get(DBKEY);
+  const guard = _dbSnapshotAtual();
   if(d){
-    _applyLoadedData(d);
+    // Se o cache carregado perdeu registros que já existiam no snapshot,
+    // preserva o conjunto anterior e mescla apenas o que é novo.
+    const base = _dbTemDadosProtegidos(guard) && _dbTemDadosProtegidos(d)
+      ? _mesclarDBSemPerda(guard,d)
+      : d;
+    _applyLoadedData(base);
+  } else if(guard && _dbTemDadosProtegidos(guard)){
+    _applyLoadedData(guard);
+    console.warn('[WMS DATA GUARD] cache principal ausente; snapshot integral utilizado.');
+    save();
   } else {
     _applyLoadedData({});
   }
-  // Atualização 006 — recuperação automática do último snapshot operacional
-  // se um cache vazio aparecer sem ter sido produzido por Limpar Estoque.
-  if(_restaurarSnapshotGuardSeNecessario()){
-    save();
-  }
+  if(_restaurarSnapshotGuardSeNecessario()){ save(); }
+  if(_dbTemDadosProtegidos(DB)) _salvarSnapshotGuard(DB,'load');
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -6297,6 +6424,7 @@ function abrirMatrizClienteDireto(id){
 }
 
 async function excluirCliente(id){
+  if(!isMaster()){showT('Somente o MASTER pode excluir definitivamente um cliente.','err');return;}
   const c=DB.clientes.find(x=>x.id===id);
   if(!c) return;
   const prodCount=DB.produtos.filter(p=>p.clienteId===id).length;
@@ -6305,6 +6433,8 @@ async function excluirCliente(id){
     :`Excluir "${c.nome}"?`;
   if(!await wmsConfirm(msg,'Excluir Cliente','🗑️','🗑 Excluir Cliente')) return;
   DB.clientes=DB.clientes.filter(x=>x.id!==id);
+  delete DB.matrizCapacidade[id];
+  _marcarExclusaoMaster('cliente',id);
   save();
   renderClientes();
   showT('Cliente excluído','ok');
@@ -6398,8 +6528,10 @@ function editarItemPPCli(cliId,idx){
 }
 
 async function excluirItemPPCli(cliId,idx){
+  if(!isMaster()){showT('Somente o MASTER pode excluir definitivamente uma regra de capacidade.','err');return;}
   if(!await wmsConfirm('Remover este SKU da matriz de capacidade?','Remover SKU','🗑️','🗑 Remover')) return;
   DB.matrizCapacidade[cliId]?.splice(idx,1);
+  _marcarExclusaoMaster('matriz-capacidade',cliId+':'+idx);
   save();
   renderCliMatrizPP(cliId);
   renderClientes();
@@ -6583,8 +6715,11 @@ function salvarItemPP(){
 }
 
 async function excluirItemPP(cliId,idx){
+  if(!isMaster()){showT('Somente o MASTER pode excluir definitivamente uma regra de capacidade.','err');return;}
   if(!await wmsConfirm('Remover este SKU da matriz de capacidade?','Remover SKU','🗑️','🗑 Remover')) return;
   DB.matrizCapacidade[cliId]?.splice(idx,1);
+  _marcarExclusaoMaster('matriz-capacidade',cliId+':'+idx);
+  save();
   renderMatrizPP();
   showT('Removido.','ok');
 }
@@ -9144,14 +9279,14 @@ function injectDemo(){
 (function(){const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='flex';})();
 // ══════════════════════════════════════════════════════════════
 // YALOG WMS · VERSIONAMENTO CENTRALIZADO
-// Atualização 008 — restauração de sessão local no refresh/publicação; preserva as Atualizações 005, 006 e 007.
+// Atualização 010 — persistência definitiva sem perda de dados; matriz SKU + UM; preserva as Atualizações anteriores.
 // Atualize SOMENTE estes valores a cada publicação. O refresh da
 // página preserva a sessão autenticada; a versão não é usada como
 // critério de logout.
 // ══════════════════════════════════════════════════════════════
 const YALOG_WMS_VERSION = '2.1.2';
-const YALOG_WMS_BUILD = '009';
-const YALOG_WMS_UPDATE = '009';
+const YALOG_WMS_BUILD = '010';
+const YALOG_WMS_UPDATE = '010';
 const YALOG_WMS_RELEASE = `v${YALOG_WMS_VERSION} Build ${YALOG_WMS_BUILD}`;
 
 function aplicarVersaoWMS(){
@@ -12983,6 +13118,7 @@ async function limparGeralConfirmar(){
     DB.produtos=[];DB.movimentos=[];DB.paletes=[];DB.tarefasRec=[];DB.tarefasSep=[];DB.inventarios=[];
     DB._estoqueLimpoEm=now();
     DB._estoqueLimpoPor=usuarioAtual?.nome||'Master';
+    _marcarExclusaoMaster('estoque-total','Limpar Estoque');
     DB.seqWMS=1;DB.seqRec=1;DB.seqSep=1;DB.seqInv=1;
     // Libera todos endereços (exceto os bloqueados manualmente ou reservados)
     DB.enderecos.forEach(e=>{if(!e.bloqueioManual&&!e.reservado)e.status='livre';});
@@ -13063,6 +13199,7 @@ async function executarLimpar(){
   setTimeout(()=>{
     const ids=new Set(prods.map(p=>p.wmsId));
     DB.produtos=DB.produtos.filter(p=>!ids.has(p.wmsId));
+    _marcarExclusaoMaster('estoque-seletivo',String(tipo)+':'+String(val));
     // Libera endereços que ficaram vazios (exceto bloqueados manualmente ou reservados)
     DB.enderecos.forEach(e=>{
       if(e.bloqueioManual||e.reservado)return;
