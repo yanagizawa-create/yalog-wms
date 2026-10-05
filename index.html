@@ -5316,54 +5316,16 @@ CoreConfig.disableSupabase = function() {
    da troca do provider — nessa ordem exata, nunca antes.
    ═══════════════════════════════════════ */
 async function inicializarSupabaseNoBoot() {
-  console.log('[Supabase Bootstrap] Verificando configuração de persistência...');
-  // SPRINT YALOG-WMS-004 — diagnóstico técnico (puramente aditivo,
-  // não altera nenhuma decisão do bootstrap abaixo).
-  console.log('====================================================');
-  console.log('[SUPABASE BOOTSTRAP DIAGNÓSTICO]');
-  console.log('Supabase URL:', CoreConfig.supabaseUrl || null);
-  console.log('Storage Provider (antes da decisão):', CoreConfig.storageProvider);
-  console.log('Project Reference:', _projectRefDaUrl(CoreConfig.supabaseUrl));
-  console.log('Publishable Key (mascarada):', _mascarar(CoreConfig.supabaseKey, 20, 4));
-  console.log('====================================================');
-
-  if (!CoreConfig.supabaseUrl || !CoreConfig.supabaseKey) {
-    console.log('[Supabase Bootstrap] Motivo do fallback: supabaseUrl/supabaseKey não configurados. Provider selecionado: LOCAL.');
-    return;
-  }
-
-  // A lib do CDN normalmente já terminou de carregar antes daqui (a
-  // tag do CDN não é async/defer), mas em conexões lentas ou com
-  // bloqueadores de script isso não é garantido — aguarda até 1.5s
-  // antes de desistir, em pequenos intervalos.
-  let tentativas = 0;
-  while ((typeof window.supabase === 'undefined' || !window.supabase.createClient) && tentativas < 10) {
-    await new Promise(r => setTimeout(r, 150));
-    tentativas++;
-  }
-  if (typeof window.supabase === 'undefined' || !window.supabase.createClient) {
-    console.warn('[Supabase Bootstrap] Motivo do fallback: biblioteca supabase-js não carregou a tempo (', tentativas, 'tentativas). Provider selecionado: LOCAL — tentará de novo no próximo carregamento.');
-    return;
-  }
-
-  // Só promove para 'supabase' depois de CONFIRMAR que o cliente é
-  // criado de verdade — nunca só por existir uma URL/KEY configurada.
-  _supabaseClientSingleton = null; // garante uma tentativa limpa, não reaproveita um singleton de uma sessão anterior
-  let client = null;
-  try { client = _obterClienteSupabase(); } catch(e) { console.warn('[Supabase Bootstrap] erro ao criar cliente:', e); }
-  if (!client) {
-    console.warn('[Supabase Bootstrap] Motivo do fallback: não foi possível criar o cliente Supabase. Provider selecionado: LOCAL — tentará de novo no próximo carregamento.');
-    return;
-  }
-
-  // SPRINT HOTFIX-002, itens 1-2: troca o provider IMEDIATAMENTE após
-  // validar o cliente — sem nenhuma outra condição no meio — e só
-  // DEPOIS marca a decisão como tomada.
-  CoreConfig.storageProvider = 'supabase';
-  CoreConfig._supabaseAutoDecidido = true;
-  console.log('[Supabase Bootstrap] Cliente Supabase criado com sucesso. Provider selecionado: SUPABASE.');
-  // SPRINT YALOG-WMS-004 — confirma o estado final pós-decisão.
-  console.log('[SUPABASE BOOTSTRAP DIAGNÓSTICO] Storage Provider (após a decisão):', CoreConfig.storageProvider);
+  // BUILD 016 — PERSISTÊNCIA LOCAL AUTORITATIVA DURANTE O MVP
+  // O WMS não pode trocar silenciosamente a fonte de dados para Supabase
+  // durante uma atualização. Isso poderia carregar um agregado remoto
+  // incompleto e fazer o estoque local parecer vazio.
+  // Supabase continua disponível para SSO e para ativação explícita via
+  // CoreConfig.useSupabase(), mas NÃO é ativado automaticamente no boot.
+  CoreConfig.storageProvider = 'local';
+  CoreConfig._supabaseAutoDecidido = false;
+  console.log('[WMS Persistence Guard 016] Provider LOCAL mantido no boot. Supabase somente por ativação explícita.');
+  return true;
 }
 
 function _providerAtivo() { return CoreConfig.storageProvider === 'supabase' ? SupabaseProvider : LocalStorageProvider; }
@@ -6195,7 +6157,26 @@ function save(){
       return false;
     }
   }
-  _salvarSnapshotGuard(DB,'save');
+  // BUILD 016 — INVARIANTE DE ESTOQUE: nenhuma gravação comum pode
+  // reduzir produtos ou históricos protegidos. Se houver redução e não
+  // existir autorização explícita do Master, a gravação é bloqueada.
+  if(!(DB?._masterDataDeletion||DB?._estoqueLimpoEm)){
+    const guardNow=_dbSnapshotAtual();
+    if(guardNow && _dbTemDadosProtegidos(guardNow)){
+      const mergedNow=_mesclarDBSemPerda(DB,guardNow);
+      const atualOp=_dbContagens(DB), guardOp=_dbContagens(guardNow), mergedOp=_dbContagens(mergedNow);
+      const colecoesProtegidas=['produtos','movimentos','paletes','tarefasRec','tarefasMov','tarefasSep','inventarios','ajustes','auditoria','clientes','sites','enderecos'];
+      const reduziu=colecoesProtegidas.some(k=>(Number(atualOp[k])||0)<(Number(guardOp[k])||0));
+      if(reduziu){
+        const antesScore=_dbPontuacao(DB), depoisScore=_dbPontuacao(mergedNow);
+        if(depoisScore>=antesScore){
+          console.warn('[WMS DATA GUARD 016] gravação bloqueada/reconciliada: redução não autorizada detectada.');
+          DB=mergedNow;
+        }
+      }
+    }
+  }
+  _salvarSnapshotGuard(DB,'save-build-016');
   const ok=Core.set(DBKEY, DB);
   if(ok && !(DB?._masterDataDeletion||DB?._estoqueLimpoEm)) _dataVaultAtualizarComDB(DB);
   return ok;
@@ -6425,25 +6406,28 @@ function _applyLoadedData(parsed){
 async function load(){
   let d = Core.get(DBKEY);
   const vault=_dataVaultLer();
-  if(vault && !(d?._masterDataDeletion||d?._estoqueLimpoEm)) d=_mesclarDBSemPerda(d||{},vault);
-  d = _recuperarProdutosAntesDoLoad(d);
-  const guard = _dbSnapshotAtual();
-  if(d){
-    // Se o cache carregado perdeu registros que já existiam no snapshot,
-    // preserva o conjunto anterior e mescla apenas o que é novo.
-    const base = _dbTemDadosProtegidos(guard) && _dbTemDadosProtegidos(d)
-      ? _mesclarDBSemPerda(guard,d)
-      : d;
-    _applyLoadedData(base);
-  } else if(guard && _dbTemDadosProtegidos(guard)){
+  const guard=_dbSnapshotAtual();
+  const temMasterDeletion=!!(d?._masterDataDeletion||d?._estoqueLimpoEm);
+
+  // BUILD 016 — NÃO ACEITAR UMA BASE OPERACIONAL MENOR COMO AUTORIDADE.
+  // Se o cache atual perdeu produtos, movimentações ou outros registros,
+  // a base protegida tem prioridade. Exclusão somente com marcador Master.
+  if(vault && !temMasterDeletion) d=_mesclarDBSemPerda(d||{},vault);
+  if(guard && !temMasterDeletion) d=_mesclarDBSemPerda(d||{},guard);
+  d=_recuperarProdutosAntesDoLoad(d);
+
+  if(d && Object.keys(d).length>0){
+    _applyLoadedData(d);
+  }else if(guard && _dbTemDadosProtegidos(guard)){
     _applyLoadedData(guard);
-    console.warn('[WMS DATA GUARD] cache principal ausente; snapshot integral utilizado.');
+    console.warn('[WMS DATA GUARD 016] cache principal ausente; snapshot integral utilizado.');
     save();
-  } else {
+  }else{
     _applyLoadedData({});
   }
+
   if(_restaurarSnapshotGuardSeNecessario()){ save(); }
-  if(_dbTemDadosProtegidos(DB)) _salvarSnapshotGuard(DB,'load');
+  if(_dbTemDadosProtegidos(DB)) _salvarSnapshotGuard(DB,'load-build-016');
   _produtoGuardSalvar(DB);
 }
 
@@ -9730,14 +9714,14 @@ function injectDemo(){
 (function(){const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='flex';})();
 // ══════════════════════════════════════════════════════════════
 // YALOG WMS · VERSIONAMENTO CENTRALIZADO
-// Atualização 015 — Seleção diretiva por checkbox no Ajuste de Estoque e Cofre de Continuidade para preservar cadastros, estoque e históricos entre atualizações; exclusão somente por ação autorizada do Master.
+// Atualização 016 — Seleção diretiva por checkbox no Ajuste de Estoque e Cofre de Continuidade para preservar cadastros, estoque e históricos entre atualizações; exclusão somente por ação autorizada do Master.
 // Atualize SOMENTE estes valores a cada publicação. O refresh da
 // página preserva a sessão autenticada; a versão não é usada como
 // critério de logout.
 // ══════════════════════════════════════════════════════════════
 const YALOG_WMS_VERSION = '2.1.2';
-const YALOG_WMS_BUILD = '015';
-const YALOG_WMS_UPDATE = '015';
+const YALOG_WMS_BUILD = '016';
+const YALOG_WMS_UPDATE = '016';
 const YALOG_WMS_RELEASE = `v${YALOG_WMS_VERSION} Build ${YALOG_WMS_BUILD}`;
 
 function aplicarVersaoWMS(){
