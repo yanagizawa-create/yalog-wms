@@ -34,34 +34,36 @@ html{font-size:14px;}
 body{background:var(--bg);color:var(--w);font-family:var(--sans);min-height:100vh;overflow-x:hidden;}
 a{color:inherit;text-decoration:none;}
 
-/* ══ LAYOUT ══ */
-.shell{display:flex;min-height:100vh;}
-.sb{width:236px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:200;transition:transform .3s;}
-.sb-logo{padding:20px 18px 16px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px;}
-.sb-logo-row{display:flex;align-items:center;gap:10px;cursor:pointer;}
-.sb-img{width:52px;height:52px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:16px;overflow:hidden;flex-shrink:0;}
+/* ══ LAYOUT · TOPO YALOG WMS ══ */
+.shell{display:block;min-height:100vh;}
+.sb{width:100%;height:76px;position:fixed;inset:0 0 auto 0;background:rgba(18,22,43,.98);border-bottom:1px solid var(--border);display:flex;flex-direction:row;align-items:center;z-index:200;box-shadow:0 6px 18px rgba(0,0,0,.18);transition:none;}
+.sb-logo{width:245px;flex:0 0 245px;height:76px;padding:12px 18px;border-right:1px solid var(--border);display:flex;flex-direction:row;align-items:center;gap:10px;}
+.sb-logo-row{display:flex;align-items:center;gap:10px;cursor:pointer;min-width:0;}
+.sb-img{width:42px;height:42px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:16px;overflow:hidden;flex-shrink:0;}
 .sb-img img{width:100%;height:100%;object-fit:cover;}
-.sb-name{font-family:var(--serif);font-style:italic;font-size:15px;line-height:1.2;}
-.sb-sub{font-size:8px;color:var(--w40);font-family:var(--mono);letter-spacing:.18em;text-transform:uppercase;margin-top:1px;}
-.sb-change{font-size:8px;color:var(--orange);font-family:var(--mono);letter-spacing:.1em;cursor:pointer;text-transform:uppercase;}
-.sb-change:hover{color:var(--orange2);}
-.sb-nav{flex:1;padding:12px 0;overflow-y:auto;}
-.nav-grp{
-  font-size:9px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;
-  font-family:var(--mono);color:var(--orange2);
-  padding:14px 20px 5px;margin-top:6px;
-  border-top:1px solid rgba(251,146,60,.2);
-}
-.ni{display:flex;align-items:center;gap:9px;padding:9px 18px;cursor:pointer;font-size:12px;font-weight:500;color:var(--w40);transition:background .10s,color .10s,border-color .10s;border-left:2px solid transparent;position:relative;}
-.ni:hover{background:var(--w06);color:var(--w);}
-.ni.active{background:rgba(251,146,60,.1);color:var(--orange2);border-left-color:var(--orange);}
-.ni-ic{font-size:14px;width:18px;text-align:center;}
-.ni-badge{margin-left:auto;background:var(--orange);color:#fff;font-size:8px;font-family:var(--mono);padding:1px 5px;font-weight:700;}
-.sb-foot{padding:18px 24px;border-top:1px solid var(--border);font-size:10px;color:var(--w40);font-family:var(--mono);letter-spacing:.08em;}
+.sb-name{font-family:var(--serif);font-style:italic;font-size:17px;line-height:1.1;white-space:nowrap;}
+.sb-sub{font-size:8px;color:var(--orange2);font-family:var(--mono);letter-spacing:.16em;text-transform:uppercase;margin-top:4px;white-space:nowrap;}
+.sb-change{display:none;}
+.sb-nav{padding:0 8px;overflow-x:auto;overflow-y:visible;display:flex;align-items:center;gap:2px;flex:1;min-width:0;height:76px;scrollbar-width:thin;}
+.nav-grp{display:none;}
+.top-menu-group{position:relative;display:flex;align-items:center;height:76px;flex:0 0 auto;}
+.top-menu-trigger{height:76px;border:0;background:none;color:var(--w70);padding:0 11px;cursor:pointer;white-space:nowrap;font:10px var(--sans);font-weight:600;letter-spacing:.02em;display:flex;align-items:center;gap:7px;border-bottom:3px solid transparent;transition:background .12s,color .12s,border-color .12s;}
+.top-menu-trigger:hover,.top-menu-group:focus-within .top-menu-trigger,.top-menu-trigger.has-active{background:rgba(251,146,60,.08);color:var(--w);border-bottom-color:var(--orange);}
+.top-menu-trigger .top-chevron{font-size:11px;color:var(--w40);transition:transform .15s;}
+.top-menu-group:hover .top-menu-trigger .top-chevron,.top-menu-group.open .top-menu-trigger .top-chevron{transform:rotate(180deg);}
+.top-menu-dropdown{position:absolute;top:70px;left:0;min-width:235px;max-width:310px;background:rgba(18,22,43,.99);border:1px solid var(--border2);box-shadow:0 18px 40px rgba(0,0,0,.38);padding:7px;display:none;z-index:500;border-radius:0 0 12px 12px;}
+.top-menu-group:hover .top-menu-dropdown,.top-menu-group.open .top-menu-dropdown,.top-menu-group:focus-within .top-menu-dropdown{display:block;}
+.top-menu-label{font:8px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--orange2);padding:8px 10px 6px;border-bottom:1px solid var(--border);margin-bottom:4px;}
+.top-menu-dropdown .ni{display:flex;align-items:center;gap:9px;width:100%;padding:9px 10px;border:0;border-left:2px solid transparent;background:transparent;cursor:pointer;font-size:11px;font-weight:500;color:var(--w40);transition:background .10s,color .10s,border-color .10s;position:relative;white-space:nowrap;border-radius:7px;}
+.top-menu-dropdown .ni:hover{background:var(--w06);color:var(--w);}
+.top-menu-dropdown .ni.active{background:rgba(251,146,60,.1);color:var(--orange2);border-left-color:var(--orange);}
+.ni-ic{font-size:14px;width:18px;text-align:center;flex:0 0 18px;}
+.ni-badge{margin-left:auto;background:var(--orange);color:#fff;font-size:8px;font-family:var(--mono);padding:1px 5px;font-weight:700;border-radius:4px;}
+.sb-foot{display:none;}
 
 /* ══ MAIN ══ */
-.main{margin-left:236px;flex:1;display:flex;flex-direction:column;min-height:100vh;}
-.topbar{height:52px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:100;}
+.main{margin-left:0;padding-top:76px;flex:1;display:flex;flex-direction:column;min-height:100vh;width:100%;}
+.topbar{height:58px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:76px;z-index:100;}
 .tb-title{font-family:var(--serif);font-style:italic;font-size:17px;}
 .tb-r{display:flex;align-items:center;gap:12px;}
 .tb-date{font-family:var(--mono);font-size:9px;color:var(--w40);letter-spacing:.1em;}
@@ -271,12 +273,33 @@ a{color:inherit;text-decoration:none;}
 
 /* RESPONSIVE */
 @media(max-width:900px){
-  .sb{transform:translateX(-100%);}
-  .sb.open{transform:translateX(0);}
-  .main{margin-left:0;}
+  .sb{height:70px;min-height:70px;}
+  .sb-logo{width:190px;flex-basis:190px;height:70px;padding:10px 12px;}
+  .sb-img{width:38px;height:38px;}
+  .sb-name{font-size:15px;}
+  .sb-nav{height:70px;padding:0 4px;overflow-x:auto;}
+  .top-menu-group{height:70px;}
+  .top-menu-trigger{height:70px;padding:0 9px;font-size:10px;}
+  .top-menu-dropdown{position:fixed;top:70px;left:8px;right:8px;max-width:none;min-width:0;max-height:70vh;overflow:auto;border-radius:0 0 12px 12px;}
+  .main{padding-top:70px;}
+  .topbar{top:70px;}
   .g2,.g3,.g4,.g12,.g21,.g13{grid-template-columns:1fr;}
   .kpi-grid{grid-template-columns:repeat(2,1fr);}
   .content{padding:16px;}
+}
+@media(max-width:600px){
+  .sb{height:62px;min-height:62px;}
+  .sb-logo{width:155px;flex-basis:155px;height:62px;padding:8px 10px;}
+  .sb-img{width:34px;height:34px;}
+  .sb-name{font-size:14px;}
+  .sb-sub{font-size:7px;}
+  .sb-nav{height:62px;}
+  .top-menu-group{height:62px;}
+  .top-menu-trigger{height:62px;padding:0 8px;font-size:9px;}
+  .top-menu-dropdown{top:62px;}
+  .main{padding-top:62px;}
+  .topbar{top:62px;padding:0 12px;}
+  .tb-title{font-size:14px;}
 }
 
 /* ══ LOGIN SCREEN ══ */
@@ -382,6 +405,9 @@ a{color:inherit;text-decoration:none;}
 .qs-hint span{font-size:9px;color:var(--w40);font-family:var(--mono);}
 /* Active nav highlight */
 .ni.active{background:rgba(251,146,60,.1);color:var(--orange2);border-left-color:var(--orange);}
+.top-menu-dropdown .ni.active{border-left-color:var(--orange);}
+.top-menu-group.is-hidden{display:none;}
+@media(max-width:900px){.sb-nav{scrollbar-width:thin;}.top-menu-trigger .top-chevron{display:none;}}
 
 
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
@@ -579,69 +605,120 @@ a{color:inherit;text-decoration:none;}
     </div>
     <div class="sb-change" onclick="openM('mLogo')">✎ Trocar logo</div>
   </div>
-  <nav class="sb-nav">
-    <div class="nav-grp">Principal</div>
-    <div class="ni active" onclick="go('home')"><span class="ni-ic"><i data-lucide="layout-dashboard"></i></span> Visão Geral</div>
-    <div class="ni" onclick="go('ocupacao')"><span class="ni-ic"><i data-lucide="trending-up"></i></span> Ocupação &amp; Posições</div>
+  <nav class="sb-nav" id="wmsTopNav" aria-label="Navegação principal">
+    <div class="top-menu-group">
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">① DASHBOARD <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Principal</div>
+        <div class="ni active" onclick="go('home')"><span class="ni-ic"><i data-lucide="layout-dashboard"></i></span> Visão Geral</div>
+        <div class="ni" onclick="go('ocupacao')"><span class="ni-ic"><i data-lucide="trending-up"></i></span> Ocupação &amp; Posições</div>
+      </div>
+    </div>
 
-    <div class="nav-grp">Recebimento</div>
-    <div class="ni" onclick="go('recUpload')"><span class="ni-ic"><i data-lucide="upload"></i></span> Upload NF</div>
-    <div class="ni" onclick="go('recTarefas')"><span class="ni-ic"><i data-lucide="clipboard-check"></i></span> Conferência e Armazenagem <span class="ni-badge" id="bdRec">0</span></div>
-    <div class="ni" onclick="go('relRecebimento')" title="Relatórios de Recebimento"><span class="ni-ic"><i data-lucide="bar-chart-3"></i></span> Relatórios</div>
-    <div class="ni" onclick="go('armazenagem')"><span class="ni-ic"><i data-lucide="package-check"></i></span> Armazenagem <span class="ni-badge" id="bdArmazem">0</span></div>
+    <div class="top-menu-group">
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">② RECEBIMENTO <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Recebimento</div>
+        <div class="ni" onclick="go('recUpload')"><span class="ni-ic"><i data-lucide="upload"></i></span> Upload NF</div>
+        <div class="ni" onclick="go('recTarefas')"><span class="ni-ic"><i data-lucide="clipboard-check"></i></span> Conferência e Armazenagem <span class="ni-badge" id="bdRec">0</span></div>
+        <div class="ni" onclick="go('relRecebimento')"><span class="ni-ic"><i data-lucide="bar-chart-3"></i></span> Relatórios</div>
+        <div class="ni" onclick="go('armazenagem')"><span class="ni-ic"><i data-lucide="package-check"></i></span> Armazenagem <span class="ni-badge" id="bdArmazem">0</span></div>
+      </div>
+    </div>
 
-    <div class="nav-grp">Estoque</div>
-    <div class="ni" onclick="go('paletes')"><span class="ni-ic"><i data-lucide="layers"></i></span> Paletes</div>
-    <div class="ni" onclick="go('estoqueList')"><span class="ni-ic"><i data-lucide="grid-3x3"></i></span> Produtos</div>
-    <div class="ni" onclick="go('estoqueMapa')"><span class="ni-ic"><i data-lucide="map"></i></span> Mapa Armazém</div>
-    <div class="ni" onclick="go('curvaABC')"><span class="ni-ic"><i data-lucide="pie-chart"></i></span> Curva ABC</div>
-    <div class="ni" onclick="go('movimentar')"><span class="ni-ic"><i data-lucide="repeat"></i></span> Movimentar</div>
-    <div class="ni" onclick="go('tarefasMov')"><span class="ni-ic"><i data-lucide="clipboard-list"></i></span> Tarefas de Movimentação <span class="ni-badge" id="bdTarefasMov">0</span></div>
-    <div class="ni" onclick="go('relEstoque')" title="Relatórios de Estoque"><span class="ni-ic"><i data-lucide="bar-chart-3"></i></span> Relatórios</div>
-    <div class="ni" onclick="go('bloqueios')"><span class="ni-ic"><i data-lucide="ban"></i></span> Bloqueios <span class="ni-badge" id="bdBlk">0</span></div>
+    <div class="top-menu-group">
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">③ ESTOQUE <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Estoque</div>
+        <div class="ni" onclick="go('paletes')"><span class="ni-ic"><i data-lucide="layers"></i></span> Paletes</div>
+        <div class="ni" onclick="go('estoqueList')"><span class="ni-ic"><i data-lucide="grid-3x3"></i></span> Produtos</div>
+        <div class="ni" onclick="go('estoqueMapa')"><span class="ni-ic"><i data-lucide="map"></i></span> Mapa Armazém</div>
+        <div class="ni" onclick="go('curvaABC')"><span class="ni-ic"><i data-lucide="pie-chart"></i></span> Curva ABC</div>
+        <div class="ni" onclick="go('movimentar')"><span class="ni-ic"><i data-lucide="repeat"></i></span> Movimentar</div>
+        <div class="ni" onclick="go('tarefasMov')"><span class="ni-ic"><i data-lucide="clipboard-list"></i></span> Tarefas de Movimentação <span class="ni-badge" id="bdTarefasMov">0</span></div>
+        <div class="ni" onclick="go('relEstoque')"><span class="ni-ic"><i data-lucide="bar-chart-3"></i></span> Relatórios</div>
+        <div class="ni" onclick="go('bloqueios')"><span class="ni-ic"><i data-lucide="ban"></i></span> Bloqueios <span class="ni-badge" id="bdBlk">0</span></div>
+      </div>
+    </div>
 
-    <div class="nav-grp">Saída</div>
-    <div class="ni" onclick="go('sepUpload')"><span class="ni-ic"><i data-lucide="download"></i></span> Upload Pedido/NF</div>
-    <div class="ni" onclick="go('sepTarefas')"><span class="ni-ic"><i data-lucide="list-checks"></i></span> Separações <span class="ni-badge" id="bdSep">0</span></div>
-    <div class="ni" onclick="go('relSaida')" title="Relatórios de Saída"><span class="ni-ic"><i data-lucide="bar-chart-3"></i></span> Relatórios</div>
-    <div class="ni" onclick="go('devolucao')"><span class="ni-ic"><i data-lucide="undo-2"></i></span> Devoluções</div>
-    <div class="ni" onclick="go('expedicao')"><span class="ni-ic"><i data-lucide="truck"></i></span> Expedição <span class="ni-badge" id="bdExp">0</span></div>
+    <div class="top-menu-group">
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">④ SAÍDA <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Saída</div>
+        <div class="ni" onclick="go('sepUpload')"><span class="ni-ic"><i data-lucide="download"></i></span> Upload Pedido/NF</div>
+        <div class="ni" onclick="go('sepTarefas')"><span class="ni-ic"><i data-lucide="list-checks"></i></span> Separações <span class="ni-badge" id="bdSep">0</span></div>
+        <div class="ni" onclick="go('relSaida')"><span class="ni-ic"><i data-lucide="bar-chart-3"></i></span> Relatórios</div>
+        <div class="ni" onclick="go('devolucao')"><span class="ni-ic"><i data-lucide="undo-2"></i></span> Devoluções</div>
+        <div class="ni" onclick="go('expedicao')"><span class="ni-ic"><i data-lucide="truck"></i></span> Expedição <span class="ni-badge" id="bdExp">0</span></div>
+      </div>
+    </div>
 
-    <div class="nav-grp">Qualidade & Gestão</div>
-    <div class="ni" onclick="go('alertasValidade')"><span class="ni-ic"><i data-lucide="alarm-clock"></i></span> Alertas Validade <span class="ni-badge" id="bdAlerta">0</span></div>
-    <div class="ni" onclick="go('ageingReport')"><span class="ni-ic"><i data-lucide="calendar"></i></span> Ageing Report</div>
-    <div class="ni" onclick="go('custoArmazem')"><span class="ni-ic"><i data-lucide="dollar-sign"></i></span> Custo Armazém</div>
-    <div class="nav-grp">Inventário</div>
-    <div class="ni" onclick="go('invList')"><span class="ni-ic"><i data-lucide="layout-grid"></i></span> Inventários <span class="ni-badge" id="bdInv">0</span></div>
-    <div class="ni" onclick="gerarInventario('rotativo')"><span class="ni-ic"><i data-lucide="refresh-ccw"></i></span> Gerar Rotativo</div>
-    <div class="ni" onclick="gerarInventario('geral')"><span class="ni-ic"><i data-lucide="plus-circle"></i></span> Gerar Geral</div>
-    <div class="ni" onclick="go('conciliacao')"><span class="ni-ic"><i data-lucide="shuffle"></i></span> Conciliação Cliente</div>
+    <div class="top-menu-group">
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">⑤ QUALIDADE <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Qualidade &amp; Gestão</div>
+        <div class="ni" onclick="go('alertasValidade')"><span class="ni-ic"><i data-lucide="alarm-clock"></i></span> Alertas Validade <span class="ni-badge" id="bdAlerta">0</span></div>
+        <div class="ni" onclick="go('ageingReport')"><span class="ni-ic"><i data-lucide="calendar"></i></span> Ageing Report</div>
+        <div class="ni" onclick="go('custoArmazem')"><span class="ni-ic"><i data-lucide="dollar-sign"></i></span> Custo Armazém</div>
+      </div>
+    </div>
 
+    <div class="top-menu-group">
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">⑥ INVENTÁRIO <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Inventário</div>
+        <div class="ni" onclick="go('invList')"><span class="ni-ic"><i data-lucide="layout-grid"></i></span> Inventários <span class="ni-badge" id="bdInv">0</span></div>
+        <div class="ni" onclick="gerarInventario('rotativo')"><span class="ni-ic"><i data-lucide="refresh-ccw"></i></span> Gerar Rotativo</div>
+        <div class="ni" onclick="gerarInventario('geral')"><span class="ni-ic"><i data-lucide="plus-circle"></i></span> Gerar Geral</div>
+        <div class="ni" onclick="go('conciliacao')"><span class="ni-ic"><i data-lucide="shuffle"></i></span> Conciliação Cliente</div>
+      </div>
+    </div>
 
-    <div class="nav-grp">Carga & Estrutura</div>
-    <div class="ni" onclick="go('cargaEstoque')"><span class="ni-ic"><i data-lucide="upload"></i></span> Carga de Estoque</div>
-    <div class="ni" onclick="go('enderecos')"><span class="ni-ic"><i data-lucide="grid-3x3"></i></span> Endereços</div>
-    <div class="ni" onclick="go('capArmazem')" style="color:var(--b2);"><span class="ni-ic"><i data-lucide="map"></i></span> Configuração de Área Blocada</div>
-    <div class="ni" onclick="go('matrizPP')" style="color:var(--orange2);"><span class="ni-ic"><i data-lucide="layout-grid"></i></span> Matriz de Capacidade PP</div>
-    <div class="ni" onclick="abrirReimpressao()" title="Reimprimir etiquetas por Cód. Palete ou WMS"><span class="ni-ic"><i data-lucide="printer"></i></span> Etiquetas</div>
-    <div class="ni" onclick="go('clientes')"><span class="ni-ic"><i data-lucide="building-2"></i></span> Clientes</div>
-    <div class="ni" onclick="go('sites')"><span class="ni-ic"><i data-lucide="factory"></i></span> Unidades Logísticas</div>
+    <div class="top-menu-group">
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">⑦ ESTRUTURA <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Carga &amp; Estrutura</div>
+        <div class="ni" onclick="go('cargaEstoque')"><span class="ni-ic"><i data-lucide="upload"></i></span> Carga de Estoque</div>
+        <div class="ni" onclick="go('enderecos')"><span class="ni-ic"><i data-lucide="grid-3x3"></i></span> Endereços</div>
+        <div class="ni" onclick="go('capArmazem')"><span class="ni-ic"><i data-lucide="map"></i></span> Configuração de Área Blocada</div>
+        <div class="ni" onclick="go('matrizPP')"><span class="ni-ic"><i data-lucide="layout-grid"></i></span> Matriz de Capacidade PP</div>
+        <div class="ni" onclick="abrirReimpressao()"><span class="ni-ic"><i data-lucide="printer"></i></span> Etiquetas</div>
+        <div class="ni" onclick="go('clientes')"><span class="ni-ic"><i data-lucide="building-2"></i></span> Clientes</div>
+        <div class="ni" onclick="go('sites')"><span class="ni-ic"><i data-lucide="factory"></i></span> Unidades Logísticas</div>
+      </div>
+    </div>
 
-    <div class="nav-grp" id="navGestaoGrp" style="display:none;">Gestão</div>
-    <div class="ni" id="navAjuste" onclick="go('ajusteEstoque')" style="display:none;"><span class="ni-ic"><i data-lucide="scale"></i></span> Ajuste de Estoque</div>
-    <div class="ni" id="navAceite" onclick="go('masterAceite')" style="display:none;"><span class="ni-ic"><i data-lucide="key"></i></span> Aceites Master <span class="ni-badge" id="bdAceite">0</span></div>
-    <div class="ni" id="navUsuarios" onclick="go('usuarios')" style="display:none;"><span class="ni-ic"><i data-lucide="user"></i></span> Usuários</div>
-    <div class="ni" id="navLimpar" onclick="go('limparEstoque')" style="display:none;"><span class="ni-ic"><i data-lucide="trash-2"></i></span> Limpar Estoque</div>
-    <div class="ni" id="navMapaEstoqueGestao" onclick="go('mapaEstoqueGestao')" style="display:none;"><span class="ni-ic"><i data-lucide="file-spreadsheet"></i></span> Mapa de Estoque</div>
-    <div class="ni" id="navBackup" onclick="go('backup')" style="display:none;"><span class="ni-ic"><i data-lucide="save"></i></span> Backup</div>
-    <div class="ni" id="navConfigGeral" onclick="go('configGeral')" style="display:none;"><span class="ni-ic"><i data-lucide="settings"></i></span> Configurações Gerais</div>
+    <div class="top-menu-group" id="topMenuGestao" style="display:none;">
+      <span id="navGestaoGrp" style="display:none;" aria-hidden="true"></span>
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">⑧ GESTÃO <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Gestão / Administração</div>
+        <div class="ni" id="navAjuste" onclick="go('ajusteEstoque')" style="display:none;"><span class="ni-ic"><i data-lucide="scale"></i></span> Ajuste de Estoque</div>
+        <div class="ni" id="navAceite" onclick="go('masterAceite')" style="display:none;"><span class="ni-ic"><i data-lucide="key"></i></span> Aceites Master <span class="ni-badge" id="bdAceite">0</span></div>
+        <div class="ni" id="navUsuarios" onclick="go('usuarios')" style="display:none;"><span class="ni-ic"><i data-lucide="user"></i></span> Usuários</div>
+        <div class="ni" id="navLimpar" onclick="go('limparEstoque')" style="display:none;"><span class="ni-ic"><i data-lucide="trash-2"></i></span> Limpar Estoque</div>
+        <div class="ni" id="navMapaEstoqueGestao" onclick="go('mapaEstoqueGestao')" style="display:none;"><span class="ni-ic"><i data-lucide="file-spreadsheet"></i></span> Mapa de Estoque</div>
+        <div class="ni" id="navBackup" onclick="go('backup')" style="display:none;"><span class="ni-ic"><i data-lucide="save"></i></span> Backup</div>
+        <div class="ni" id="navConfigGeral" onclick="go('configGeral')" style="display:none;"><span class="ni-ic"><i data-lucide="settings"></i></span> Configurações Gerais</div>
+      </div>
+    </div>
 
-    <div class="nav-grp">Dados</div>
-    <div class="ni" onclick="go('historico')"><span class="ni-ic"><i data-lucide="layout-grid"></i></span> Movimentações</div>
-    <div class="ni" onclick="exportAll()"><span class="ni-ic"><i data-lucide="download"></i></span> Exportar CSV</div>
+    <div class="top-menu-group">
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">⑨ DADOS <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Dados</div>
+        <div class="ni" onclick="go('historico')"><span class="ni-ic"><i data-lucide="layout-grid"></i></span> Movimentações</div>
+        <div class="ni" onclick="exportAll()"><span class="ni-ic"><i data-lucide="download"></i></span> Exportar CSV</div>
+      </div>
+    </div>
 
-    <div class="nav-grp">Conta</div>
-    <div class="ni" onclick="go('minhaConta')"><span class="ni-ic"><i data-lucide="user-cog"></i></span> Minha Conta</div>
+    <div class="top-menu-group">
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">⑩ CONTA <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Conta</div>
+        <div class="ni" onclick="go('minhaConta')"><span class="ni-ic"><i data-lucide="user-cog"></i></span> Minha Conta</div>
+      </div>
+    </div>
   </nav>
   <div class="sb-foot">WMS • <span data-wms-version>v2.1.2 Build 006</span><br>YALOG-WMS-001 • <span data-wms-version>v2.1.2 Build 006</span><br><span data-wms-update style="color:var(--orange2);">Atualização 006</span></div>
 </aside>
@@ -5016,6 +5093,51 @@ function _persistirDBCanonico(db){
   return _yalogPersistQueue;
 }
 
+// BUILD 019 — SESSÃO PERSISTENTE CANÔNICA
+// A sessão do WMS não pode depender exclusivamente de sessionStorage/localStorage.
+// Publicação/refresh não é logout. O IndexedDB guarda uma cópia independente
+// da sessão para permitir a restauração mesmo se o cache síncrono falhar.
+const WMS_IDB_SESSION_KEY='sessao-wms-canonica';
+async function _idbGravarSessaoWms(sessao){
+  if(!_idbDisponivel()||!sessao)return false;
+  const conn=await _idbAbrir(); if(!conn)return false;
+  return new Promise(resolve=>{
+    try{
+      const tx=conn.transaction(WMS_IDB_STORE,'readwrite');
+      tx.objectStore(WMS_IDB_STORE).put({sessao:_cloneSeguro(sessao),salvoEm:new Date().toISOString(),schema:'YALOG-WMS-SESSION-001'},WMS_IDB_SESSION_KEY);
+      tx.oncomplete=()=>{try{conn.close();}catch(e){}resolve(true);};
+      tx.onerror=()=>{try{conn.close();}catch(e){}resolve(false);};
+      tx.onabort=()=>{try{conn.close();}catch(e){}resolve(false);};
+    }catch(e){try{conn.close();}catch(_e){}resolve(false);}
+  });
+}
+async function _idbLerSessaoWms(){
+  if(!_idbDisponivel())return null;
+  const conn=await _idbAbrir(); if(!conn)return null;
+  return new Promise(resolve=>{
+    try{
+      const tx=conn.transaction(WMS_IDB_STORE,'readonly');
+      const req=tx.objectStore(WMS_IDB_STORE).get(WMS_IDB_SESSION_KEY);
+      req.onsuccess=()=>resolve(req.result?.sessao?_cloneSeguro(req.result.sessao):null);
+      req.onerror=()=>resolve(null);
+      tx.oncomplete=()=>{try{conn.close();}catch(e){}};
+    }catch(e){try{conn.close();}catch(_e){}resolve(null);}
+  });
+}
+async function _idbRemoverSessaoWms(){
+  if(!_idbDisponivel())return false;
+  const conn=await _idbAbrir(); if(!conn)return false;
+  return new Promise(resolve=>{
+    try{
+      const tx=conn.transaction(WMS_IDB_STORE,'readwrite');
+      tx.objectStore(WMS_IDB_STORE).delete(WMS_IDB_SESSION_KEY);
+      tx.oncomplete=()=>{try{conn.close();}catch(e){}resolve(true);};
+      tx.onerror=()=>{try{conn.close();}catch(e){}resolve(false);};
+      tx.onabort=()=>{try{conn.close();}catch(e){}resolve(false);};
+    }catch(e){try{conn.close();}catch(_e){}resolve(false);}
+  });
+}
+
 if(typeof window!=='undefined' && window.addEventListener){
   window.addEventListener('beforeunload',()=>{try{_persistirDBCanonico(DB);}catch(e){}});
 }
@@ -5972,14 +6094,20 @@ const Core = {
     try {
       const raw=JSON.stringify(value);
       sessionStorage.setItem(key, raw);
-      if(key===SESSAO_KEY) localStorage.setItem(SESSAO_PERSIST_KEY, raw);
+      if(key===SESSAO_KEY){
+        try{ localStorage.setItem(SESSAO_PERSIST_KEY, raw); }catch(e){ console.warn('[Core.sessionSet] localStorage indisponível; sessão canônica será usada.',e); }
+        if(typeof _idbGravarSessaoWms==='function') _idbGravarSessaoWms(value).catch(e=>console.warn('[WMS SESSION 019] falha ao persistir sessão canônica:',e));
+      }
       return true;
     } catch(e) { console.warn('[Core.sessionSet] falha ao gravar', key, e); return false; }
   },
   sessionRemove(key) {
     try {
       sessionStorage.removeItem(key);
-      if(key===SESSAO_KEY) localStorage.removeItem(SESSAO_PERSIST_KEY);
+      if(key===SESSAO_KEY){
+        try{ localStorage.removeItem(SESSAO_PERSIST_KEY); }catch(e){}
+        if(typeof _idbRemoverSessaoWms==='function') _idbRemoverSessaoWms().catch(e=>console.warn('[WMS SESSION 019] falha ao remover sessão canônica:',e));
+      }
       return true;
     } catch(e) { console.warn('[Core.sessionRemove] falha ao remover', key, e); return false; }
   },
@@ -6346,9 +6474,9 @@ function save(){
     // Após uma limpeza total, o marcador fica até o primeiro novo estoque.
     // Isso impede a recuperação automática do estoque antigo que o Master
     // mandou excluir.
-    return ok;
+    return true;
   }
-  return ok;
+  return !!(localOk || _idbDisponivel());
 }
 function _applyLoadedData(parsed){
   if(parsed && Object.keys(parsed).length > 0){
@@ -6648,6 +6776,25 @@ function statusSp(s){return s==='LIBERADO'?'<span class="sp sp-lib">LIBERADO</sp
 function barcode(num){let h='<div class="barcode-wrap"><div class="barcode-bars">';const encoded=String(num).split('').map(c=>parseInt(c));for(let i=0;i<80;i++){const w=Math.random()>0.5?2:3;h+=`<div class="barcode-bar" style="width:${w}px;height:${30+Math.random()*20}px;"></div>`;}h+=`</div><div class="barcode-num">${num}</div></div>`;return h;}
 
 // ══════════════════════════════════════════════════════════════
+// TOP NAVIGATION · dropdowns sem alterar a navegação funcional
+// ══════════════════════════════════════════════════════════════
+function toggleTopMenu(group){
+  document.querySelectorAll('.top-menu-group.open').forEach(g=>{if(g!==group)g.classList.remove('open');});
+  if(group)group.classList.toggle('open');
+}
+function closeTopMenus(){document.querySelectorAll('.top-menu-group.open').forEach(g=>g.classList.remove('open'));}
+function syncTopNavActive(){
+  document.querySelectorAll('.top-menu-group').forEach(g=>{
+    const active=g.querySelector('.top-menu-dropdown .ni.active');
+    const trigger=g.querySelector('.top-menu-trigger');
+    if(trigger)trigger.classList.toggle('has-active',!!active);
+  });
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.top-menu-group'))closeTopMenus();
+});
+
+// ══════════════════════════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════════════════════════
 const TITLES={mapaEstoqueGestao:'Mapa de Estoque',capArmazem:'Configuração de Área Blocada',home:'Visão Geral',recUpload:'Entrada de Mercadoria',recTarefas:'Conferências',estoqueList:'Produtos em Estoque',estoqueMapa:'Mapa do Armazém',curvaABC:'Curva ABC',bloqueios:'Posições Bloqueadas',sepUpload:'Solicitação de Separação',sepTarefas:'Tarefas de Separação',expedicao:'Expedição',devolucao:'Devoluções de Clientes',alertasValidade:'Alertas de Validade',ageingReport:'Ageing Report',custoArmazem:'Custo de Armazenagem',invList:'Inventários',historico:'Movimentações',cargaEstoque:'Carga de Estoque',enderecos:'Endereços',ajusteEstoque:'Ajuste de Estoque',masterAceite:'Aceites Master',usuarios:'Usuários',armazenagem:'Tarefas de Armazenagem',movimentar:'Movimentação entre Endereços',relSaida:'Relatório de Saída',relEstoque:'Relatório de Estoque',relRecebimento:'Relatório de Recebimento',tarefasMov:'Tarefas de Movimentação',paletes:'Rastreabilidade de Paletes',sites:'Unidades Logísticas',clientes:'Cadastro de Clientes',matrizPP:'Matriz Capacidade PP',limparEstoque:'Limpar / Excluir Estoque',backup:'Backup do Estoque',configGeral:'Configurações Gerais',minhaConta:'Minha Conta'};
@@ -6655,6 +6802,8 @@ function go(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById('s-'+id).classList.add('active');
   document.querySelectorAll('.ni').forEach(n=>{n.classList.remove('active');if(n.getAttribute('onclick')&&n.getAttribute('onclick').includes("'"+id+"'"))n.classList.add('active');});
+  syncTopNavActive();
+  closeTopMenus();
   document.getElementById('tbTitle').textContent=TITLES[id]||id;
   // módulos originais
   if(id==='home'){populateHomeSiteFiltro();renderHome();}
@@ -9905,14 +10054,14 @@ function injectDemo(){
 (function(){const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='flex';})();
 // ══════════════════════════════════════════════════════════════
 // YALOG WMS · VERSIONAMENTO CENTRALIZADO
-// Atualização 018 — Persistência canônica local, recuperação multi-fonte e proteção transacional contra perda de estoque/históricos; exclusão somente por ação autorizada do Master.
+// Atualização 020 — Navegação superior responsiva com menus contextuais por módulo; estrutura funcional e persistência preservadas.
 // Atualize SOMENTE estes valores a cada publicação. O refresh da
 // página preserva a sessão autenticada; a versão não é usada como
 // critério de logout.
 // ══════════════════════════════════════════════════════════════
 const YALOG_WMS_VERSION = '2.1.2';
-const YALOG_WMS_BUILD = '018';
-const YALOG_WMS_UPDATE = '018';
+const YALOG_WMS_BUILD = '020';
+const YALOG_WMS_UPDATE = '020';
 const YALOG_WMS_RELEASE = `v${YALOG_WMS_VERSION} Build ${YALOG_WMS_BUILD}`;
 
 function aplicarVersaoWMS(){
@@ -10278,7 +10427,20 @@ async function _tentarRestaurarSessaoWms(){
   // tentamos revalidá-lo primeiro; se não houver, o WMS restaura diretamente
   // a identidade local. Logout continua sendo o único caminho que remove
   // explicitamente as duas cópias da sessão.
-  const salva=Core.sessionGet(SESSAO_KEY);
+  let salva=Core.sessionGet(SESSAO_KEY);
+  // BUILD 019: publicação/refresh não é logout. Se sessionStorage/localStorage
+  // não trouxerem a sessão, tenta a cópia canônica no IndexedDB antes de pedir
+  // novo login. A sessão canônica só é removida por logout explícito/reset.
+  if(!salva && typeof _idbLerSessaoWms==='function'){
+    try{
+      const canonica=await _idbLerSessaoWms();
+      if(canonica){
+        salva=canonica;
+        Core.sessionSet(SESSAO_KEY,canonica);
+        console.log('[WMS SESSION 019] sessão restaurada pelo IndexedDB após publicação/refresh.');
+      }
+    }catch(e){ console.warn('[WMS SESSION 019] falha ao ler sessão canônica:',e); }
+  }
   if(!salva || !salva.company_id || !salva.login || !salva.role) return false;
 
   // 1) Sessão SSO: se houver token, tenta revalidar no backend.
@@ -10393,8 +10555,9 @@ async function initLogin(){
 
   // 3. Sessão ausente/expirada/revogada e sem handoff: mostrar login manual.
   if(overlay) overlay.style.display='none';
+  // BUILD 019: ausência temporária de sessão não autoriza exclusão da sessão
+  // persistente. Somente Logout explícito ou Reset Master remove a sessão.
   usuarioAtual=null;
-  Core.sessionRemove(SESSAO_KEY);
   document.getElementById('loginBoxFirstAccess').style.display='none';
   document.getElementById('loginBoxNormal').style.display='block';
   document.getElementById('loginOverlay').style.display='flex';
@@ -10647,8 +10810,10 @@ async function fazerLogin(){
       showT('Bem-vindo, '+usuario.nome+'!','ok');
     }
   }catch(e){
-    console.error('[WMS] Erro no login:',e);
-    errEl.textContent='Erro inesperado ao entrar. Tente novamente.';
+    console.error('[WMS LOGIN 019] Erro inesperado:',e);
+    const msg=String(e?.message||e||'Erro desconhecido');
+    errEl.textContent='Erro inesperado ao entrar. A sessão não foi encerrada. Tente novamente.';
+    errEl.title=msg;
     errEl.style.display='block';
   }finally{
     if(btn){ btn.disabled=false; btn.textContent='Entrar →'; }
@@ -13594,6 +13759,12 @@ function updateNavByPerfil(){
   if(navMapa)navMapa.style.display=(isLiderOuMaster||perfil==='analista')?'':'none';
   const navCfg=document.getElementById('navConfigGeral');
   if(navCfg)navCfg.style.display=isMasterPerfil?'':'none';
+  const topGestao=document.getElementById('topMenuGestao');
+  if(topGestao){
+    const hasVisible=[navAjuste,navAceite,navU,navL,navB,navMapa,navCfg].some(el=>el&&el.style.display!=='none');
+    topGestao.style.display=hasVisible?'':'none';
+  }
+  syncTopNavActive();
 }
 
 function previewLogo(input){
