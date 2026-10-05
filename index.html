@@ -403,7 +403,84 @@ a{color:inherit;text-decoration:none;}
 
 
 
-/* ══ BUILD 013 — RESPONSIVIDADE + FLUIDEZ DO MAPA ══ */
+
+/* ══ BUILD 014 — MAPA POR RUAS/BLOCOS + RESPONSIVIDADE GLOBAL ══ */
+.mapa-toolbar{width:100%;box-sizing:border-box;}
+.mapa-layout{width:100%;box-sizing:border-box;}
+.mapa-main{min-width:0;max-width:100%;}
+.mapa-panel{min-width:0;max-width:100%;}
+.wmap{width:max-content;min-width:100%;padding:10px 8px 18px;}
+.wmap-street{display:grid;grid-template-columns:70px minmax(0,1fr);gap:10px;align-items:start;margin-bottom:14px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);}
+.wmap-street-label{font-family:var(--mono);font-size:10px;color:var(--orange2);font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding-top:8px;white-space:nowrap;}
+.wmap-blocks{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;}
+.wmap-block{border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.018);padding:8px;min-width:128px;}
+.wmap-block-title{font:700 9px var(--mono);color:var(--w60);margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--border);}
+.wmap-block-cells{display:grid;grid-template-columns:repeat(4,minmax(44px,1fr));gap:5px;}
+.wmap-block .wc{width:44px;height:38px;box-sizing:border-box;}
+.wmap-empty{padding:40px;text-align:center;color:var(--w40);font:11px var(--mono);}
+@media(max-width:1200px){.mapa-layout{grid-template-columns:minmax(0,1fr) 300px!important;}.wmap-blocks{gap:8px;}.wmap-block{min-width:120px;}}
+@media(max-width:900px){
+  .mapa-layout{grid-template-columns:1fr!important;min-height:0!important;}
+  .mapa-main{max-height:58vh;min-height:320px;overflow:auto;}
+  .mapa-panel{max-height:44vh;min-height:260px;border-left:0;border-top:1px solid var(--border);}
+  .wmap-street{grid-template-columns:1fr;gap:5px;}
+  .wmap-blocks{flex-wrap:nowrap;overflow-x:auto;padding-bottom:8px;}
+  .wmap-block{flex:0 0 auto;}
+}
+@media(max-width:600px){
+  .content{padding:10px!important;}
+  .ph{gap:10px;flex-wrap:wrap;}
+  .ph-title{font-size:24px!important;}
+  .mapa-toolbar{display:grid;grid-template-columns:1fr;}
+  .mapa-search-wrap{min-width:0!important;width:100%;}
+  .mapa-toolbar select,.mapa-toolbar button{width:100%;min-width:0;}
+  .wmap{min-width:720px;}
+}
+/* Formulário de ajuste: cliente opcional + endereço de digitação livre */
+.aj-endereco-wrap{position:relative;}
+.aj-endereco-hint{font:9px var(--mono);color:var(--w40);margin-top:5px;}
+
+
+/* ══ BUILD 014 — RESPONSIVIDADE GLOBAL E NAVEGAÇÃO FLUIDA ══ */
+.sb{transition:transform .16s ease;}
+.ni{transition:background .08s,color .08s,border-color .08s;}
+.screen.active{animation:fin .08s ease;}
+.mo{transition:opacity .12s ease;}
+.md{width:min(92vw,540px);max-height:90vh;overflow:auto;padding:clamp(18px,3vw,32px);}
+.md-wide{width:min(94vw,820px);}.md-xl{width:min(95vw,1100px);}
+.topbar{padding:0 clamp(10px,2vw,28px);gap:10px;}
+.tb-r{min-width:0;flex-wrap:wrap;justify-content:flex-end;}
+.tb-date{white-space:nowrap;}
+@media(max-width:1100px){
+  .main{margin-left:236px;min-width:0;}
+  .content{padding:20px;}
+  .topbar{padding:0 16px;}
+}
+@media(max-width:900px){
+  .main{margin-left:0;width:100%;}
+  .topbar{height:auto;min-height:52px;padding:8px 12px;align-items:center;}
+  .tb-title{font-size:15px;}
+  .tb-r{gap:6px;}
+  .tb-date{display:none;}
+  .content{padding:14px;overflow-x:hidden;}
+  .ph{margin-bottom:16px;}
+  .frow{grid-template-columns:1fr!important;}
+  .tw{max-width:100%;overflow:auto;}
+  .mo{padding:10px;align-items:flex-start;overflow:auto;}
+  .md,.md-wide,.md-xl{width:100%;max-width:none;max-height:calc(100vh - 20px);margin:auto;}
+}
+@media(max-width:600px){
+  html{font-size:13px;}
+  .content{padding:10px;}
+  .topbar{padding:7px 10px;}
+  .tb-btn{padding:7px 9px;font-size:9px;}
+  .tb-r{max-width:68vw;}
+  .md{padding:16px;}
+  .btn{max-width:100%;}
+  .fsec{padding:14px!important;}
+}
+
+/* ══ BUILD 014 — RESPONSIVIDADE + FLUIDEZ DO MAPA ══ */
 .mapa-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;background:var(--panel);border:1px solid var(--border);padding:10px 12px;}
 .mapa-search{flex:1 1 300px;min-width:220px;background:var(--bg3);border:1px solid var(--border2);color:var(--w);padding:9px 12px 9px 34px;font:11px var(--sans);outline:none;}
 .mapa-search:focus{border-color:var(--orange);}
@@ -1656,16 +1733,18 @@ a{color:inherit;text-decoration:none;}
 
   <div class="fsec">
     <div class="fsec-t">⚖️ Solicitar Ajuste</div>
-    <div style="font-size:11px;color:var(--w60);margin:-4px 0 14px;">Selecione primeiro <strong>Unidade, Cliente e Endereço</strong>. O sistema exibirá o estoque encontrado nessa posição para que o item correto seja selecionado antes do ajuste.</div>
+    <div style="font-size:11px;color:var(--w60);margin:-4px 0 14px;">Selecione a <strong>Unidade</strong> e informe o <strong>Endereço</strong>. O Cliente pode ser deixado em <strong>Todos</strong> para localizar rapidamente qualquer estoque naquela posição. O sistema exibirá o conteúdo encontrado para seleção do item correto.</div>
     <div class="frow">
       <div class="fg"><label>Site / Unidade <span class="req">*</span></label>
         <select id="ajSite" onchange="onAjSiteChange()"><option value="">Selecione a unidade...</option></select>
       </div>
-      <div class="fg"><label>Cliente <span class="req">*</span></label>
-        <select id="ajCliente" onchange="onAjClienteChange()" disabled><option value="">Selecione primeiro a unidade...</option></select>
+      <div class="fg"><label>Cliente</label>
+        <select id="ajCliente" onchange="onAjClienteChange()" disabled><option value="">Todos os Clientes</option></select>
       </div>
-      <div class="fg"><label>Endereço <span class="req">*</span></label>
-        <select id="ajEndereco" onchange="onAjEnderecoChange()" disabled><option value="">Selecione primeiro a unidade...</option></select>
+      <div class="fg aj-endereco-wrap"><label>Endereço <span class="req">*</span></label>
+        <input id="ajEndereco" type="text" list="ajEnderecosLista" placeholder="Digite o endereço, ex.: 01.006.01" oninput="onAjEnderecoChange()" disabled autocomplete="off">
+        <datalist id="ajEnderecosLista"></datalist>
+        <div class="aj-endereco-hint">Digite diretamente ou selecione uma sugestão. O sistema consulta a posição informada.</div>
       </div>
     </div>
     <input type="hidden" id="ajWmsId" value="">
@@ -5962,7 +6041,7 @@ const YALOG_LOGIN_INTELIGENTE_RESERVADO = false;
 
 
 // ══════════════════════════════════════════════════════════════
-// BUILD 013 — PRODUCT CONTINUITY GUARD
+// BUILD 014 — PRODUCT CONTINUITY GUARD + FULL DATA CONTINUITY
 // Produtos existentes jamais podem desaparecer por troca de HTML,
 // tenant cache, sync remoto incompleto ou reconstrução de DB.
 // ══════════════════════════════════════════════════════════════
@@ -5971,17 +6050,21 @@ function _produtoGuardKey(){return PRODUCT_GUARD_KEY+':'+(_companyIdLocalAtual||
 function _produtoGuardLerMelhor(){
   const candidatos=[];
   const companyAtual=_companyIdLocalAtual||null;
+  const add=(v,source='guard')=>{
+    if(v&&Array.isArray(v.produtos)&&v.produtos.length&&(!companyAtual || !v.companyId || v.companyId===companyAtual))
+      candidatos.push({...v,_source:source});
+  };
   try{
     for(let i=0;i<localStorage.length;i++){
       const k=localStorage.key(i)||'';
       if(k===PRODUCT_GUARD_KEY||k.startsWith(PRODUCT_GUARD_KEY+':')){
-        try{
-          const v=JSON.parse(localStorage.getItem(k)||'null');
-          // Nunca mistura empresas: quando há tenant autenticado, aceita
-          // somente snapshot daquele tenant ou snapshot legado global.
-          if(v&&Array.isArray(v.produtos)&&v.produtos.length&&
-             (!companyAtual || !v.companyId || v.companyId===companyAtual)) candidatos.push(v);
-        }catch(e){}
+        try{ add(JSON.parse(localStorage.getItem(k)||'null'),k); }catch(e){}
+      }
+      // Também considera o DB operacional global e a chave tenant-aware.
+      // Nunca apaga nem altera essas chaves aqui; apenas lê para recuperação.
+      const tenantPrefix=companyAtual?('wms:'+companyAtual+':'+DBKEY):'';
+      if(k===DBKEY || (tenantPrefix && k===tenantPrefix)){
+        try{ const db=JSON.parse(localStorage.getItem(k)||'null'); if(db?.produtos?.length)add({produtos:db.produtos,companyId:companyAtual},k); }catch(e){}
       }
     }
   }catch(e){}
@@ -6039,7 +6122,20 @@ function _recuperarProdutosAntesDoLoad(d){
   return out;
 }
 
+function _protegerBaseCompletaAntesDePersistir(){
+  if(DB?._masterDataDeletion||DB?._estoqueLimpoEm)return;
+  const guard=_dbSnapshotAtual();
+  if(!guard||!_dbTemDadosProtegidos(guard))return;
+  const antes=_dbPontuacao(DB);
+  const mesclado=_mesclarDBSemPerda(DB,guard);
+  const depois=_dbPontuacao(mesclado);
+  if(depois>antes){
+    console.warn('[WMS DATA GUARD] restauração preventiva da base completa:',depois-antes,'registros/cadastros preservados.');
+    DB=mesclado;
+  }
+}
 function save(){
+  _protegerBaseCompletaAntesDePersistir();
   _protegerProdutosAntesDePersistir();
   _produtoGuardSalvar(DB);
   // REGRA DEFINITIVA: toda gravação válida gera snapshot integral antes do
@@ -8398,19 +8494,29 @@ function renderMapa(){
     <div><div style="font-size:8px;color:var(--w40);font-family:var(--mono);text-transform:uppercase;margin-bottom:4px;">Mistos</div><div style="font-family:var(--serif);font-style:italic;font-size:24px;color:#c084fc;">${nMistos.toLocaleString('pt-BR')}</div></div>
   `;
 
-  // Mapa visual — desenha TODOS os endereços cadastrados
-  const addrs=ends.map(e=>e.addr).sort();
-  const ruaMap={};
-  addrs.forEach(a=>{const parts=a.split('-');const rua=parts[0]||'RUA';ruaMap[rua]=ruaMap[rua]||[];ruaMap[rua].push(a);});
+  // Mapa visual — representa Rua → Bloco → Posições, evitando a lacuna vertical
+  // causada por tratar cada endereço como uma rua independente.
+  const addrs=ends.map(e=>e.addr).sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
+  const ruas={};
+  const parseAddr=(addr)=>{
+    const m=String(addr||'').match(/^(\d+)[.\-](\d+)[.\-](\d+)(?:[.\-](\d+))?/);
+    return m?{rua:m[1],bloco:m[2],pos:m[3],nivel:m[4]||''}:{rua:'OUTROS',bloco:String(addr||'—'),pos:'',nivel:''};
+  };
+  addrs.forEach(addr=>{const x=parseAddr(addr);ruas[x.rua]=ruas[x.rua]||{};ruas[x.rua][x.bloco]=ruas[x.rua][x.bloco]||[];ruas[x.rua][x.bloco].push(addr);});
   let html='<div class="wmap">';
-  Object.entries(ruaMap).forEach(([rua,cells])=>{
-    html+=`<div class="wmap-row"><div class="wmap-label">${rua}</div><div class="wmap-cells">`;
-    cells.forEach(addr=>{
-      const c=classe[addr];
-      html+=`<div class="wc ${c.chave}" onclick="showPosDetalhe('${addr}')" title="${addr} · ${c.label} · ${fN(c.qtd)} un.">
-        <div class="wc-addr">${addr.split('-').slice(1).join('-')||addr}</div>
-        <div class="wc-qty">${fN(c.qtd)}</div>
-      </div>`;
+  Object.entries(ruas).forEach(([rua,blocos])=>{
+    html+=`<div class="wmap-street"><div class="wmap-street-label">RUA ${rua}</div><div class="wmap-blocks">`;
+    Object.entries(blocos).forEach(([bloco,cells])=>{
+      html+=`<div class="wmap-block"><div class="wmap-block-title">BLOCO ${bloco}</div><div class="wmap-block-cells">`;
+      cells.sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true})).forEach(addr=>{
+        const c=classe[addr]; const x=parseAddr(addr); const short=x.pos+(x.nivel?'.'+x.nivel:'');
+        const addrEnc=encodeURIComponent(String(addr));
+        html+=`<div class="wc ${c.chave}" data-addr="${String(addr).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}" onclick="showPosDetalhe(decodeURIComponent('${addrEnc}'))" title="${addr} · ${c.label} · ${fN(c.qtd)} un.">
+          <div class="wc-addr">${short||addr}</div>
+          <div class="wc-qty">${fN(c.qtd)}</div>
+        </div>`;
+      });
+      html+='</div></div>';
     });
     html+='</div></div>';
   });
@@ -8435,8 +8541,7 @@ function showPosDetalhe(addr){
   // Atualiza célula selecionada no mapa
   document.querySelectorAll('.wc.selecionada').forEach(el=>el.classList.remove('selecionada'));
   document.querySelectorAll('.wc').forEach(el=>{
-    if(el.querySelector('.wc-addr')?.textContent===addr.split('-').slice(1).join('-'))
-      el.classList.add('selecionada');
+    if(el.getAttribute('data-addr')===addr) el.classList.add('selecionada');
   });
 
   document.getElementById('mapaPanelAddr').textContent=addr;
@@ -9575,14 +9680,14 @@ function injectDemo(){
 (function(){const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='flex';})();
 // ══════════════════════════════════════════════════════════════
 // YALOG WMS · VERSIONAMENTO CENTRALIZADO
-// Atualização 013 — Mapa de Estoque gerencial com filtro por unidade/cliente e exportação Excel; preserva as Atualizações anteriores.
+// Atualização 014 — Ajuste de Estoque por endereço digitável, Mapa do Armazém responsivo por ruas/blocos e proteção reforçada de persistência; preserva todas as Atualizações anteriores.
 // Atualize SOMENTE estes valores a cada publicação. O refresh da
 // página preserva a sessão autenticada; a versão não é usada como
 // critério de logout.
 // ══════════════════════════════════════════════════════════════
 const YALOG_WMS_VERSION = '2.1.2';
-const YALOG_WMS_BUILD = '011';
-const YALOG_WMS_UPDATE = '011';
+const YALOG_WMS_BUILD = '014';
+const YALOG_WMS_UPDATE = '014';
 const YALOG_WMS_RELEASE = `v${YALOG_WMS_VERSION} Build ${YALOG_WMS_BUILD}`;
 
 function aplicarVersaoWMS(){
@@ -12686,8 +12791,9 @@ function initAjusteEstoque(){
       (DB.sites||[]).filter(s=>s.status!=='congelada').map(s=>`<option value="${s.id}">${s.nome}</option>`).join('');
     site.value='';
   }
-  if(cli){cli.innerHTML='<option value="">Selecione primeiro a unidade...</option>';cli.disabled=true;}
-  if(end){end.innerHTML='<option value="">Selecione primeiro a unidade...</option>';end.disabled=true;}
+  if(cli){cli.innerHTML='<option value="">Todos os Clientes</option>';cli.disabled=true;}
+  if(end){end.value='';end.disabled=true;}
+  const dl=document.getElementById('ajEnderecosLista'); if(dl)dl.innerHTML='';
   const w=document.getElementById('ajWmsId'); if(w)w.value='';
   const ps=document.getElementById('ajProdutoSelecionado'); if(ps)ps.value='';
   const list=document.getElementById('ajProdutosEndereco'); if(list)list.innerHTML='';
@@ -12699,32 +12805,31 @@ function onAjSiteChange(){
   const siteId=document.getElementById('ajSite')?.value||'';
   const cli=document.getElementById('ajCliente');
   const end=document.getElementById('ajEndereco');
+  const dl=document.getElementById('ajEnderecosLista');
   if(!siteId){
-    if(cli){cli.innerHTML='<option value="">Selecione primeiro a unidade...</option>';cli.disabled=true;}
-    if(end){end.innerHTML='<option value="">Selecione primeiro a unidade...</option>';end.disabled=true;}
+    if(cli){cli.innerHTML='<option value="">Todos os Clientes</option>';cli.disabled=true;}
+    if(end){end.value='';end.disabled=true;}
+    if(dl)dl.innerHTML='';
     limparSelecaoAjusteProduto(); return;
   }
   const cliIds=[...new Set(DB.produtos.filter(p=>p.site===siteId || p.siteId===siteId).map(p=>p.clienteId).filter(Boolean))];
   if(cli){
-    cli.innerHTML='<option value="">Selecione o cliente...</option>'+cliIds.map(id=>{const c=DB.clientes.find(x=>x.id===id);return `<option value="${id}">${c?c.nome:id}</option>`;}).join('');
-    cli.disabled=cliIds.length===0;
+    cli.innerHTML='<option value="">Todos os Clientes</option>'+cliIds.map(id=>{const c=DB.clientes.find(x=>x.id===id);return `<option value="${id}">${c?c.nome:id}</option>`;}).join('');
+    cli.disabled=false;
   }
-  if(end){
-    const addrs=[...new Set(DB.enderecos.filter(e=>e.site===siteId||e.siteId===siteId).map(e=>e.addr).filter(Boolean))];
-    end.innerHTML='<option value="">Todos / selecione o endereço...</option>'+addrs.sort().map(a=>`<option value="${a}">${a}</option>`).join('');
-    end.disabled=addrs.length===0;
-  }
+  const addrs=[...new Set(DB.enderecos.filter(e=>e.site===siteId||e.siteId===siteId).map(e=>e.addr).filter(Boolean).concat(DB.produtos.filter(p=>p.site===siteId||p.siteId===siteId).map(p=>p.endereco).filter(Boolean)))].sort();
+  if(end){end.value='';end.disabled=false;}
+  if(dl)dl.innerHTML=addrs.map(a=>`<option value="${a}"></option>`).join('');
   limparSelecaoAjusteProduto();
 }
 function onAjClienteChange(){
   const siteId=document.getElementById('ajSite')?.value||'';
   const cliId=document.getElementById('ajCliente')?.value||'';
   const end=document.getElementById('ajEndereco');
-  if(end){
-    const addrs=[...new Set(DB.produtos.filter(p=>(p.site===siteId||p.siteId===siteId)&&(!cliId||p.clienteId===cliId)).map(p=>p.endereco).filter(Boolean))];
-    end.innerHTML='<option value="">Selecione o endereço...</option>'+addrs.sort().map(a=>`<option value="${a}">${a}</option>`).join('');
-    end.disabled=addrs.length===0;
-  }
+  const dl=document.getElementById('ajEnderecosLista');
+  const addrs=[...new Set(DB.produtos.filter(p=>(p.site===siteId||p.siteId===siteId)&&(!cliId||p.clienteId===cliId)).map(p=>p.endereco).filter(Boolean))].sort();
+  if(end){end.value='';end.disabled=!siteId;}
+  if(dl)dl.innerHTML=addrs.map(a=>`<option value="${a}"></option>`).join('');
   limparSelecaoAjusteProduto();
   renderProdutosAjusteEndereco();
 }
@@ -12743,21 +12848,21 @@ function renderProdutosAjusteEndereco(){
   const siteId=document.getElementById('ajSite')?.value||'';
   const cliId=document.getElementById('ajCliente')?.value||'';
   const addr=document.getElementById('ajEndereco')?.value||'';
-  if(!siteId||!cliId||!addr){
-    el.innerHTML='<div style="border:1px dashed var(--border);padding:16px;text-align:center;color:var(--w40);font-family:var(--mono);font-size:10px;">Selecione unidade, cliente e endereço para visualizar os produtos armazenados.</div>';
+  if(!siteId||!addr){
+    el.innerHTML='<div style="border:1px dashed var(--border);padding:16px;text-align:center;color:var(--w40);font-family:var(--mono);font-size:10px;">Selecione a unidade e informe o endereço para visualizar os produtos armazenados.</div>';
     return;
   }
   const prods=DB.produtos.filter(p=>(p.site===siteId||p.siteId===siteId)&&p.endereco===addr);
-  const prodsCli=prods.filter(p=>p.clienteId===cliId);
+  const prodsCli=cliId?prods.filter(p=>p.clienteId===cliId):prods;
   if(!prods.length){
     el.innerHTML='<div style="border:1px solid rgba(248,113,113,.25);background:rgba(248,113,113,.05);padding:14px;color:#fca5a5;font-family:var(--mono);font-size:10px;">Nenhum produto encontrado neste endereço.</div>';
     return;
   }
-  const c=DB.clientes.find(x=>x.id===cliId);
-  const outros=[...new Set(prods.filter(p=>p.clienteId!==cliId).map(p=>p.clienteId).filter(Boolean))];
+  const c=cliId?DB.clientes.find(x=>x.id===cliId):null;
+  const outros=cliId?[...new Set(prods.filter(p=>p.clienteId!==cliId).map(p=>p.clienteId).filter(Boolean))]:[];
   const alertaOutros=outros.length?`<div style="padding:9px 12px;border-bottom:1px solid rgba(251,146,60,.2);background:rgba(251,146,60,.05);color:#fdba74;font-size:10px;font-family:var(--mono);">⚠ ${prods.filter(p=>p.clienteId!==cliId).length} item(ns) de ${outros.length} outro(s) cliente(s) também ocupa(m) este endereço. Isso pode indicar conflito de endereçamento ou duplicidade de carga.</div>`:'';
   el.innerHTML=`<div style="border:1px solid var(--border);background:rgba(255,255,255,.015);">
-    <div style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px;color:var(--orange2);">📍 ${addr} · Cliente selecionado: ${c?c.nome:cliId} · ${prodsCli.length} item(ns) do cliente · ${prods.length} item(ns) no endereço</div>
+    <div style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px;color:var(--orange2);">📍 ${addr} · Cliente: ${c?c.nome:'Todos'} · ${prodsCli.length} item(ns) do cliente · ${prods.length} item(ns) no endereço</div>
     ${alertaOutros}
     <div style="overflow:auto;max-height:260px;">
       <table style="width:100%;min-width:900px;border-collapse:collapse;font-size:10px;">
