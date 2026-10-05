@@ -527,6 +527,7 @@ a{color:inherit;text-decoration:none;}
     <div class="ni" id="navAceite" onclick="go('masterAceite')" style="display:none;"><span class="ni-ic"><i data-lucide="key"></i></span> Aceites Master <span class="ni-badge" id="bdAceite">0</span></div>
     <div class="ni" id="navUsuarios" onclick="go('usuarios')" style="display:none;"><span class="ni-ic"><i data-lucide="user"></i></span> Usuários</div>
     <div class="ni" id="navLimpar" onclick="go('limparEstoque')" style="display:none;"><span class="ni-ic"><i data-lucide="trash-2"></i></span> Limpar Estoque</div>
+    <div class="ni" id="navMapaEstoqueGestao" onclick="go('mapaEstoqueGestao')" style="display:none;"><span class="ni-ic"><i data-lucide="file-spreadsheet"></i></span> Mapa de Estoque</div>
     <div class="ni" id="navBackup" onclick="go('backup')" style="display:none;"><span class="ni-ic"><i data-lucide="save"></i></span> Backup</div>
     <div class="ni" id="navConfigGeral" onclick="go('configGeral')" style="display:none;"><span class="ni-ic"><i data-lucide="settings"></i></span> Configurações Gerais</div>
 
@@ -1935,6 +1936,61 @@ a{color:inherit;text-decoration:none;}
         </table>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ════ MAPA DE ESTOQUE · GESTÃO ════ -->
+<div class="screen" id="s-mapaEstoqueGestao">
+  <div class="ph">
+    <div>
+      <div class="ph-eye">Gestão · Estoque</div>
+      <div class="ph-title">Mapa de <em>Estoque</em></div>
+    </div>
+    <div class="ph-acts">
+      <button class="btn btn-b" onclick="exportarMapaEstoqueExcel()">↓ Download Excel</button>
+    </div>
+  </div>
+
+  <div class="fsec" style="margin-bottom:16px;">
+    <div class="fsec-t">🎯 Seleção do Mapa</div>
+    <p style="font-size:12px;color:var(--w70);margin-bottom:16px;">Selecione a unidade e o cliente para consultar e baixar o mapa de estoque. O relatório é consolidado por endereço e traz somente as informações operacionais do estoque.</p>
+    <div class="frow" style="margin-bottom:12px;">
+      <div class="fg">
+        <label>Unidade Logística</label>
+        <select id="mapaEstoqueSite" onchange="renderMapaEstoqueGestao()">
+          <option value="">Todas as Unidades</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Cliente / Operação</label>
+        <select id="mapaEstoqueCliente" onchange="renderMapaEstoqueGestao()">
+          <option value="">Todos os Clientes</option>
+        </select>
+      </div>
+    </div>
+    <div id="mapaEstoqueResumo" style="margin-top:4px;"></div>
+  </div>
+
+  <div class="tw" style="max-height:560px;overflow:auto;">
+    <table class="dt" id="tbMapaEstoqueGestao">
+      <thead>
+        <tr>
+          <th>Endereço</th>
+          <th>SKU</th>
+          <th>Descrição</th>
+          <th>Cliente</th>
+          <th>Site</th>
+          <th>Lote</th>
+          <th>Validade</th>
+          <th class="ct">Quantidade</th>
+          <th class="ct">Unidade de Medida</th>
+          <th class="ri">Valor</th>
+          <th>Status</th>
+          <th>Obs.</th>
+        </tr>
+      </thead>
+      <tbody id="tbMapaEstoqueGestaoBody"></tbody>
+    </table>
   </div>
 </div>
 
@@ -6141,7 +6197,7 @@ function barcode(num){let h='<div class="barcode-wrap"><div class="barcode-bars"
 // ══════════════════════════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════════════════════════
-const TITLES={capArmazem:'Configuração de Área Blocada',home:'Visão Geral',recUpload:'Entrada de Mercadoria',recTarefas:'Conferências',estoqueList:'Produtos em Estoque',estoqueMapa:'Mapa do Armazém',curvaABC:'Curva ABC',bloqueios:'Posições Bloqueadas',sepUpload:'Solicitação de Separação',sepTarefas:'Tarefas de Separação',expedicao:'Expedição',devolucao:'Devoluções de Clientes',alertasValidade:'Alertas de Validade',ageingReport:'Ageing Report',custoArmazem:'Custo de Armazenagem',invList:'Inventários',historico:'Movimentações',cargaEstoque:'Carga de Estoque',enderecos:'Endereços',ajusteEstoque:'Ajuste de Estoque',masterAceite:'Aceites Master',usuarios:'Usuários',armazenagem:'Tarefas de Armazenagem',movimentar:'Movimentação entre Endereços',relSaida:'Relatório de Saída',relEstoque:'Relatório de Estoque',relRecebimento:'Relatório de Recebimento',tarefasMov:'Tarefas de Movimentação',paletes:'Rastreabilidade de Paletes',sites:'Unidades Logísticas',clientes:'Cadastro de Clientes',matrizPP:'Matriz Capacidade PP',limparEstoque:'Limpar / Excluir Estoque',backup:'Backup do Estoque',configGeral:'Configurações Gerais',minhaConta:'Minha Conta'};
+const TITLES={mapaEstoqueGestao:'Mapa de Estoque',capArmazem:'Configuração de Área Blocada',home:'Visão Geral',recUpload:'Entrada de Mercadoria',recTarefas:'Conferências',estoqueList:'Produtos em Estoque',estoqueMapa:'Mapa do Armazém',curvaABC:'Curva ABC',bloqueios:'Posições Bloqueadas',sepUpload:'Solicitação de Separação',sepTarefas:'Tarefas de Separação',expedicao:'Expedição',devolucao:'Devoluções de Clientes',alertasValidade:'Alertas de Validade',ageingReport:'Ageing Report',custoArmazem:'Custo de Armazenagem',invList:'Inventários',historico:'Movimentações',cargaEstoque:'Carga de Estoque',enderecos:'Endereços',ajusteEstoque:'Ajuste de Estoque',masterAceite:'Aceites Master',usuarios:'Usuários',armazenagem:'Tarefas de Armazenagem',movimentar:'Movimentação entre Endereços',relSaida:'Relatório de Saída',relEstoque:'Relatório de Estoque',relRecebimento:'Relatório de Recebimento',tarefasMov:'Tarefas de Movimentação',paletes:'Rastreabilidade de Paletes',sites:'Unidades Logísticas',clientes:'Cadastro de Clientes',matrizPP:'Matriz Capacidade PP',limparEstoque:'Limpar / Excluir Estoque',backup:'Backup do Estoque',configGeral:'Configurações Gerais',minhaConta:'Minha Conta'};
 function go(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById('s-'+id).classList.add('active');
@@ -6191,6 +6247,7 @@ function go(id){
   if(id==='masterAceite')renderMasterAceite();
   if(id==='usuarios')renderUsuarios();
   if(id==='configGeral')renderConfigGeral();
+  if(id==='mapaEstoqueGestao')initMapaEstoqueGestao();
   if(id==='minhaConta')renderMinhaConta();
   updateBadges();
   if(window.innerWidth<900)document.getElementById('sb').classList.remove('open');
@@ -9279,14 +9336,14 @@ function injectDemo(){
 (function(){const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='flex';})();
 // ══════════════════════════════════════════════════════════════
 // YALOG WMS · VERSIONAMENTO CENTRALIZADO
-// Atualização 010 — persistência definitiva sem perda de dados; matriz SKU + UM; preserva as Atualizações anteriores.
+// Atualização 011 — Mapa de Estoque gerencial com filtro por unidade/cliente e exportação Excel; preserva as Atualizações anteriores.
 // Atualize SOMENTE estes valores a cada publicação. O refresh da
 // página preserva a sessão autenticada; a versão não é usada como
 // critério de logout.
 // ══════════════════════════════════════════════════════════════
 const YALOG_WMS_VERSION = '2.1.2';
-const YALOG_WMS_BUILD = '010';
-const YALOG_WMS_UPDATE = '010';
+const YALOG_WMS_BUILD = '011';
+const YALOG_WMS_UPDATE = '011';
 const YALOG_WMS_RELEASE = `v${YALOG_WMS_VERSION} Build ${YALOG_WMS_BUILD}`;
 
 function aplicarVersaoWMS(){
@@ -12836,6 +12893,8 @@ function updateNavByPerfil(){
   if(navL)navL.style.display=isMasterPerfil?'':'none';
   const navB=document.getElementById('navBackup');
   if(navB)navB.style.display=isMasterPerfil?'':'none';
+  const navMapa=document.getElementById('navMapaEstoqueGestao');
+  if(navMapa)navMapa.style.display=(isLiderOuMaster||perfil==='analista')?'':'none';
   const navCfg=document.getElementById('navConfigGeral');
   if(navCfg)navCfg.style.display=isMasterPerfil?'':'none';
 }
@@ -13288,6 +13347,110 @@ function initBackup(){
   if(selSite)selSite.innerHTML='<option value="">Todas as Unidades</option>'+(DB.sites||[]).map(s=>`<option value="${s.id}">${s.nome}</option>`).join('');
   if(selCli)selCli.innerHTML='<option value="">Todos os Clientes</option>'+DB.clientes.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
   document.getElementById('backupPreview').innerHTML='';
+}
+
+// ══════════════════════════════════════════════════════════════
+// MAPA DE ESTOQUE · GESTÃO
+// Relatório operacional por Unidade + Cliente, com exportação XLSX.
+// Não altera DB nem os filtros existentes do módulo Produtos.
+// ══════════════════════════════════════════════════════════════
+function initMapaEstoqueGestao(){
+  const siteEl=document.getElementById('mapaEstoqueSite');
+  const cliEl=document.getElementById('mapaEstoqueCliente');
+  if(!siteEl||!cliEl)return;
+  const siteAtual=siteEl.value||'';
+  const cliAtual=cliEl.value||'';
+  siteEl.innerHTML='<option value="">Todas as Unidades</option>'+(DB.sites||[]).map(s=>`<option value="${s.id}">${s.nome}</option>`).join('');
+  if(siteAtual)siteEl.value=siteAtual;
+  const base=siteAtual?(DB.produtos||[]).filter(p=>p.site===siteAtual):(DB.produtos||[]);
+  const ids=[...new Set(base.map(p=>p.clienteId).filter(Boolean))];
+  cliEl.innerHTML='<option value="">Todos os Clientes</option>'+ids.map(id=>{const c=(DB.clientes||[]).find(x=>x.id===id);return `<option value="${id}">${c?c.nome:id}</option>`;}).join('');
+  if(cliAtual && ids.includes(cliAtual))cliEl.value=cliAtual;
+  renderMapaEstoqueGestao();
+}
+
+function _getMapaEstoqueGestaoFiltrado(){
+  const siteId=document.getElementById('mapaEstoqueSite')?.value||'';
+  const cliId=document.getElementById('mapaEstoqueCliente')?.value||'';
+  let prods=[...(DB.produtos||[])];
+  if(siteId)prods=prods.filter(p=>p.site===siteId);
+  if(cliId)prods=prods.filter(p=>p.clienteId===cliId);
+  return prods.sort((a,b)=>String(a.endereco||'').localeCompare(String(b.endereco||''),undefined,{numeric:true})||String(a.codCliente||'').localeCompare(String(b.codCliente||''))||String(a.lote||'').localeCompare(String(b.lote||'')));
+}
+
+function renderMapaEstoqueGestao(){
+  const siteEl=document.getElementById('mapaEstoqueSite');
+  const cliEl=document.getElementById('mapaEstoqueCliente');
+  if(!siteEl||!cliEl)return;
+  const siteAtual=siteEl.value||'';
+  const cliAtual=cliEl.value||'';
+  const base=siteAtual?(DB.produtos||[]).filter(p=>p.site===siteAtual):(DB.produtos||[]);
+  const ids=[...new Set(base.map(p=>p.clienteId).filter(Boolean))];
+  cliEl.innerHTML='<option value="">Todos os Clientes</option>'+ids.map(id=>{const c=(DB.clientes||[]).find(x=>x.id===id);return `<option value="${id}">${c?c.nome:id}</option>`;}).join('');
+  if(cliAtual && ids.includes(cliAtual))cliEl.value=cliAtual; else if(cliAtual)cliEl.value='';
+
+  const prods=_getMapaEstoqueGestaoFiltrado();
+  const body=document.getElementById('tbMapaEstoqueGestaoBody');
+  const resumo=document.getElementById('mapaEstoqueResumo');
+  if(!body||!resumo)return;
+  const totalQtd=prods.reduce((s,p)=>s+(parseFloat(p.qtd)||0),0);
+  const totalValor=prods.reduce((s,p)=>s+(parseFloat(p.qtd)||0)*(parseFloat(p.valorUnit)||0),0);
+  const enderecos=new Set(prods.map(p=>p.endereco).filter(Boolean)).size;
+  resumo.innerHTML=`<div class="end-import-stat" style="margin:0;"><div><div class="v">${fN(prods.length)}</div><div class="l">Linhas</div></div><div><div class="v">${fN(enderecos)}</div><div class="l">Endereços</div></div><div><div class="v">${fN(totalQtd)}</div><div class="l">Quantidade</div></div><div><div class="v">R$ ${fM(totalValor)}</div><div class="l">Valor do Estoque</div></div></div>`;
+  if(!prods.length){
+    body.innerHTML='<tr><td colspan="12" style="text-align:center;padding:32px;color:var(--w40);font-family:var(--mono);">Nenhum estoque encontrado para os filtros selecionados.</td></tr>';
+    return;
+  }
+  body.innerHTML=prods.map(p=>{
+    const cl=(DB.clientes||[]).find(c=>c.id===p.clienteId);
+    const st=(DB.sites||[]).find(s=>s.id===p.site);
+    const valor=(parseFloat(p.qtd)||0)*(parseFloat(p.valorUnit)||0);
+    const obs=p.obsGeral||p.bloqueioObs||'';
+    return `<tr>
+      <td class="mn bd">${p.endereco||'—'}</td>
+      <td class="mn">${p.codCliente||p.wmsId||'—'}</td>
+      <td class="bd">${p.descricao||'—'}</td>
+      <td>${cl?cl.nome:'—'}</td>
+      <td>${st?st.nome:'—'}</td>
+      <td class="mn">${p.lote||'—'}</td>
+      <td class="mn">${fD(p.validade)}</td>
+      <td class="mn ct">${fN(p.qtd)}</td>
+      <td class="mn ct">${p.um||'UN'}</td>
+      <td class="mn ri" style="color:var(--orange2);font-weight:700;">R$ ${fM(valor)}</td>
+      <td>${statusSp(p.status)}</td>
+      <td style="max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${String(obs).replace(/"/g,'&quot;')}">${obs||'—'}</td>
+    </tr>`;
+  }).join('');
+  setTimeout(()=>makeResizable(document.getElementById('tbMapaEstoqueGestao')),80);
+}
+
+function exportarMapaEstoqueExcel(){
+  const prods=_getMapaEstoqueGestaoFiltrado();
+  if(!prods.length){showT('Nenhum estoque para exportar com os filtros selecionados','err');return;}
+  if(typeof XLSX==='undefined'){showT('Excel não disponível nesta sessão','err');return;}
+  const siteId=document.getElementById('mapaEstoqueSite')?.value||'';
+  const cliId=document.getElementById('mapaEstoqueCliente')?.value||'';
+  const site=(DB.sites||[]).find(s=>s.id===siteId);
+  const cli=(DB.clientes||[]).find(c=>c.id===cliId);
+  const rows=prods.map(p=>{
+    const c=(DB.clientes||[]).find(x=>x.id===p.clienteId);
+    const s=(DB.sites||[]).find(x=>x.id===p.site);
+    const qtd=parseFloat(p.qtd)||0;
+    const valor=qtd*(parseFloat(p.valorUnit)||0);
+    return [p.endereco||'',p.codCliente||p.wmsId||'',p.descricao||'',c?c.nome:'',s?s.nome:'',p.lote||'',p.validade||'',qtd,p.um||'UN',valor,p.status||'',p.obsGeral||p.bloqueioObs||''];
+  });
+  const hdr=['Endereço','SKU','Descrição','Cliente','Site','Lote','Validade','Quantidade','Unidade de Medida','Valor','Status','Obs.'];
+  const ws=XLSX.utils.aoa_to_sheet([hdr,...rows]);
+  ws['!cols']=[{wch:16},{wch:20},{wch:38},{wch:28},{wch:22},{wch:18},{wch:14},{wch:14},{wch:20},{wch:16},{wch:14},{wch:38}];
+  if(ws['!ref']){
+    const range=XLSX.utils.decode_range(ws['!ref']);
+    for(let r=1;r<=range.e.r;r++){const cell=ws[XLSX.utils.encode_cell({r,c:9})];if(cell)cell.z='#,##0.00';}
+  }
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Mapa de Estoque');
+  const sufixo=[site?site.nome:'Todas_Unidades',cli?cli.nome:'Todos_Clientes'].join('_').replace(/[^a-zA-Z0-9À-ÿ_-]+/g,'_');
+  XLSX.writeFile(wb,`mapa_estoque_${sufixo}_${nowDate()}.xlsx`);
+  showT(`Excel gerado: ${prods.length} linha(s)`,'ok');
 }
 
 function backupGeral(fmt){
