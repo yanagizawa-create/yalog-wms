@@ -1624,9 +1624,23 @@ a{color:inherit;text-decoration:none;}
 
   <div class="fsec">
     <div class="fsec-t">⚖️ Solicitar Ajuste</div>
+    <div style="font-size:11px;color:var(--w60);margin:-4px 0 14px;">Selecione primeiro <strong>Unidade, Cliente e Endereço</strong>. O sistema exibirá o estoque encontrado nessa posição para que o item correto seja selecionado antes do ajuste.</div>
     <div class="frow">
-      <div class="fg"><label>Produto (Cód. WMS) <span class="req">*</span></label>
-        <select id="ajWmsId" onchange="onAjWmsChange()"><option value="">Selecione o produto...</option></select>
+      <div class="fg"><label>Site / Unidade <span class="req">*</span></label>
+        <select id="ajSite" onchange="onAjSiteChange()"><option value="">Selecione a unidade...</option></select>
+      </div>
+      <div class="fg"><label>Cliente <span class="req">*</span></label>
+        <select id="ajCliente" onchange="onAjClienteChange()" disabled><option value="">Selecione primeiro a unidade...</option></select>
+      </div>
+      <div class="fg"><label>Endereço <span class="req">*</span></label>
+        <select id="ajEndereco" onchange="onAjEnderecoChange()" disabled><option value="">Selecione primeiro a unidade...</option></select>
+      </div>
+    </div>
+    <input type="hidden" id="ajWmsId" value="">
+    <div id="ajProdutosEndereco" style="margin:0 0 16px;"></div>
+    <div class="frow">
+      <div class="fg"><label>Produto selecionado</label>
+        <input id="ajProdutoSelecionado" type="text" readonly placeholder="Selecione um item na lista acima" style="background:var(--bg4);color:var(--w40);">
       </div>
       <div class="fg"><label>Tipo de Ajuste <span class="req">*</span></label>
         <select id="ajTipo" onchange="onAjTipoChange()">
@@ -9336,7 +9350,7 @@ function injectDemo(){
 (function(){const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='flex';})();
 // ══════════════════════════════════════════════════════════════
 // YALOG WMS · VERSIONAMENTO CENTRALIZADO
-// Atualização 011 — Mapa de Estoque gerencial com filtro por unidade/cliente e exportação Excel; preserva as Atualizações anteriores.
+// Atualização 012 — Mapa de Estoque gerencial com filtro por unidade/cliente e exportação Excel; preserva as Atualizações anteriores.
 // Atualize SOMENTE estes valores a cada publicação. O refresh da
 // página preserva a sessão autenticada; a versão não é usada como
 // critério de logout.
@@ -12439,17 +12453,128 @@ function downloadTemplate(fmt){
 // AJUSTE DE ESTOQUE
 // ════════════════════════════════════════
 function initAjusteEstoque(){
-  const sel=document.getElementById('ajWmsId');
-  if(sel){
-    sel.innerHTML='<option value="">Selecione o produto...</option>'+DB.produtos.map(p=>{const cl=DB.clientes.find(c=>c.id===p.clienteId);return`<option value="${p.wmsId}">${p.wmsId} · ${p.descricao} (${cl?cl.nome:'—'})</option>`;}).join('');
+  const site=document.getElementById('ajSite');
+  const cli=document.getElementById('ajCliente');
+  const end=document.getElementById('ajEndereco');
+  if(site){
+    site.innerHTML='<option value="">Selecione a unidade...</option>'+
+      (DB.sites||[]).filter(s=>s.status!=='congelada').map(s=>`<option value="${s.id}">${s.nome}</option>`).join('');
+    site.value='';
   }
-  // Limpa campos dinâmicos
-  const ajCD=document.getElementById('ajCamposDinamicos');
-  if(ajCD)ajCD.innerHTML='';
-  const ajT=document.getElementById('ajTipo');
-  if(ajT)ajT.value='';
+  if(cli){cli.innerHTML='<option value="">Selecione primeiro a unidade...</option>';cli.disabled=true;}
+  if(end){end.innerHTML='<option value="">Selecione primeiro a unidade...</option>';end.disabled=true;}
+  const w=document.getElementById('ajWmsId'); if(w)w.value='';
+  const ps=document.getElementById('ajProdutoSelecionado'); if(ps)ps.value='';
+  const list=document.getElementById('ajProdutosEndereco'); if(list)list.innerHTML='';
+  const ajCD=document.getElementById('ajCamposDinamicos'); if(ajCD)ajCD.innerHTML='';
+  const ajT=document.getElementById('ajTipo'); if(ajT)ajT.value='';
   renderAjustesMeus();
 }
+function onAjSiteChange(){
+  const siteId=document.getElementById('ajSite')?.value||'';
+  const cli=document.getElementById('ajCliente');
+  const end=document.getElementById('ajEndereco');
+  if(!siteId){
+    if(cli){cli.innerHTML='<option value="">Selecione primeiro a unidade...</option>';cli.disabled=true;}
+    if(end){end.innerHTML='<option value="">Selecione primeiro a unidade...</option>';end.disabled=true;}
+    limparSelecaoAjusteProduto(); return;
+  }
+  const cliIds=[...new Set(DB.produtos.filter(p=>p.site===siteId || p.siteId===siteId).map(p=>p.clienteId).filter(Boolean))];
+  if(cli){
+    cli.innerHTML='<option value="">Selecione o cliente...</option>'+cliIds.map(id=>{const c=DB.clientes.find(x=>x.id===id);return `<option value="${id}">${c?c.nome:id}</option>`;}).join('');
+    cli.disabled=cliIds.length===0;
+  }
+  if(end){
+    const addrs=[...new Set(DB.enderecos.filter(e=>e.site===siteId||e.siteId===siteId).map(e=>e.addr).filter(Boolean))];
+    end.innerHTML='<option value="">Todos / selecione o endereço...</option>'+addrs.sort().map(a=>`<option value="${a}">${a}</option>`).join('');
+    end.disabled=addrs.length===0;
+  }
+  limparSelecaoAjusteProduto();
+}
+function onAjClienteChange(){
+  const siteId=document.getElementById('ajSite')?.value||'';
+  const cliId=document.getElementById('ajCliente')?.value||'';
+  const end=document.getElementById('ajEndereco');
+  if(end){
+    const addrs=[...new Set(DB.produtos.filter(p=>(p.site===siteId||p.siteId===siteId)&&(!cliId||p.clienteId===cliId)).map(p=>p.endereco).filter(Boolean))];
+    end.innerHTML='<option value="">Selecione o endereço...</option>'+addrs.sort().map(a=>`<option value="${a}">${a}</option>`).join('');
+    end.disabled=addrs.length===0;
+  }
+  limparSelecaoAjusteProduto();
+  renderProdutosAjusteEndereco();
+}
+function onAjEnderecoChange(){
+  limparSelecaoAjusteProduto();
+  renderProdutosAjusteEndereco();
+}
+function limparSelecaoAjusteProduto(){
+  const w=document.getElementById('ajWmsId'); if(w)w.value='';
+  const ps=document.getElementById('ajProdutoSelecionado'); if(ps)ps.value='';
+  const cd=document.getElementById('ajCamposDinamicos'); if(cd)cd.innerHTML='';
+  const tipo=document.getElementById('ajTipo'); if(tipo)tipo.value='';
+}
+function renderProdutosAjusteEndereco(){
+  const el=document.getElementById('ajProdutosEndereco'); if(!el)return;
+  const siteId=document.getElementById('ajSite')?.value||'';
+  const cliId=document.getElementById('ajCliente')?.value||'';
+  const addr=document.getElementById('ajEndereco')?.value||'';
+  if(!siteId||!cliId||!addr){
+    el.innerHTML='<div style="border:1px dashed var(--border);padding:16px;text-align:center;color:var(--w40);font-family:var(--mono);font-size:10px;">Selecione unidade, cliente e endereço para visualizar os produtos armazenados.</div>';
+    return;
+  }
+  const prods=DB.produtos.filter(p=>(p.site===siteId||p.siteId===siteId)&&p.endereco===addr);
+  const prodsCli=prods.filter(p=>p.clienteId===cliId);
+  if(!prods.length){
+    el.innerHTML='<div style="border:1px solid rgba(248,113,113,.25);background:rgba(248,113,113,.05);padding:14px;color:#fca5a5;font-family:var(--mono);font-size:10px;">Nenhum produto encontrado neste endereço.</div>';
+    return;
+  }
+  const c=DB.clientes.find(x=>x.id===cliId);
+  const outros=[...new Set(prods.filter(p=>p.clienteId!==cliId).map(p=>p.clienteId).filter(Boolean))];
+  const alertaOutros=outros.length?`<div style="padding:9px 12px;border-bottom:1px solid rgba(251,146,60,.2);background:rgba(251,146,60,.05);color:#fdba74;font-size:10px;font-family:var(--mono);">⚠ ${prods.filter(p=>p.clienteId!==cliId).length} item(ns) de ${outros.length} outro(s) cliente(s) também ocupa(m) este endereço. Isso pode indicar conflito de endereçamento ou duplicidade de carga.</div>`:'';
+  el.innerHTML=`<div style="border:1px solid var(--border);background:rgba(255,255,255,.015);">
+    <div style="padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px;color:var(--orange2);">📍 ${addr} · Cliente selecionado: ${c?c.nome:cliId} · ${prodsCli.length} item(ns) do cliente · ${prods.length} item(ns) no endereço</div>
+    ${alertaOutros}
+    <div style="overflow:auto;max-height:260px;">
+      <table style="width:100%;min-width:900px;border-collapse:collapse;font-size:10px;">
+        <thead><tr>
+          <th style="padding:8px;text-align:left;position:sticky;top:0;background:var(--bg4);">SELECIONAR</th>
+          <th style="padding:8px;text-align:left;">CÓD. WMS</th>
+          <th style="padding:8px;text-align:left;">SKU</th>
+          <th style="padding:8px;text-align:left;">DESCRIÇÃO</th>
+          <th style="padding:8px;text-align:left;">LOTE</th>
+          <th style="padding:8px;text-align:right;">QTD.</th>
+          <th style="padding:8px;text-align:left;">UM</th>
+          <th style="padding:8px;text-align:left;">CLIENTE</th>
+          <th style="padding:8px;text-align:left;">STATUS</th>
+        </tr></thead>
+        <tbody>${prods.map(p=>{
+          const sku=p.codCliente||'—';
+          const doCliente=p.clienteId===cliId;
+          const pc=DB.clientes.find(x=>x.id===p.clienteId);
+          return `<tr style="border-top:1px solid var(--border);${doCliente?'':'opacity:.65;background:rgba(248,113,113,.025);'}">
+            <td style="padding:8px;">${doCliente?`<button class="btn btn-o btn-xs" onclick="selecionarProdutoAjuste('${String(p.wmsId).replace(/'/g,"\'")}')">Selecionar</button>`:'<span style="font-family:var(--mono);font-size:9px;color:#fca5a5;">Outro cliente</span>'}</td>
+            <td class="mn" style="padding:8px;color:var(--orange2);">${p.wmsId}</td>
+            <td class="mn" style="padding:8px;">${sku}</td>
+            <td style="padding:8px;">${p.descricao||'—'}</td>
+            <td class="mn" style="padding:8px;">${p.lote||'—'}</td>
+            <td class="mn" style="padding:8px;text-align:right;">${fN(p.qtd)}</td>
+            <td class="mn" style="padding:8px;">${p.um||'UN'}</td>
+            <td style="padding:8px;">${pc?pc.nome:(p.clienteId||'—')}</td>
+            <td style="padding:8px;">${statusSp(p.status)}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+function selecionarProdutoAjuste(wmsId){
+  const p=DB.produtos.find(x=>x.wmsId===wmsId); if(!p)return;
+  const w=document.getElementById('ajWmsId'); if(w)w.value=wmsId;
+  const ps=document.getElementById('ajProdutoSelecionado');
+  if(ps){const c=DB.clientes.find(x=>x.id===p.clienteId);ps.value=`${p.wmsId} · ${p.descricao||'—'} · ${p.lote||'sem lote'} · Qtd ${fN(p.qtd)} ${p.um||'UN'} · ${c?c.nome:'—'}`;}
+  onAjWmsChange();
+}
+
 function calcAjuste(){
   const sistEl=document.getElementById('ajQtdSist');
   const fisEl=document.getElementById('ajQtdFisica');
@@ -13818,6 +13943,8 @@ function solicitarAjuste(){
   const ajuste={
     id:'AJ-'+String(Date.now()).slice(-6),
     wmsId,descricao:p?.descricao||'',clienteId:p?.clienteId||'',
+    siteId:p?.site||p?.siteId||document.getElementById('ajSite')?.value||'',
+    endereco:p?.endereco||document.getElementById('ajEndereco')?.value||'',
     tipo,qtdSist,qtdFisica,diff,novoValor,
     justificativa:just,
     solicitante:usuarioAtual?.nome||'Usuário',
@@ -13830,6 +13957,9 @@ function solicitarAjuste(){
   document.getElementById('ajTipo').value='';
   document.getElementById('ajJustificativa').value='';
   document.getElementById('ajCamposDinamicos').innerHTML='';
+  const _w=document.getElementById('ajWmsId');if(_w)_w.value='';
+  const _ps=document.getElementById('ajProdutoSelecionado');if(_ps)_ps.value='';
+  renderProdutosAjusteEndereco();
   renderAjustesMeus();
   showT(`Ajuste ${ajuste.id} solicitado! Aguardando aprovação.`,'ok');
 }
