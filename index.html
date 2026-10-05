@@ -52,7 +52,7 @@ a{color:inherit;text-decoration:none;}
   padding:14px 20px 5px;margin-top:6px;
   border-top:1px solid rgba(251,146,60,.2);
 }
-.ni{display:flex;align-items:center;gap:9px;padding:9px 18px;cursor:pointer;font-size:12px;font-weight:500;color:var(--w40);transition:all .2s;border-left:2px solid transparent;position:relative;}
+.ni{display:flex;align-items:center;gap:9px;padding:9px 18px;cursor:pointer;font-size:12px;font-weight:500;color:var(--w40);transition:background .10s,color .10s,border-color .10s;border-left:2px solid transparent;position:relative;}
 .ni:hover{background:var(--w06);color:var(--w);}
 .ni.active{background:rgba(251,146,60,.1);color:var(--orange2);border-left-color:var(--orange);}
 .ni-ic{font-size:14px;width:18px;text-align:center;}
@@ -71,7 +71,7 @@ a{color:inherit;text-decoration:none;}
 
 /* ══ SCREENS ══ */
 .screen{display:none;}
-.screen.active{display:block;animation:fin .3s ease;}
+.screen.active{display:block;animation:fin .12s ease;}
 @keyframes fin{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
 
 /* ══ PAGE HDR ══ */
@@ -402,11 +402,39 @@ a{color:inherit;text-decoration:none;}
   padding:6px 14px;cursor:pointer;font-size:11px;}
 
 
+
+/* ══ BUILD 013 — RESPONSIVIDADE + FLUIDEZ DO MAPA ══ */
+.mapa-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;background:var(--panel);border:1px solid var(--border);padding:10px 12px;}
+.mapa-search{flex:1 1 300px;min-width:220px;background:var(--bg3);border:1px solid var(--border2);color:var(--w);padding:9px 12px 9px 34px;font:11px var(--sans);outline:none;}
+.mapa-search:focus{border-color:var(--orange);}
+.mapa-search-wrap{position:relative;flex:1 1 300px;min-width:220px;}
+.mapa-search-wrap>span{position:absolute;left:11px;top:8px;color:var(--w40);pointer-events:none;}
+.mapa-layout{grid-template-columns:minmax(0,1fr) clamp(280px,24vw,360px);min-width:0;}
+.mapa-main{min-width:0;overflow:auto;max-height:calc(100vh - 285px);overscroll-behavior:contain;}
+.wmap{min-width:max-content;padding-bottom:10px;}
+.wmap-cells{flex-wrap:nowrap;}
+.wmap-row{min-width:max-content;}
+.mapa-panel{min-width:0;max-height:calc(100vh - 285px);overflow:hidden;}
+@media(max-width:1100px){.mapa-layout{grid-template-columns:minmax(0,1fr) 300px;}}
+@media(max-width:900px){
+  .mapa-layout{grid-template-columns:1fr;min-height:0;}
+  .mapa-main{max-height:55vh;min-height:320px;}
+  .mapa-panel{max-height:48vh;border-left:none;border-top:1px solid var(--border);}
+  .mapa-search-wrap{flex-basis:100%;}
+  .mapa-toolbar select,.mapa-toolbar button{flex:1 1 160px;}
+}
+@media(max-width:600px){
+  .content{padding:10px;}
+  .ph-title{font-size:24px;}
+  .mapa-main{max-height:48vh;}
+  .wc{width:40px;height:34px;}
+}
+
 /* ══ MAPA PAINEL LATERAL ══ */
 .mapa-layout{display:grid;grid-template-columns:1fr 340px;gap:0;min-height:600px;}
 .mapa-main{overflow:auto;}
 .mapa-panel{border-left:1px solid var(--border);background:var(--panel);
-  display:flex;flex-direction:column;transition:width .2s;}
+  display:flex;flex-direction:column;transition:width .10s;}
 .mapa-panel-header{padding:14px 16px;border-bottom:1px solid var(--border);
   display:flex;align-items:center;justify-content:space-between;}
 .mapa-panel-body{flex:1;overflow-y:auto;padding:16px;}
@@ -929,11 +957,15 @@ a{color:inherit;text-decoration:none;}
 
 <!-- ════ MAPA ════ -->
 <div class="screen" id="s-estoqueMapa">
-  <div class="ph"><div><div class="ph-eye">Estoque</div><div class="ph-title">Mapa do <em>Armazém</em></div></div>
-    <div class="ph-acts" style="flex-wrap:wrap;gap:8px;">
-      <select id="filtMapaSite" onchange="renderMapa()" class="btn btn-o" style="font-size:10px;cursor:pointer;padding:9px 14px;color:var(--orange2);border-color:var(--orange2);"><option value="">🏭 Todas as Unidades</option></select>
-      <select id="filtMapaCli" onchange="renderMapa()" class="btn btn-o" style="font-size:10px;cursor:pointer;padding:9px 14px;"><option value="">Todos os Clientes</option></select>
+  <div class="ph"><div><div class="ph-eye">Estoque</div><div class="ph-title">Mapa do <em>Armazém</em></div></div></div>
+  <div class="mapa-toolbar">
+    <div class="mapa-search-wrap">
+      <span>⌕</span>
+      <input id="filtMapaBusca" class="mapa-search" placeholder="Buscar endereço, SKU, descrição, lote ou cliente..." oninput="renderMapaDebounced()">
     </div>
+    <select id="filtMapaSite" onchange="renderMapa()" class="btn btn-o" style="font-size:10px;cursor:pointer;padding:9px 14px;color:var(--orange2);border-color:var(--orange2);"><option value="">🏭 Todas as Unidades</option></select>
+    <select id="filtMapaCli" onchange="renderMapa()" class="btn btn-o" style="font-size:10px;cursor:pointer;padding:9px 14px;"><option value="">Todos os Clientes</option></select>
+    <button class="btn btn-o btn-sm" onclick="limparBuscaMapa()">Limpar busca</button>
   </div>
   <div class="g2" style="margin-bottom:16px;">
     <div class="card"><div class="clbl">Legenda</div>
@@ -1934,6 +1966,9 @@ a{color:inherit;text-decoration:none;}
           </div>
         </div>
         <input type="hidden" id="cliPP_f_edit_idx">
+      </div>
+      <div style="font-size:9px;color:var(--w40);font-family:var(--mono);margin:-4px 0 10px;">
+        Cadastro geral do cliente: importe a matriz para definir <strong style="color:var(--orange2);">SKU + UM/derivação + capacidade máxima por palete</strong>. Essa regra apoia a gestão do estoque verticalizado.
       </div>
       <div style="font-size:10px;color:var(--w40);font-family:var(--mono);margin-bottom:8px;" id="cliPPCount"></div>
       <div class="tw">
@@ -5925,7 +5960,88 @@ const ApiEngine = { ativo: false, baseUrl: null };
 const YALOG_MODO_CONSULTA_RESERVADO = false;
 const YALOG_LOGIN_INTELIGENTE_RESERVADO = false;
 
+
+// ══════════════════════════════════════════════════════════════
+// BUILD 013 — PRODUCT CONTINUITY GUARD
+// Produtos existentes jamais podem desaparecer por troca de HTML,
+// tenant cache, sync remoto incompleto ou reconstrução de DB.
+// ══════════════════════════════════════════════════════════════
+const PRODUCT_GUARD_KEY='wms_product_guard_v1';
+function _produtoGuardKey(){return PRODUCT_GUARD_KEY+':'+(_companyIdLocalAtual||'global');}
+function _produtoGuardLerMelhor(){
+  const candidatos=[];
+  const companyAtual=_companyIdLocalAtual||null;
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i)||'';
+      if(k===PRODUCT_GUARD_KEY||k.startsWith(PRODUCT_GUARD_KEY+':')){
+        try{
+          const v=JSON.parse(localStorage.getItem(k)||'null');
+          // Nunca mistura empresas: quando há tenant autenticado, aceita
+          // somente snapshot daquele tenant ou snapshot legado global.
+          if(v&&Array.isArray(v.produtos)&&v.produtos.length&&
+             (!companyAtual || !v.companyId || v.companyId===companyAtual)) candidatos.push(v);
+        }catch(e){}
+      }
+    }
+  }catch(e){}
+  candidatos.sort((a,b)=>(b.produtos?.length||0)-(a.produtos?.length||0));
+  return candidatos[0]||null;
+}
+function _produtoGuardSalvar(db){
+  try{
+    if(!db||!Array.isArray(db.produtos)||!db.produtos.length)return false;
+    const valor={version:1,data:now(),companyId:_companyIdLocalAtual||null,produtos:_cloneSeguro(db.produtos)};
+    LocalStorageProvider.set(_produtoGuardKey(),valor);
+    LocalStorageProvider.set(PRODUCT_GUARD_KEY,valor);
+    return true;
+  }catch(e){console.warn('[WMS PRODUCT GUARD] falha:',e);return false;}
+}
+function _mesclarProdutosSemPerda(base,guard){
+  const b=Array.isArray(base)?_cloneSeguro(base)||[]:[];
+  const g=Array.isArray(guard)?guard:[];
+  if(!g.length)return b;
+  const mapa=new Map();
+  b.forEach(p=>{if(p?.wmsId!=null)mapa.set(String(p.wmsId),p);});
+  g.forEach(p=>{
+    const k=p?.wmsId!=null?String(p.wmsId):'';
+    if(k&&!mapa.has(k))mapa.set(k,_cloneSeguro(p));
+  });
+  return Array.from(mapa.values());
+}
+function _protegerProdutosAntesDePersistir(){
+  if(DB?._masterDataDeletion||DB?._estoqueLimpoEm)return;
+  let guard=_produtoGuardLerMelhor();
+  if(!guard?.produtos?.length){
+    const dbGuard=_dbSnapshotAtual();
+    if(dbGuard?.produtos?.length)guard={produtos:dbGuard.produtos};
+  }
+  if(!guard?.produtos?.length)return;
+  const antes=DB.produtos?.length||0;
+  const mesclados=_mesclarProdutosSemPerda(DB.produtos,guard.produtos);
+  if(mesclados.length>antes){
+    console.warn('[WMS PRODUCT GUARD] restauração preventiva de produtos:',mesclados.length-antes);
+    DB.produtos=mesclados;
+  }
+}
+function _recuperarProdutosAntesDoLoad(d){
+  if(d?._masterDataDeletion||d?._estoqueLimpoEm)return d||{};
+  let guard=_produtoGuardLerMelhor();
+  if(!guard?.produtos?.length){
+    const dbGuard=_dbSnapshotAtual();
+    if(dbGuard?.produtos?.length)guard={produtos:dbGuard.produtos};
+  }
+  if(!guard?.produtos?.length)return d||{};
+  const out=_cloneSeguro(d)||{};
+  const atuais=Array.isArray(out.produtos)?out.produtos:[];
+  const mesclados=_mesclarProdutosSemPerda(atuais,guard.produtos);
+  if(mesclados.length>atuais.length)out.produtos=mesclados;
+  return out;
+}
+
 function save(){
+  _protegerProdutosAntesDePersistir();
+  _produtoGuardSalvar(DB);
   // REGRA DEFINITIVA: toda gravação válida gera snapshot integral antes do
   // envio ao provider. Isso inclui clientes/cadastros, mesmo sem estoque.
   // Uma publicação/refresh jamais deve depender do HTML para reconstruir dados.
@@ -6163,7 +6279,8 @@ function _applyLoadedData(parsed){
 }
 
 async function load(){
-  const d = Core.get(DBKEY);
+  let d = Core.get(DBKEY);
+  d = _recuperarProdutosAntesDoLoad(d);
   const guard = _dbSnapshotAtual();
   if(d){
     // Se o cache carregado perdeu registros que já existiam no snapshot,
@@ -6181,6 +6298,7 @@ async function load(){
   }
   if(_restaurarSnapshotGuardSeNecessario()){ save(); }
   if(_dbTemDadosProtegidos(DB)) _salvarSnapshotGuard(DB,'load');
+  _produtoGuardSalvar(DB);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -6221,8 +6339,8 @@ function go(id){
   if(id==='home'){populateHomeSiteFiltro();renderHome();}
   if(id==='recUpload'){initRecUpload();populateRecSite();}
   if(id==='recTarefas')renderTarefasRec();
-  if(id==='estoqueList'){setTimeout(renderEstoque,50);}
-  if(id==='estoqueMapa'){populateMapaFiltros();renderMapa();}
+  if(id==='estoqueList'){requestAnimationFrame(renderEstoque);}
+  if(id==='estoqueMapa'){requestAnimationFrame(()=>{populateMapaFiltros();renderMapa();});}
   if(id==='curvaABC'){populateABCFiltros();renderABC();}
   if(id==='bloqueios')renderBloqueios();
   if(id==='sepUpload')initSepUpload();
@@ -7317,6 +7435,75 @@ function renderHome(){
 // ══════════════════════════════════════════════════════════════
 // RECEBIMENTO
 // ══════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════
+// BUILD 013 — PRODUTO NOVO NA ENTRADA + CAPACIDADE PP
+// ═══════════════════════════════════════════════════════════════
+let _novoProdCapCtx=null;
+function _clienteIdAtualRecebimento(){
+  const nome=(document.getElementById('rCliente')?.value||'').trim().toLowerCase();
+  if(!nome)return '';
+  return (DB.clientes||[]).find(c=>String(c.nome||'').trim().toLowerCase()===nome)?.id||'';
+}
+function _acharRegraCapacidade(cliId,sku,um){
+  const arr=DB.matrizCapacidade?.[cliId]||[];
+  const s=String(sku||'').trim().toUpperCase();
+  const u=_normMatrizUM(um||'');
+  return arr.find(x=>String(x.sku||'').trim().toUpperCase()===s&&_matrizItemUM(x)===u)
+      ||arr.find(x=>String(x.sku||'').trim().toUpperCase()===s);
+}
+function verificarProdutoNovoNoRecebimento(input){
+  const sku=(input?.value||'').trim().toUpperCase();
+  if(!sku)return;
+  const cliId=_clienteIdAtualRecebimento();
+  if(!cliId)return;
+  const item=input.closest('div[id^="inItem"]');
+  const um=(item?.querySelector('.iUM')?.value||extrairUMdoCodigo(sku)||'UN').trim().toUpperCase();
+  const regra=_acharRegraCapacidade(cliId,sku,um);
+  if(regra){
+    const desc=item?.querySelector('.iDesc'),umEl=item?.querySelector('.iUM');
+    if(desc&&!desc.value&&regra.descricao)desc.value=regra.descricao;
+    if(umEl&&!umEl.value&&regra.um)umEl.value=regra.um;
+    return;
+  }
+  const chave=cliId+'|'+sku+'|'+um;
+  if(window._novoProdCapUltimaChave===chave)return;
+  window._novoProdCapUltimaChave=chave;
+  _novoProdCapCtx={cliId,sku,um,itemId:item?.id||''};
+  const cli=DB.clientes.find(c=>c.id===cliId);
+  document.getElementById('novoProdCapCliente').value=cli?.nome||'';
+  document.getElementById('novoProdCapSku').value=sku;
+  document.getElementById('novoProdCapDesc').value=item?.querySelector('.iDesc')?.value||'';
+  document.getElementById('novoProdCapUm').value=um;
+  document.getElementById('novoProdCapMax').value='';
+  document.getElementById('novoProdCapMsg').textContent='⚠ Este SKU ainda não possui capacidade por palete cadastrada para este cliente.';
+  openM('mCadastroProdutoCap');
+}
+function salvarNovoProdutoCapacidade(){
+  if(!_novoProdCapCtx)return;
+  const {cliId,sku,itemId}=_novoProdCapCtx;
+  const desc=(document.getElementById('novoProdCapDesc')?.value||'').trim();
+  const um=_normMatrizUM((document.getElementById('novoProdCapUm')?.value||'').trim().toUpperCase());
+  const maxQtdPP=parseInt(document.getElementById('novoProdCapMax')?.value||'0',10);
+  if(!um||!maxQtdPP){showT('Informe a UM/derivação e a capacidade máxima por palete.','err');return;}
+  if(!DB.matrizCapacidade)DB.matrizCapacidade={};
+  if(!DB.matrizCapacidade[cliId])DB.matrizCapacidade[cliId]=[];
+  const arr=DB.matrizCapacidade[cliId];
+  const idx=arr.findIndex(x=>String(x.sku||'').toUpperCase()===sku&&_matrizItemUM(x)===um);
+  const obj={sku,descricao:desc,um,maxQtdPP};
+  if(idx>=0)arr[idx]=obj;else arr.push(obj);
+  const item=itemId?document.getElementById(itemId):null;
+  if(item){
+    const d=item.querySelector('.iDesc'),u=item.querySelector('.iUM');
+    if(d&&desc)d.value=desc;
+    if(u)u.value=um;
+  }
+  save();
+  closeM('mCadastroProdutoCap');
+  showT(`✓ Produto ${sku} cadastrado com capacidade de ${maxQtdPP} ${um}/palete.`,'ok');
+  _novoProdCapCtx=null;
+}
+
 function initRecUpload(){
   populateRecSite();
   // Popula clientes
@@ -7353,7 +7540,7 @@ function addItemNF(){
   div.innerHTML=`
     <button onclick="removeItemNF(this)" style="position:absolute;top:6px;right:6px;background:none;border:none;cursor:pointer;color:var(--w40);font-size:12px;" title="Remover item">✕</button>
     <div class="fg"><label>Cód. Produto (Cliente)</label>
-      <input type="text" class="iCodCli" placeholder="Ex: 010020157-GL-20L" oninput="autoUMdoCodigo(this)">
+      <input type="text" class="iCodCli" placeholder="Ex: 010020157-GL-20L" oninput="autoUMdoCodigo(this)" onblur="verificarProdutoNovoNoRecebimento(this)">
     </div>
     <div class="fg"><label>Descrição do Produto <span class="req">*</span></label><input type="text" class="iDesc" placeholder="Nome do produto"></div>
     <div class="fg"><label>Lote</label><input type="text" class="iLote" placeholder="LOT-2025-01"></div>
@@ -7953,6 +8140,9 @@ window.onload=function(){
 
 
 
+
+
+
 </body></html>`);
   w.document.close();
 }
@@ -8133,17 +8323,42 @@ function populateMapaFiltros(){
     cliEl.value=cliVal;
   }
 }
+let _mapaBuscaTimer=null;
+function renderMapaDebounced(){
+  clearTimeout(_mapaBuscaTimer);
+  _mapaBuscaTimer=setTimeout(renderMapa,90);
+}
+function limparBuscaMapa(){
+  const el=document.getElementById('filtMapaBusca');
+  if(el)el.value='';
+  renderMapa();
+}
 function renderMapa(){
   populateMapaFiltros();
   const filtSite=document.getElementById('filtMapaSite')?.value||'';
   const filtCli=document.getElementById('filtMapaCli')?.value||'';
+  const busca=(document.getElementById('filtMapaBusca')?.value||'').trim().toLowerCase();
 
-  // Base = TODA a estrutura cadastrada (item 1) — não apenas endereços ocupados
-  let ends=filtSite?DB.enderecos.filter(e=>e.site===filtSite||e.siteId===filtSite):DB.enderecos.slice();
-
-  // Produtos (para status de ocupação), respeitando os mesmos filtros
   let prods=filtSite?DB.produtos.filter(p=>p.site===filtSite||p.siteId===filtSite):DB.produtos.slice();
   if(filtCli)prods=prods.filter(p=>p.clienteId===filtCli);
+
+  let enderecosBusca=null;
+  if(busca){
+    enderecosBusca=new Set();
+    (DB.enderecos||[]).forEach(e=>{
+      if(String(e.addr||'').toLowerCase().includes(busca))enderecosBusca.add(e.addr);
+    });
+    prods.forEach(p=>{
+      const cli=DB.clientes.find(c=>c.id===p.clienteId);
+      const site=DB.sites.find(x=>x.id===p.site||x.id===p.siteId);
+      const hay=[p.endereco,p.codCliente,p.wmsId,p.descricao,p.lote,cli?.nome,site?.nome]
+        .map(v=>String(v??'').toLowerCase()).join(' | ');
+      if(hay.includes(busca)&&p.endereco)enderecosBusca.add(p.endereco);
+    });
+  }
+
+  let ends=filtSite?DB.enderecos.filter(e=>e.site===filtSite||e.siteId===filtSite):DB.enderecos.slice();
+  if(enderecosBusca)ends=ends.filter(e=>enderecosBusca.has(e.addr));
   const prodsPorEnd={};
   prods.filter(p=>(p.qtd||0)>0).forEach(p=>{
     const addr=p.endereco||'SEM-END';
@@ -8203,8 +8418,18 @@ function renderMapa(){
   html+='</div>';
   document.getElementById('wmapaWrap').innerHTML=html;
 }
+const _mapaProdsPorEndereco=()=>{
+  const m=new Map();
+  (DB.produtos||[]).forEach(p=>{
+    if((p.qtd||0)<=0)return;
+    const a=p.endereco||'';
+    if(!m.has(a))m.set(a,[]);
+    m.get(a).push(p);
+  });
+  return m;
+};
 function showPosDetalhe(addr){
-  const prods=DB.produtos.filter(p=>p.endereco===addr&&(p.qtd||0)>0);
+  const prods=_mapaProdsPorEndereco().get(addr)||[];
   const endDB=DB.enderecos.find(e=>e.addr===addr);
 
   // Atualiza célula selecionada no mapa
@@ -9350,7 +9575,7 @@ function injectDemo(){
 (function(){const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='flex';})();
 // ══════════════════════════════════════════════════════════════
 // YALOG WMS · VERSIONAMENTO CENTRALIZADO
-// Atualização 012 — Mapa de Estoque gerencial com filtro por unidade/cliente e exportação Excel; preserva as Atualizações anteriores.
+// Atualização 013 — Mapa de Estoque gerencial com filtro por unidade/cliente e exportação Excel; preserva as Atualizações anteriores.
 // Atualize SOMENTE estes valores a cada publicação. O refresh da
 // página preserva a sessão autenticada; a versão não é usada como
 // critério de logout.
@@ -14487,6 +14712,7 @@ function _preencherNFXML(xml, nNF){
     }
   });
   atualizarBadgeItens();
+  setTimeout(()=>document.querySelectorAll('#itensNF .iCodCli').forEach(el=>verificarProdutoNovoNoRecebimento(el)),120);
   if(fileInfo)fileInfo.textContent='NF '+nNF+' \u00b7 '+dets.length+' item(ns) \u00b7 R$ '+(parseFloat(vNF||0).toFixed(2).replace('.',','))+' \u00b7 '+(xNome||'\u2014');
   if(result)result.innerHTML='<div style="background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);padding:10px 14px;font-size:11px;color:#4ade80;font-family:var(--mono);">\u2713 XML importado \u00b7 NF '+nNF+' \u00b7 <strong>'+dets.length+' item(ns)</strong> preenchidos \u00b7 Confira e corrija se necess\u00e1rio</div>';
   showT('NF-e XML importada! Confira os dados.','ok');
@@ -20931,5 +21157,27 @@ function baixarTemplateEnderecos(fmt='xlsx'){
   XLSX.writeFile(wb,'YALog_Template_Carga_Enderecos.xlsx');
   showT('Template de endereços baixado com UNIDADE + SITE','ok');
 }</script>
+
+<!-- ════ MODAL · NOVO PRODUTO / CAPACIDADE POR PALETE · BUILD 013 ════ -->
+<div class="mo" id="mCadastroProdutoCap">
+  <div class="md md-lg" style="max-width:760px;">
+    <button class="mc" onclick="closeM('mCadastroProdutoCap')">✕</button>
+    <div class="mt">📦 Novo produto / capacidade por palete</div>
+    <div class="ms">Produto identificado na entrada da NF, mas ainda sem regra de capacidade cadastrada para este cliente.</div>
+    <div class="frow">
+      <div class="fg"><label>Cliente / Operação</label><input id="novoProdCapCliente" type="text" disabled></div>
+      <div class="fg"><label>SKU / Cód. Cliente</label><input id="novoProdCapSku" type="text" disabled></div>
+      <div class="fg"><label>Descrição</label><input id="novoProdCapDesc" type="text" placeholder="Descrição do produto"></div>
+      <div class="fg"><label>UM / Derivação <span class="req">*</span></label><input id="novoProdCapUm" type="text" placeholder="UN / KG / SC / CX..." style="text-transform:uppercase;"></div>
+      <div class="fg"><label>Máx. Qtd / Palete <span class="req">*</span></label><input id="novoProdCapMax" type="number" min="1" placeholder="Ex.: 480"></div>
+    </div>
+    <div id="novoProdCapMsg" style="margin-top:8px;font:9px var(--mono);color:var(--w40);"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">
+      <button class="btn btn-o" onclick="closeM('mCadastroProdutoCap')">Agora não</button>
+      <button class="btn btn-p" onclick="salvarNovoProdutoCapacidade()">✓ Cadastrar e usar</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
