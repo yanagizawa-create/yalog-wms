@@ -4134,7 +4134,7 @@ const LocalStorageProvider = {
   // Sem empresa autenticada ainda (_companyIdLocalAtual null), o
   // comportamento é IDÊNTICO ao anterior a esta sprint.
   _chaveFisica(key) {
-    // BUILD 017 — A base operacional local possui UMA chave canônica por
+    // BUILD 018 — A base operacional local possui UMA chave canônica por
     // instalação. O tenant é responsabilidade do Supabase quando o modo
     // online for ativado; ele NÃO pode mudar a chave local durante o MVP.
     // Isso evita que uma nova sessão/login encontre uma chave tenant vazia
@@ -4961,7 +4961,7 @@ function _cloneSeguro(v){
 }
 
 // ═══════════════════════════════════════════════════════════════
-// BUILD 017 — BANCO LOCAL CANÔNICO / CONTINUIDADE REAL
+// BUILD 018 — BANCO LOCAL CANÔNICO / CONTINUIDADE REAL
 // localStorage continua sendo o cache síncrono compatível com o WMS legado.
 // IndexedDB passa a manter a cópia operacional canônica local, com capacidade
 // muito superior ao localStorage. A leitura é assíncrona e acontece antes do
@@ -4989,14 +4989,35 @@ async function _idbLerDB(){
     try{const tx=db.transaction(WMS_IDB_STORE,'readonly');const req=tx.objectStore(WMS_IDB_STORE).get(WMS_IDB_KEY);req.onsuccess=()=>{const v=req.result;resolve(v&&v.db?_cloneSeguro(v.db):null);};req.onerror=()=>resolve(null);tx.oncomplete=()=>{try{db.close();}catch(e){}};}catch(e){try{db.close();}catch(_e){}resolve(null);}
   });
 }
+let _yalogPersistQueue=Promise.resolve();
+let _yalogLastPersistPromise=Promise.resolve();
 async function _idbGravarDB(db){
   if(!_idbDisponivel()||!db)return false;
   const clone=_cloneSeguro(db); if(!clone)return false;
-  const base={db:clone,salvoEm:new Date().toISOString(),build:YALOG_WMS_UPDATE||'017'};
+  const base={db:clone,salvoEm:new Date().toISOString(),build:YALOG_WMS_UPDATE||'018',schema:'YALOG-WMS-CANONICAL-001'};
   const conn=await _idbAbrir(); if(!conn)return false;
   return new Promise(resolve=>{
-    try{const tx=conn.transaction(WMS_IDB_STORE,'readwrite');tx.objectStore(WMS_IDB_STORE).put(base,WMS_IDB_KEY);tx.oncomplete=()=>{try{conn.close();}catch(e){}resolve(true);};tx.onerror=()=>{try{conn.close();}catch(e){}resolve(false);};}catch(e){try{conn.close();}catch(_e){}resolve(false);}
+    try{
+      const tx=conn.transaction(WMS_IDB_STORE,'readwrite');
+      tx.objectStore(WMS_IDB_STORE).put(base,WMS_IDB_KEY);
+      tx.oncomplete=()=>{try{conn.close();}catch(e){}resolve(true);};
+      tx.onerror=()=>{try{conn.close();}catch(e){}resolve(false);};
+      tx.onabort=()=>{try{conn.close();}catch(e){}resolve(false);};
+    }catch(e){try{conn.close();}catch(_e){}resolve(false);}
   });
+}
+function _persistirDBCanonico(db){
+  const snapshot=_cloneSeguro(db);
+  if(!snapshot) return Promise.resolve(false);
+  // Serializa as gravações: uma atualização nunca pode terminar depois
+  // de uma gravação mais nova e sobrescrever o estado canônico.
+  _yalogPersistQueue=_yalogPersistQueue.catch(()=>false).then(()=>_idbGravarDB(snapshot));
+  _yalogLastPersistPromise=_yalogPersistQueue;
+  return _yalogPersistQueue;
+}
+
+if(typeof window!=='undefined' && window.addEventListener){
+  window.addEventListener('beforeunload',()=>{try{_persistirDBCanonico(DB);}catch(e){}});
 }
 function _localStorageCandidatosDB(){
   const out=[];
@@ -5020,16 +5041,36 @@ function _localStorageCandidatosDB(){
   }catch(e){}
   return out;
 }
+function _mesclarLegacySemSobrescreverCanonico(canonico, legado){
+  const c=_cloneSeguro(canonico)||{}; const l=_cloneSeguro(legado)||{}; const out={...c};
+  const colecoes=['clientes','sites','enderecos','produtos','movimentos','tarefasRec','tarefasMov','tarefasSep','inventarios','paletes','transportadoras','docas','contratos','devolucoes','usuarios','ajustes','auditoria'];
+  colecoes.forEach(k=>{
+    const base=Array.isArray(out[k])?out[k]:[]; const extras=Array.isArray(l[k])?l[k]:[];
+    const ids=new Set(base.map(x=>_chaveRegistro(x,k)).filter(Boolean));
+    const adicionar=extras.filter(x=>{const id=_chaveRegistro(x,k);return id?!ids.has(id):!base.some(y=>JSON.stringify(y)===JSON.stringify(x));});
+    out[k]=base.concat(_cloneSeguro(adicionar)||[]);
+  });
+  const mc=out.matrizCapacidade||{}, ml=l.matrizCapacidade||{}; out.matrizCapacidade={...mc};
+  Object.entries(ml).forEach(([cli,arr])=>{if(!Array.isArray(out.matrizCapacidade[cli]))out.matrizCapacidade[cli]=_cloneSeguro(arr)||[];else{const ids=new Set(out.matrizCapacidade[cli].map(x=>_matrizKey(x?.sku,_matrizItemUM(x))));(arr||[]).forEach(x=>{const id=_matrizKey(x?.sku,_matrizItemUM(x));if(!ids.has(id)){out.matrizCapacidade[cli].push(_cloneSeguro(x));ids.add(id);}});}});
+  if(!Array.isArray(out.capacidadeArmazem))out.capacidadeArmazem=[];
+  const capIds=new Set(out.capacidadeArmazem.map(x=>_chaveRegistro(x,'capacidadeArmazem')));
+  (Array.isArray(l.capacidadeArmazem)?l.capacidadeArmazem:[]).forEach(x=>{const id=_chaveRegistro(x,'capacidadeArmazem');if(!capIds.has(id)){out.capacidadeArmazem.push(_cloneSeguro(x));capIds.add(id);}});
+  return out;
+}
 async function _recuperarMelhorBasePersistida(baseAtual){
   let melhor=_cloneSeguro(baseAtual)||{};
+  // BUILD 018: IndexedDB é a fonte canônica local. Quando existe um banco
+  // canônico válido, fontes antigas do localStorage só podem acrescentar
+  // registros que não existam nele; jamais podem sobrescrever estoque atual,
+  // quantidades, lotes ou históricos canônicos com uma cópia antiga.
+  const idb=await _idbLerDB();
+  const temCanonico=idb && !_dbEhZeragemTotal(idb);
+  if(temCanonico) melhor=_mesclarDBSemPerda(melhor,idb);
   const candidatos=_localStorageCandidatosDB();
-  const idb=await _idbLerDB(); if(idb)candidatos.push({key:'indexedDB:'+WMS_IDB_NAME,db:idb});
-  // Faz merge aditivo de TODOS os candidatos, nunca escolhe cegamente um
-  // estado menor. O conjunto final é a união por ID de cada coleção.
   for(const c of candidatos){
     try{
       if(c.db?._estoqueLimpoEm||c.db?._masterDataDeletion)continue;
-      melhor=_mesclarDBSemPerda(melhor,c.db);
+      melhor=temCanonico?_mesclarLegacySemSobrescreverCanonico(melhor,c.db):_mesclarDBSemPerda(melhor,c.db);
     }catch(e){}
   }
   return melhor;
@@ -5319,7 +5360,7 @@ function _lerConfigPersistida() {
   let providerLegado = null;
   try { providerLegado = localStorage.getItem('wms_storage_provider_ativo'); } catch(e) {}
   const base = { ..._configPadrao(), ...persistida };
-  // BUILD 017 — provider local é a fonte de verdade do MVP. Uma configuração
+  // BUILD 018 — provider local é a fonte de verdade do MVP. Uma configuração
   // antiga de Supabase nunca pode trocar a fonte operacional silenciosamente.
   base.storageProvider = 'local';
   return base;
@@ -6228,7 +6269,7 @@ function _protegerBaseCompletaAntesDePersistir(){
   }
 }
 function save(){
-  // BUILD 017 — se o Master limpou o estoque e depois uma nova carga foi
+  // BUILD 018 — se o Master limpou o estoque e depois uma nova carga foi
   // efetivamente criada, encerra o estado de limpeza. A partir daí o novo
   // estoque volta a ser protegido normalmente.
   if(Array.isArray(DB?.produtos) && DB.produtos.length>0 && DB?._estoqueLimpoEm){
@@ -6242,7 +6283,11 @@ function save(){
   if(!(DB?._masterDataDeletion||DB?._estoqueLimpoEm)) DB=_dataVaultMesclar(DB);
   _protegerBaseCompletaAntesDePersistir();
   _protegerProdutosAntesDePersistir();
-  _produtoGuardSalvar(DB);
+  // BUILD 018: com IndexedDB disponível, não replica o estoque inteiro em
+  // localStorage (isso triplicava o consumo e podia atingir a quota). Os
+  // guards antigos continuam sendo lidos para recuperação, mas o banco
+  // canônico novo fica somente no IndexedDB.
+  if(!_idbDisponivel()) _produtoGuardSalvar(DB);
   // REGRA DEFINITIVA: toda gravação válida gera snapshot integral antes do
   // envio ao provider. Isso inclui clientes/cadastros, mesmo sem estoque.
   // Uma publicação/refresh jamais deve depender do HTML para reconstruir dados.
@@ -6273,20 +6318,29 @@ function save(){
       }
     }
   }
-  _salvarSnapshotGuard(DB,'save-build-017');
-  const ok=Core.set(DBKEY, DB);
-  if(ok){
-    const exclusao=DB && DB._masterDataDeletion ? DB._masterDataDeletion : null;
-    const limpeza=DB && DB._estoqueLimpoEm ? DB._estoqueLimpoEm : null;
-    _idbGravarDB(DB).catch(()=>{});
-    if(!(exclusao||limpeza)) _dataVaultAtualizarComDB(DB);
+  // BUILD 018 — PERSISTÊNCIA CANÔNICA: IndexedDB recebe o estado completo.
+  // localStorage deixa de ser a única fonte e pode falhar por limite de quota
+  // sem invalidar a gravação operacional. O snapshot/vault antigos continuam
+  // sendo lidos para compatibilidade, mas não são mais necessários para que
+  // o estoque seja preservado.
+  const persistPromise=_persistirDBCanonico(DB);
+  const localOk=Core.set(DBKEY, DB); // espelho compatível; pode falhar por quota
+  const exclusao=DB && DB._masterDataDeletion ? DB._masterDataDeletion : null;
+  const limpeza=DB && DB._estoqueLimpoEm ? DB._estoqueLimpoEm : null;
+  // BUILD 018: não grava o DB completo novamente no localStorage quando
+  // IndexedDB está disponível. Isso elimina a principal causa de quota cheia.
+  if(!_idbDisponivel() && !(exclusao||limpeza)) _dataVaultAtualizarComDB(DB);
+  // Não bloqueia a UI; a fila canônica é aguardada por operações críticas
+  // (como carga inicial) através de _yalogLastPersistPromise.
+  persistPromise.catch(e=>console.warn('[WMS PERSISTENCE 018] falha IndexedDB:',e));
+  if(localOk || _idbDisponivel()){
     // Autorização Master é transacional, não um estado permanente que
     // desliga a proteção para todas as gravações futuras.
     if(window._wmsMasterDeletionPending && exclusao && exclusao.scope!=='estoque-total'){
       delete DB._masterDataDeletion;
       window._wmsMasterDeletionPending=false;
       _dataVaultAtualizarComDB(DB);
-      _idbGravarDB(DB).catch(()=>{});
+      _persistirDBCanonico(DB).catch(()=>{});
       Core.set(DBKEY,DB);
     }
     // Após uma limpeza total, o marcador fica até o primeiro novo estoque.
@@ -6518,8 +6572,21 @@ function _applyLoadedData(parsed){
 
 }
 
+async function _validarPersistenciaCanonica(){
+  try{
+    const idb=await _idbLerDB();
+    const atual=DB;
+    const ci=_dbContagens(idb||{}), ca=_dbContagens(atual||{});
+    if(idb && ca.produtos>ci.produtos){
+      console.warn('[WMS PERSISTENCE 018] memória possui mais produtos que o canônico; reconciliando antes de continuar.');
+      DB=_mesclarDBSemPerda(idb,atual);
+      await _persistirDBCanonico(DB);
+    }
+  }catch(e){console.warn('[WMS PERSISTENCE 018] validação canônica:',e);}
+}
+
 async function load(){
-  // BUILD 017 — recuperação ANTES de qualquer normalização/migração.
+  // BUILD 018 — recuperação ANTES de qualquer normalização/migração.
   // A fonte atual pode estar vazia ou incompleta; primeiro reunimos DB local,
   // snapshots antigos, vaults e IndexedDB. Só depois o WMS aplica migrações.
   let d=Core.get(DBKEY);
@@ -6542,10 +6609,15 @@ async function load(){
 
   if(_restaurarSnapshotGuardSeNecessario()){}
   if(_dbTemDadosProtegidos(DB)){
-    _salvarSnapshotGuard(DB,'load-build-017');
-    _produtoGuardSalvar(DB);
+    await _validarPersistenciaCanonica();
+    if(!_idbDisponivel()) _salvarSnapshotGuard(DB,'load-build-018');
+    // BUILD 018: com IndexedDB disponível, não replica o estoque inteiro em
+  // localStorage (isso triplicava o consumo e podia atingir a quota). Os
+  // guards antigos continuam sendo lidos para recuperação, mas o banco
+  // canônico novo fica somente no IndexedDB.
+  if(!_idbDisponivel()) _produtoGuardSalvar(DB);
     // Reescreve o estado canônico depois da migração/normalização.
-    try{await _idbGravarDB(DB);}catch(e){}
+    try{await _persistirDBCanonico(DB);}catch(e){}
   }
 }
 
@@ -9833,14 +9905,14 @@ function injectDemo(){
 (function(){const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='flex';})();
 // ══════════════════════════════════════════════════════════════
 // YALOG WMS · VERSIONAMENTO CENTRALIZADO
-// Atualização 017 — Persistência canônica local, recuperação multi-fonte e proteção transacional contra perda de estoque/históricos; exclusão somente por ação autorizada do Master.
+// Atualização 018 — Persistência canônica local, recuperação multi-fonte e proteção transacional contra perda de estoque/históricos; exclusão somente por ação autorizada do Master.
 // Atualize SOMENTE estes valores a cada publicação. O refresh da
 // página preserva a sessão autenticada; a versão não é usada como
 // critério de logout.
 // ══════════════════════════════════════════════════════════════
 const YALOG_WMS_VERSION = '2.1.2';
-const YALOG_WMS_BUILD = '017';
-const YALOG_WMS_UPDATE = '017';
+const YALOG_WMS_BUILD = '018';
+const YALOG_WMS_UPDATE = '018';
 const YALOG_WMS_RELEASE = `v${YALOG_WMS_VERSION} Build ${YALOG_WMS_BUILD}`;
 
 function aplicarVersaoWMS(){
@@ -12652,7 +12724,7 @@ function renderCargaEnderecoList(){
 
 function cancelarCarga(){cargaData=[];document.getElementById('cargaPreviewWrap').style.display='none';document.getElementById('cargaFile').value='';document.getElementById('cargaParseMsg').innerHTML='';document.getElementById('cargaResultado').style.display='none';}
 
-function processarCarga(){
+async function processarCarga(){
   const validos=cargaData.filter(r=>r._valid);
   if(!validos.length){showT('Sem itens válidos para processar','err');return;}
   const endMode=document.querySelector('input[name="cargaEnd"]:checked')?.value||'descritivo';
@@ -12784,7 +12856,15 @@ function processarCarga(){
     DB.movimentos.push({data:now(),tipo:'CARGA',wmsId,descricao:r.desc,clienteId:cliId||'',qtd:r.qtd,ref:'CARGA-ESTOQUE',resp:usuarioAtual?.nome||'Sistema'});
     wmsIds.push(wmsId);criados++;
   });
-  save();updateBadges();
+  const persistOk=save();
+  // Confirma a persistência canônica antes de declarar a carga concluída.
+  let canonOk=true;
+  try{ canonOk=await _yalogLastPersistPromise; }catch(e){ canonOk=false; }
+  if(!persistOk || !canonOk){
+    showT('A carga foi processada em memória, mas a persistência canônica não foi confirmada. A operação foi interrompida para proteger os dados.','err');
+    return;
+  }
+  updateBadges();
   document.getElementById('cargaResultado').style.display='block';
   document.getElementById('cargaResultado').innerHTML=`
     <div style="background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.25);padding:20px;">
