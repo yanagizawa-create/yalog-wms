@@ -6046,6 +6046,49 @@ const YALOG_LOGIN_INTELIGENTE_RESERVADO = false;
 // tenant cache, sync remoto incompleto ou reconstrução de DB.
 // ══════════════════════════════════════════════════════════════
 const PRODUCT_GUARD_KEY='wms_product_guard_v1';
+
+// BUILD 015 — COFRE DE CONTINUIDADE
+// Mantém uma união histórica dos dados protegidos no navegador.
+// Uma atualização nunca pode reduzir coleções/históricos sem uma ação
+// explícita de exclusão autorizada. O cofre é local e complementar ao snapshot.
+const DATA_VAULT_KEY='wms_data_vault_v1';
+function _dataVaultKey(){return DATA_VAULT_KEY+':'+(_companyIdLocalAtual||'global');}
+function _dataVaultLer(){
+  try{
+    const v=LocalStorageProvider.get(_dataVaultKey());
+    return v&&v.db?_cloneSeguro(v.db):null;
+  }catch(e){return null;}
+}
+function _dataVaultSalvar(db){
+  try{
+    if(!db||typeof db!=='object')return false;
+    LocalStorageProvider.set(_dataVaultKey(),{version:1,data:new Date().toISOString(),db:_cloneSeguro(db)});
+    return true;
+  }catch(e){console.warn('[WMS DATA VAULT] falha:',e);return false;}
+}
+function _dataVaultMesclar(db){
+  const vault=_dataVaultLer();
+  if(!vault)return db;
+  try{return _mesclarDBSemPerda(db,vault);}catch(e){return db;}
+}
+function _dataVaultAtualizarComDB(db){
+  try{
+    const atual=_dataVaultLer();
+    const merge=atual?_mesclarDBSemPerda(atual,db):_cloneSeguro(db);
+    return _dataVaultSalvar(merge);
+  }catch(e){return false;}
+}
+function _dataVaultRemoverProdutos(ids){
+  try{
+    const vault=_dataVaultLer(); if(!vault)return;
+    const set=new Set((ids||[]).map(String));
+    vault.produtos=Array.isArray(vault.produtos)?vault.produtos.filter(x=>!set.has(String(x?.wmsId))):[];
+    _dataVaultSalvar(vault);
+  }catch(e){}
+}
+function _dataVaultLimparPorMaster(){
+  try{LocalStorageProvider.remove(_dataVaultKey());}catch(e){}
+}
 function _produtoGuardKey(){return PRODUCT_GUARD_KEY+':'+(_companyIdLocalAtual||'global');}
 function _produtoGuardLerMelhor(){
   const candidatos=[];
@@ -6135,6 +6178,9 @@ function _protegerBaseCompletaAntesDePersistir(){
   }
 }
 function save(){
+  // COFRE DE CONTINUIDADE: recupera qualquer registro que exista no
+  // histórico protegido e tenha desaparecido da memória sem autorização Master.
+  if(!(DB?._masterDataDeletion||DB?._estoqueLimpoEm)) DB=_dataVaultMesclar(DB);
   _protegerBaseCompletaAntesDePersistir();
   _protegerProdutosAntesDePersistir();
   _produtoGuardSalvar(DB);
@@ -6150,7 +6196,9 @@ function save(){
     }
   }
   _salvarSnapshotGuard(DB,'save');
-  return Core.set(DBKEY, DB);
+  const ok=Core.set(DBKEY, DB);
+  if(ok && !(DB?._masterDataDeletion||DB?._estoqueLimpoEm)) _dataVaultAtualizarComDB(DB);
+  return ok;
 }
 function _applyLoadedData(parsed){
   if(parsed && Object.keys(parsed).length > 0){
@@ -6376,6 +6424,8 @@ function _applyLoadedData(parsed){
 
 async function load(){
   let d = Core.get(DBKEY);
+  const vault=_dataVaultLer();
+  if(vault && !(d?._masterDataDeletion||d?._estoqueLimpoEm)) d=_mesclarDBSemPerda(d||{},vault);
   d = _recuperarProdutosAntesDoLoad(d);
   const guard = _dbSnapshotAtual();
   if(d){
@@ -9680,14 +9730,14 @@ function injectDemo(){
 (function(){const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='flex';})();
 // ══════════════════════════════════════════════════════════════
 // YALOG WMS · VERSIONAMENTO CENTRALIZADO
-// Atualização 014 — Ajuste de Estoque por endereço digitável, Mapa do Armazém responsivo por ruas/blocos e proteção reforçada de persistência; preserva todas as Atualizações anteriores.
+// Atualização 015 — Seleção diretiva por checkbox no Ajuste de Estoque e Cofre de Continuidade para preservar cadastros, estoque e históricos entre atualizações; exclusão somente por ação autorizada do Master.
 // Atualize SOMENTE estes valores a cada publicação. O refresh da
 // página preserva a sessão autenticada; a versão não é usada como
 // critério de logout.
 // ══════════════════════════════════════════════════════════════
 const YALOG_WMS_VERSION = '2.1.2';
-const YALOG_WMS_BUILD = '014';
-const YALOG_WMS_UPDATE = '014';
+const YALOG_WMS_BUILD = '015';
+const YALOG_WMS_UPDATE = '015';
 const YALOG_WMS_RELEASE = `v${YALOG_WMS_VERSION} Build ${YALOG_WMS_BUILD}`;
 
 function aplicarVersaoWMS(){
@@ -12879,10 +12929,10 @@ function renderProdutosAjusteEndereco(){
         </tr></thead>
         <tbody>${prods.map(p=>{
           const sku=p.codCliente||'—';
-          const doCliente=p.clienteId===cliId;
+          const doCliente=!cliId || p.clienteId===cliId;
           const pc=DB.clientes.find(x=>x.id===p.clienteId);
           return `<tr style="border-top:1px solid var(--border);${doCliente?'':'opacity:.65;background:rgba(248,113,113,.025);'}">
-            <td style="padding:8px;">${doCliente?`<button class="btn btn-o btn-xs" onclick="selecionarProdutoAjuste('${String(p.wmsId).replace(/'/g,"\'")}')">Selecionar</button>`:'<span style="font-family:var(--mono);font-size:9px;color:#fca5a5;">Outro cliente</span>'}</td>
+            <td style="padding:8px;">${doCliente?`<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-family:var(--mono);font-size:9px;color:var(--orange2);"><input type="checkbox" class="aj-prod-check" data-wms-id="${String(p.wmsId).replace(/&/g,'&amp;').replace(/\"/g,'&quot;')}" onchange="selecionarProdutoAjuste(this.checked ? this.dataset.wmsId : '')"><span>AJUSTAR</span></label>`:'<span style="font-family:var(--mono);font-size:9px;color:#fca5a5;">Outro cliente</span>'}</td>
             <td class="mn" style="padding:8px;color:var(--orange2);">${p.wmsId}</td>
             <td class="mn" style="padding:8px;">${sku}</td>
             <td style="padding:8px;">${p.descricao||'—'}</td>
@@ -12898,8 +12948,17 @@ function renderProdutosAjusteEndereco(){
   </div>`;
 }
 function selecionarProdutoAjuste(wmsId){
-  const p=DB.produtos.find(x=>x.wmsId===wmsId); if(!p)return;
-  const w=document.getElementById('ajWmsId'); if(w)w.value=wmsId;
+  // Seleção diretiva: um ajuste por vez. O checkbox funciona como uma
+  // flag visual inequívoca do item/lote/cliente que será tratado.
+  document.querySelectorAll('.aj-prod-check').forEach(ch=>{
+    if(String(ch.dataset.wmsId)!==String(wmsId)) ch.checked=false;
+  });
+  if(!wmsId){
+    limparSelecaoAjusteProduto();
+    return;
+  }
+  const p=DB.produtos.find(x=>String(x.wmsId)===String(wmsId)); if(!p)return;
+  const w=document.getElementById('ajWmsId'); if(w)w.value=p.wmsId;
   const ps=document.getElementById('ajProdutoSelecionado');
   if(ps){const c=DB.clientes.find(x=>x.id===p.clienteId);ps.value=`${p.wmsId} · ${p.descricao||'—'} · ${p.lote||'sem lote'} · Qtd ${fN(p.qtd)} ${p.um||'UN'} · ${c?c.nome:'—'}`;}
   onAjWmsChange();
@@ -13633,6 +13692,7 @@ async function limparGeralConfirmar(){
     DB._estoqueLimpoEm=now();
     DB._estoqueLimpoPor=usuarioAtual?.nome||'Master';
     _marcarExclusaoMaster('estoque-total','Limpar Estoque');
+    _dataVaultLimparPorMaster();
     DB.seqWMS=1;DB.seqRec=1;DB.seqSep=1;DB.seqInv=1;
     // Libera todos endereços (exceto os bloqueados manualmente ou reservados)
     DB.enderecos.forEach(e=>{if(!e.bloqueioManual&&!e.reservado)e.status='livre';});
@@ -13713,6 +13773,7 @@ async function executarLimpar(){
   setTimeout(()=>{
     const ids=new Set(prods.map(p=>p.wmsId));
     DB.produtos=DB.produtos.filter(p=>!ids.has(p.wmsId));
+    _dataVaultRemoverProdutos([...ids]);
     _marcarExclusaoMaster('estoque-seletivo',String(tipo)+':'+String(val));
     // Libera endereços que ficaram vazios (exceto bloqueados manualmente ou reservados)
     DB.enderecos.forEach(e=>{
