@@ -886,11 +886,13 @@ canvas{max-width:100%;}
         <option value="">Todas as Unidades Logísticas</option>
       </select>
       <select id="homeFiltro" onchange="renderHome()" class="btn btn-o btn-sm" style="cursor:pointer;">
-        <option value="geral">Visão Geral</option>
-        <option value="cliente">Por Cliente</option>
+        <option value="operacao">Visão por Operação</option>
         <option value="site">Por Unidade Logística</option>
         <option value="bloqueado">Bloqueados</option>
         <option value="disponivel">Disponíveis</option>
+      </select>
+      <select id="homeClienteFiltro" onchange="renderHome()" class="btn btn-o btn-sm" style="cursor:pointer;display:none;">
+        <option value="">Todos os Clientes</option>
       </select>
     </div>
   </div>
@@ -7869,9 +7871,22 @@ function verificarLimiteArea(enderecoAlvo){
 
 function renderHome(){
   populateHomeSiteFiltro();
+  populateHomeClienteFiltro();
+
   const siteFilter=document.getElementById('homeSiteFiltro')?.value||'';
+  const filtro=document.getElementById('homeFiltro')?.value||'operacao';
+  const clienteFilter=document.getElementById('homeClienteFiltro')?.value||'';
+
+  // O filtro por operação é exclusivamente analítico: reduz o conjunto exibido
+  // no Dashboard sem alterar DB, persistência ou histórico.
   let prods=siteFilter?DB.produtos.filter(p=>p.site===siteFilter):DB.produtos;
-  const filtro=document.getElementById('homeFiltro')?.value||'geral';
+  if(filtro==='operacao' && clienteFilter){
+    prods=prods.filter(p=>p.clienteId===clienteFilter);
+  }
+
+  const clienteSel=document.getElementById('homeClienteFiltro');
+  if(clienteSel)clienteSel.style.display=filtro==='operacao'?'inline-flex':'none';
+
   // Normaliza tipos (localStorage pode ter strings)
   prods.forEach(p=>{p.qtd=parseFloat(p.qtd)||0;p.valorUnit=parseFloat(p.valorUnit)||0;});
   const totalQtd=prods.reduce((a,b)=>a+(b.qtd||0),0);
@@ -8030,7 +8045,7 @@ function renderHome(){
 
   // Chart filtrado
   const ftitle=document.getElementById('chHomeFiltroTitle');
-  if(filtro==='geral'||filtro==='cliente'){
+  if(filtro==='operacao'){
     const clis=[...new Set(prods.map(p=>p.clienteId))];
     const cliNomes=clis.map(id=>{const c=DB.clientes.find(x=>x.id===id);return c?c.nome:id;});
     const cliVals=clis.map(id=>prods.filter(p=>p.clienteId===id).reduce((a,b)=>a+(parseFloat(b.qtd)||0)*(parseFloat(b.valorUnit)||0),0));
@@ -14398,6 +14413,16 @@ function populateHomeSiteFiltro(){
   const val=sel.value;
   sel.innerHTML='<option value="">Todas as Unidades Logísticas</option>'
     +(DB.sites||[]).map(s=>`<option value="${s.id}">${s.nome}</option>`).join('');
+  if(val)sel.value=val;
+}
+
+function populateHomeClienteFiltro(){
+  const sel=document.getElementById('homeClienteFiltro');
+  if(!sel)return;
+  const val=sel.value;
+  sel.innerHTML='<option value="">Todos os Clientes</option>'
+    +(DB.clientes||[]).slice().sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||'')))
+      .map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
   if(val)sel.value=val;
 }
 
