@@ -603,6 +603,17 @@ a{color:inherit;text-decoration:none;}
 @media(max-width:1100px){#s-estoqueList .ph-acts{width:100%;}.estoque-filter-summary{margin-top:0;}.ph-acts select{min-width:150px;}}
 @media(max-width:700px){#s-estoqueList .ph-acts>div{width:100%;}#s-estoqueList .ph-acts input{width:100%!important;}#s-estoqueList .ph-acts select,#s-estoqueList .ph-acts button{flex:1 1 45%;min-width:0;}.estoque-filter-summary{font-size:8px;}}
 </style>
+<style id="yalog-build025-vision-filters">
+.yalog-filter-field{display:flex;flex-direction:column;gap:4px;min-width:170px;}
+.yalog-filter-field label{font:700 8px var(--mono);letter-spacing:.10em;text-transform:uppercase;color:var(--w40);padding-left:2px;}
+.yalog-filter-field select{min-width:170px;}
+.yalog-filter-search{min-width:260px;}
+.yalog-stock-filters .yalog-filter-field:nth-child(3){min-width:230px;}
+.yalog-stock-filters .yalog-filter-field:nth-child(3) select{min-width:230px;}
+.yalog-home-filters .yalog-filter-field select{min-width:190px;}
+@media(max-width:1100px){.yalog-filter-field,.yalog-filter-search,.yalog-stock-filters .yalog-filter-field:nth-child(3){min-width:0;flex:1 1 180px;}.yalog-filter-field select,.yalog-stock-filters .yalog-filter-field:nth-child(3) select{min-width:0;width:100%;}.yalog-filter-search input{width:100%!important;}}
+@media(max-width:700px){.yalog-filter-field,.yalog-filter-search{flex:1 1 100%;}.yalog-stock-filters .yalog-filter-field:nth-child(3){flex:1 1 100%;}}
+</style>
 
 <style id="yalog-build022-ui-fix">
 /* ═══════════════════════════════════════════════════════════════
@@ -892,14 +903,14 @@ canvas{max-width:100%;}
 <div class="screen active" id="s-home">
   <div class="ph">
     <div><div class="ph-eye">Dashboard · WMS</div><div class="ph-title">Operação do <em>Armazém</em></div></div>
-    <div class="ph-acts" style="gap:8px;">
-      <select id="homeSiteFiltro" onchange="renderHome()" class="btn btn-o btn-sm" style="cursor:pointer;">
+    <div class="ph-acts yalog-home-filters" style="gap:8px;align-items:flex-end;flex-wrap:wrap;">
+      <div class="yalog-filter-field"><label>UNIDADE LOGÍSTICA</label><select id="homeSiteFiltro" onchange="renderHome()" class="btn btn-o btn-sm">
         <option value="">Todas as Unidades Logísticas</option>
-      </select>
-      <select id="homeClienteFiltro" onchange="renderHome()" class="btn btn-o btn-sm" style="cursor:pointer;">
+      </select></div>
+      <div class="yalog-filter-field"><label>CLIENTE / OPERAÇÃO</label><select id="homeClienteFiltro" onchange="renderHome()" class="btn btn-o btn-sm">
         <option value="">Todos os Clientes / Operações</option>
-      </select>
-      <select id="homeFiltro" onchange="renderHome()" class="btn btn-o btn-sm" style="cursor:pointer;">
+      </select></div>
+      <div class="yalog-filter-field"><label>VISÃO</label><select id="homeFiltro" onchange="renderHome()" class="btn btn-o btn-sm">
         <option value="geral">Visão Geral</option>
         <option value="cliente">Por Cliente</option>
         <option value="site">Por Unidade Logística</option>
@@ -1232,14 +1243,16 @@ canvas{max-width:100%;}
 <!-- ════ ESTOQUE ════ -->
 <div class="screen" id="s-estoqueList">
   <div class="ph"><div><div class="ph-eye">Estoque</div><div class="ph-title">Produtos em <em>Estoque</em></div></div>
-    <div class="ph-acts" style="flex-wrap:wrap;gap:8px;">
-      <div style="position:relative;display:flex;align-items:center;">
-        <span style="position:absolute;left:10px;color:var(--w40);font-size:13px;pointer-events:none;">🔍</span>
-        <input type="text" id="filtEstBusca" placeholder="Buscar por nome, Cód.WMS, SKU, lote..." oninput="renderEstoque()" style="padding:8px 12px 8px 32px;background:var(--bg3);border:1px solid var(--border2);color:var(--w);font-family:var(--sans);font-size:11px;width:280px;outline:none;" onfocus="this.style.borderColor='var(--orange)'" onblur="this.style.borderColor='var(--border2)'">
+    <div class="ph-acts yalog-stock-filters" style="flex-wrap:wrap;gap:8px;align-items:flex-end;">
+      <div class="yalog-filter-field yalog-filter-search">
+        <label>BUSCA</label>
+        <div style="position:relative;display:flex;align-items:center;">
+          <span style="position:absolute;left:10px;color:var(--w40);font-size:13px;pointer-events:none;">🔍</span>
+          <input type="text" id="filtEstBusca" placeholder="Nome, Cód. WMS, SKU, lote..." oninput="renderEstoque()" style="padding:9px 12px 9px 32px;background:var(--bg3);border:1px solid var(--border2);color:var(--w);font-family:var(--sans);font-size:11px;width:260px;outline:none;" onfocus="this.style.borderColor='var(--orange)'" onblur="this.style.borderColor='var(--border2)'"></div>
       </div>
-      <select id="filtEstSite" onchange="renderEstoque()" class="btn btn-o" style="font-size:10px;cursor:pointer;padding:9px 14px;color:var(--orange2);border-color:var(--orange2);"><option value="">🏭 Todas as Unidades</option></select>
-      <select id="filtEstCliente" onchange="renderEstoque()" class="btn btn-o" style="font-size:10px;cursor:pointer;padding:9px 14px;"><option value="">Todos os Clientes</option></select>
-      <select id="filtEstStatus" onchange="renderEstoque()" class="btn btn-o" style="font-size:10px;cursor:pointer;padding:9px 14px;"><option value="">Todos os Status</option><option value="LIBERADO">Liberado</option><option value="BLOQUEADO">Bloqueado</option></select>
+      <div class="yalog-filter-field"><label>UNIDADE LOGÍSTICA</label><select id="filtEstSite" onchange="renderEstoque()" class="btn btn-o"><option value="">🏭 Todas as Unidades</option></select></div>
+      <div class="yalog-filter-field"><label>CLIENTE / OPERAÇÃO</label><select id="filtEstCliente" onchange="renderEstoque()" class="btn btn-o"><option value="">Todos os Clientes / Operações</option></select></div>
+      <div class="yalog-filter-field"><label>STATUS</label><select id="filtEstStatus" onchange="renderEstoque()" class="btn btn-o"><option value="">Todos os Status</option><option value="LIBERADO">Liberado</option><option value="BLOQUEADO">Bloqueado</option></select></div>
       <button class="btn btn-o btn-sm" onclick="limparFiltrosEstoque()">↺ Limpar</button>
       <button class="btn btn-b btn-sm" onclick="downloadEstoqueCSV()">↓ CSV</button>
       <button class="btn btn-b btn-sm" onclick="downloadEstoqueXLSX()">↓ Excel</button>
@@ -21986,7 +21999,290 @@ function baixarTemplateEnderecos(fmt='xlsx'){
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws1,'CARGA_ENDERECOS');XLSX.utils.book_append_sheet(wb,ws2,'INSTRUCOES');
   XLSX.writeFile(wb,'YALog_Template_Carga_Enderecos.xlsx');
   showT('Template de endereços baixado com UNIDADE + SITE','ok');
-}</script>
+}
+
+// ══════════════════════════════════════════════════════════════
+// BUILD 025 — VISÃO / FILTROS / GRÁFICOS — CORREÇÃO CIRÚRGICA
+// Objetivo: não alterar persistência, autenticação, estrutura operacional
+// ou regras de estoque. Apenas normaliza a camada de leitura/visualização.
+// ══════════════════════════════════════════════════════════════
+(function(){
+  const _baseClienteNomeOperacao = typeof _clienteNomeOperacao==='function' ? _clienteNomeOperacao : null;
+
+  function _yalogSafeText(v){return String(v??'').trim();}
+  function _yalogIsCnpj(v){return typeof _isCnpjLike==='function' ? _isCnpjLike(v) : (/^\d{11,14}$/.test(_yalogSafeText(v).replace(/\D/g,'')));}
+
+  // Resolve uma unidade independentemente de o estoque legado guardar
+  // site como ID, siteId, nome da unidade ou nome legado.
+  function _yalogFindSite(raw){
+    const token=_yalogSafeText(raw);
+    if(!token)return null;
+    const sites=DB.sites||[];
+    return sites.find(s=>String(s.id)===token)
+      ||sites.find(s=>_yalogSafeText(s.nome).toLowerCase()===token.toLowerCase())
+      ||sites.find(s=>_yalogSafeText(s.descricao).toLowerCase()===token.toLowerCase())
+      ||null;
+  }
+
+  function _siteIdDoProdutoV25(p){
+    if(!p)return null;
+    const raw=p.siteId??p.site??p.unidadeId??p.unidade_id??null;
+    if(raw==null||raw==='')return null;
+    const site=_yalogFindSite(raw);
+    return site?site.id:raw;
+  }
+  function _siteNomeDoProdutoV25(p){
+    const site=_yalogFindSite(p?.siteId??p?.site??p?.unidadeId??p?.unidade_id);
+    if(site)return _siteLabel(site);
+    for(const v of [p?.siteNome,p?.site_nome,p?.nomeSite,p?.nome_site,p?.unidadeNome,p?.unidade_nome,p?.unidade,p?.site]){
+      const x=_yalogSafeText(v); if(x&&!_yalogIsCnpj(x))return x;
+    }
+    return '';
+  }
+
+  // Exponha sempre o cadastro de unidades; se o legado só tiver o nome
+  // gravado no estoque/endereços/paletes, cria uma opção de leitura sem
+  // alterar o banco.
+  function _unidadesDisponiveisV25(){
+    const map=new Map();
+    const add=(id,nome,meta={})=>{
+      const k=_yalogSafeText(id||nome); if(!k)return;
+      const site=_yalogFindSite(k);
+      const sid=site?.id||id||nome;
+      const label=site?_siteLabel(site):(_yalogSafeText(nome)||`Unidade ${sid}`);
+      if(!map.has(String(sid)))map.set(String(sid),{id:sid,nome:label,...meta});
+    };
+    (DB.sites||[]).forEach(s=>add(s.id,s.nome,s));
+    (DB.produtos||[]).forEach(p=>{const raw=p?.siteId??p?.site??p?.unidadeId??p?.unidade_id;if(raw) add(_siteIdDoProdutoV25(p),_siteNomeDoProdutoV25(p));});
+    (DB.enderecos||[]).forEach(e=>{const raw=e?.siteId??e?.site??e?.unidadeId??e?.unidade_id;if(raw) add(raw,_yalogFindSite(raw)?.nome||raw);});
+    (DB.paletes||[]).forEach(p=>{const raw=p?.siteId??p?.site??p?.unidadeId??p?.unidade_id;if(raw) add(raw,_yalogFindSite(raw)?.nome||raw);});
+    return [...map.values()].sort((a,b)=>String(a.nome).localeCompare(String(b.nome),'pt-BR'));
+  }
+
+  function _prodSiteMatchV25(p,siteId){return String(_siteIdDoProdutoV25(p)||'')===String(siteId||'');}
+
+  // Nome operacional: usa campos explícitos do cadastro; se o cadastro
+  // legado tiver apenas CNPJ, procura um nome operacional gravado no próprio
+  // estoque. Nunca inventa um nome e nunca apresenta CNPJ como nome principal.
+  function _clienteNomeOperacaoV25(c){
+    if(!c)return '';
+    const candidatos=[
+      c.nomeOperacao,c.nome_operacao,c.operacao,c.operacaoNome,c.operacao_nome,
+      c.nomeExibicao,c.nome_exibicao,c.fantasia,c.nomeFantasia,c.nome_fantasia,
+      c.razaoSocial,c.razao_social,c.nomeCliente,c.nome_cliente,c.clienteNome,c.cliente_nome,
+      c.descricao,c.cliente,c.nome
+    ];
+    for(const v of candidatos){const x=_yalogSafeText(v);if(x&&!_yalogIsCnpj(x))return x;}
+    const prods=(DB.produtos||[]).filter(p=>p.clienteId===c.id);
+    for(const p of prods){
+      for(const v of [p.nomeOperacao,p.nome_operacao,p.operacao,p.clienteNome,p.cliente_nome,p.razaoSocial,p.razao_social,p.fantasia,p.nomeCliente,p.nome_cliente,p.cliente]){
+        const x=_yalogSafeText(v);if(x&&!_yalogIsCnpj(x))return x;
+      }
+    }
+    return '';
+  }
+  function _clienteLabelV25(c,opts={}){
+    if(!c)return 'Cliente não identificado';
+    const principal=_clienteNomeOperacaoV25(c);
+    const cnpj=_yalogSafeText(c.cnpj||c.CNPJ||c.cnpjCliente||c.cnpj_cliente||'');
+    if(principal && opts.withCnpj && cnpj)return `${principal} · ${cnpj}`;
+    if(principal)return principal;
+    // Evita o comportamento anterior de transformar CNPJ em nome da operação.
+    return cnpj ? 'Nome operacional não cadastrado' : 'Cliente não identificado';
+  }
+  function _produtoClienteLabelV25(p){
+    if(!p)return 'Cliente não identificado';
+    const c=(DB.clientes||[]).find(x=>x.id===p.clienteId);
+    if(c){const n=_clienteNomeOperacaoV25(c);if(n)return n;}
+    for(const v of [p.nomeOperacao,p.nome_operacao,p.operacao,p.clienteNome,p.cliente_nome,p.razaoSocial,p.razao_social,p.fantasia,p.nomeCliente,p.nome_cliente,p.cliente]){
+      const x=_yalogSafeText(v);if(x&&!_yalogIsCnpj(x))return x;
+    }
+    return 'Nome operacional não cadastrado';
+  }
+
+  // Substitui somente os helpers de visualização. O restante do WMS continua
+  // usando suas estruturas originais.
+  window._yalogVision={siteId:_siteIdDoProdutoV25,siteName:_siteNomeDoProdutoV25,units:_unidadesDisponiveisV25,siteMatch:_prodSiteMatchV25,clientName:_clienteNomeOperacaoV25,clientLabel:_clienteLabelV25};
+
+  function populateHomeSiteFiltroV25(){
+    const sel=document.getElementById('homeSiteFiltro');if(!sel)return;
+    const val=sel.value||'';
+    sel.innerHTML='<option value="">Todas as Unidades Logísticas</option>'+_unidadesDisponiveisV25().map(s=>`<option value="${String(s.id).replace(/"/g,'&quot;')}">${_siteLabel(s)}</option>`).join('');
+    if(val && [...sel.options].some(o=>o.value===val))sel.value=val;else sel.value='';
+  }
+  function populateHomeClienteFiltroV25(){
+    const sel=document.getElementById('homeClienteFiltro');if(!sel)return;
+    const val=sel.value||'';
+    const clientes=[...(DB.clientes||[])].sort((a,b)=>_clienteLabelV25(a).localeCompare(_clienteLabelV25(b),'pt-BR'));
+    sel.innerHTML='<option value="">Todos os Clientes / Operações</option>'+clientes.map(c=>`<option value="${String(c.id).replace(/"/g,'&quot;')}">${_clienteLabelV25(c)}</option>`).join('');
+    if(val && [...sel.options].some(o=>o.value===val))sel.value=val;else sel.value='';
+  }
+
+  function renderEstoqueV25(){
+    const siteSel=document.getElementById('filtEstSite'), cliSel=document.getElementById('filtEstCliente');
+    const selectedSite=siteSel?.value||'', selectedCli=cliSel?.value||'';
+    const status=document.getElementById('filtEstStatus')?.value||'';
+    const busca=_yalogSafeText(document.getElementById('filtEstBusca')?.value).toLowerCase();
+    const unidades=_unidadesDisponiveisV25();
+    if(siteSel){
+      siteSel.innerHTML='<option value="">🏭 Todas as Unidades</option>'+unidades.map(s=>`<option value="${String(s.id).replace(/"/g,'&quot;')}">${_siteLabel(s)}</option>`).join('');
+      if(selectedSite && [...siteSel.options].some(o=>o.value===selectedSite))siteSel.value=selectedSite;else siteSel.value='';
+    }
+    const siteValue=siteSel?.value||'';
+    let base=[...(DB.produtos||[])];
+    if(siteValue)base=base.filter(p=>_prodSiteMatchV25(p,siteValue));
+    const clientes=[...(DB.clientes||[])].sort((a,b)=>_clienteLabelV25(a).localeCompare(_clienteLabelV25(b),'pt-BR'));
+    if(cliSel){
+      cliSel.innerHTML='<option value="">Todos os Clientes / Operações</option>'+clientes.map(c=>{
+        const qtd=base.filter(p=>p.clienteId===c.id).length;
+        return `<option value="${String(c.id).replace(/"/g,'&quot;')}">${_clienteLabelV25(c)}${qtd?` · ${qtd}`:''}</option>`;
+      }).join('');
+      if(selectedCli && [...cliSel.options].some(o=>o.value===selectedCli))cliSel.value=selectedCli;else cliSel.value='';
+    }
+    const cliValue=cliSel?.value||'';
+    let prods=base;
+    if(cliValue)prods=prods.filter(p=>p.clienteId===cliValue);
+    if(status)prods=prods.filter(p=>String(p.status||'')===status);
+    if(busca)prods=prods.filter(p=>[p.descricao,p.wmsId,p.codCliente,p.lote,p.endereco,_produtoClienteLabelV25(p),_siteNomeDoProdutoV25(p)].some(v=>_yalogSafeText(v).toLowerCase().includes(busca)));
+    const resumo=document.getElementById('estoqueFiltroResumo');
+    if(resumo){
+      const s=siteValue?unidades.find(x=>String(x.id)===String(siteValue)):null;
+      const c=cliValue?(DB.clientes||[]).find(x=>x.id===cliValue):null;
+      resumo.innerHTML=`<span class="estoque-filter-chip">${fN(prods.length)} item(ns) exibido(s)</span><span class="estoque-filter-chip ${s?'':'muted'}">🏭 ${s?_siteLabel(s):'Todas as unidades'}</span><span class="estoque-filter-chip ${c?'':'muted'}">👤 ${c?_clienteLabelV25(c):'Todos os clientes / operações'}</span>${status?`<span class="estoque-filter-chip">● ${status}</span>`:''}`;
+    }
+    const tb=document.getElementById('tbEstoque');if(!tb)return;
+    if(!prods.length){tb.innerHTML=`<tr><td colspan="15" style="text-align:center;padding:40px;color:var(--w40);font-family:var(--mono);">Nenhum produto encontrado com os filtros selecionados.<br><span style="font-size:9px;opacity:.7;">Base operacional: ${(DB.produtos||[]).length} item(ns).</span></td></tr>`;return;}
+    tb.innerHTML=prods.map(p=>{
+      const cl=(DB.clientes||[]).find(c=>c.id===p.clienteId);
+      const clienteLabel=_produtoClienteLabelV25(p);
+      const siteId=_siteIdDoProdutoV25(p);const st=unidades.find(s=>String(s.id)===String(siteId));
+      const venc=p.validade&&p.validade<nowDate();
+      const title=cl&&cl.cnpj?`${clienteLabel} · ${cl.cnpj}`:clienteLabel;
+      return `<tr><td class="mn" style="color:var(--orange2);font-weight:600;">${p.wmsId||'—'}<br><span style="font-size:7px;font-family:var(--mono);opacity:.6;">${p.tipoEntrada||'—'}</span></td><td class="mn">${p.codCliente||'—'}</td><td class="bd">${p.descricao||'—'}</td><td title="${String(title).replace(/"/g,'&quot;')}">${clienteLabel}</td><td class="mn" style="color:var(--b2);font-size:9px;">${st?_siteLabel(st):_siteNomeDoProdutoV25(p)||'—'}</td><td class="mn">${p.endereco||'—'}</td><td class="ct mn">${p.tipoPalete||'—'}</td><td class="mn">${p.lote||'—'}</td><td class="mn" style="${venc?'color:#f87171;':''}">${fD(p.validade)}${venc?' ⚠️':''}</td><td class="mn ct">${fN(p.qtd)}</td><td class="mn ct" style="color:var(--b2);">${p.um||'UN'}</td><td class="mn ct" style="color:var(--orange2);font-weight:700;">${(()=>{const r=calcPPReal(p.clienteId,p.codCliente,p.qtd,p.um);return r.temMatriz?r.pp:'—';})()}</td><td class="mn ri">R$ ${fM(p.valorUnit)}</td><td class="ct">${statusSp(p.status)}</td><td><div style="display:flex;gap:4px;flex-wrap:wrap;">${p.status==='LIBERADO'?`<button class="btn btn-r btn-xs" onclick="openBloquear('${p.wmsId}')">🔒</button>`:`<button class="btn btn-g btn-xs" onclick="openLiberar('${p.wmsId}')">🔓</button>`}<button class="btn btn-o btn-xs" onclick="editQtd('${p.wmsId}')">✏</button></div></td></tr>`;
+    }).join('');
+    setTimeout(()=>makeResizable(document.querySelector('#tbEstoque')?.closest('table')),80);
+  }
+
+  function _getEstoqueFiltradoV25(){
+    const site=document.getElementById('filtEstSite')?.value||'',cli=document.getElementById('filtEstCliente')?.value||'',st=document.getElementById('filtEstStatus')?.value||'',q=_yalogSafeText(document.getElementById('filtEstBusca')?.value).toLowerCase();
+    let prods=site?(DB.produtos||[]).filter(p=>_prodSiteMatchV25(p,site)):[...(DB.produtos||[])];
+    if(cli)prods=prods.filter(p=>p.clienteId===cli);if(st)prods=prods.filter(p=>p.status===st);
+    if(q)prods=prods.filter(p=>[p.descricao,p.wmsId,p.codCliente,p.lote,p.endereco,_produtoClienteLabelV25(p),_siteNomeDoProdutoV25(p)].some(v=>_yalogSafeText(v).toLowerCase().includes(q)));
+    return prods;
+  }
+
+  // Mapa de Estoque: mesmo resolver do módulo Produtos; não volta a usar p.site===id.
+  function _getMapaEstoqueGestaoFiltradoV25(){
+    const site=document.getElementById('mapaEstoqueSite')?.value||'',cli=document.getElementById('mapaEstoqueCliente')?.value||'';
+    let prods=[...(DB.produtos||[])];if(site)prods=prods.filter(p=>_prodSiteMatchV25(p,site));if(cli)prods=prods.filter(p=>p.clienteId===cli);
+    return prods.sort((a,b)=>String(a.endereco||'').localeCompare(String(b.endereco||''),undefined,{numeric:true})||String(a.codCliente||'').localeCompare(String(b.codCliente||''))||String(a.lote||'').localeCompare(String(b.lote||'')));
+  }
+  function initMapaEstoqueGestaoV25(){
+    const siteEl=document.getElementById('mapaEstoqueSite'),cliEl=document.getElementById('mapaEstoqueCliente');if(!siteEl||!cliEl)return;
+    const siteAtual=siteEl.value||'',cliAtual=cliEl.value||'',units=_unidadesDisponiveisV25();
+    siteEl.innerHTML='<option value="">Todas as Unidades</option>'+units.map(s=>`<option value="${String(s.id).replace(/"/g,'&quot;')}">${_siteLabel(s)}</option>`).join('');
+    if(siteAtual && [...siteEl.options].some(o=>o.value===siteAtual))siteEl.value=siteAtual;else siteEl.value='';
+    const base=siteEl.value?(DB.produtos||[]).filter(p=>_prodSiteMatchV25(p,siteEl.value)):(DB.produtos||[]);
+    const ids=[...new Set(base.map(p=>p.clienteId).filter(Boolean))];
+    cliEl.innerHTML='<option value="">Todos os Clientes / Operações</option>'+ids.map(id=>{const c=(DB.clientes||[]).find(x=>x.id===id);return `<option value="${id}">${c?_clienteLabelV25(c):'Cliente não identificado'}</option>`;}).join('');
+    if(cliAtual&&[...cliEl.options].some(o=>o.value===cliAtual))cliEl.value=cliAtual;else cliEl.value='';
+    renderMapaEstoqueGestaoV25();
+  }
+  function renderMapaEstoqueGestaoV25(){
+    const siteEl=document.getElementById('mapaEstoqueSite'),cliEl=document.getElementById('mapaEstoqueCliente');if(!siteEl||!cliEl)return;
+    const siteAtual=siteEl.value||'',cliAtual=cliEl.value||'';
+    const base=siteAtual?(DB.produtos||[]).filter(p=>_prodSiteMatchV25(p,siteAtual)):(DB.produtos||[]);
+    const ids=[...new Set(base.map(p=>p.clienteId).filter(Boolean))];
+    cliEl.innerHTML='<option value="">Todos os Clientes / Operações</option>'+ids.map(id=>{const c=(DB.clientes||[]).find(x=>x.id===id);return `<option value="${id}">${c?_clienteLabelV25(c):'Cliente não identificado'}</option>`;}).join('');
+    if(cliAtual&&ids.includes(cliAtual))cliEl.value=cliAtual;else if(cliAtual)cliEl.value='';
+    const prods=_getMapaEstoqueGestaoFiltradoV25(),body=document.getElementById('tbMapaEstoqueGestaoBody'),resumo=document.getElementById('mapaEstoqueResumo');if(!body||!resumo)return;
+    const totalQtd=prods.reduce((s,p)=>s+(parseFloat(p.qtd)||0),0),totalValor=prods.reduce((s,p)=>s+(parseFloat(p.qtd)||0)*(parseFloat(p.valorUnit)||0),0),ends=new Set(prods.map(p=>p.endereco).filter(Boolean)).size;
+    resumo.innerHTML=`<div class="end-import-stat" style="margin:0;"><div><div class="v">${fN(prods.length)}</div><div class="l">Linhas</div></div><div><div class="v">${fN(ends)}</div><div class="l">Endereços</div></div><div><div class="v">${fN(totalQtd)}</div><div class="l">Quantidade</div></div><div><div class="v">R$ ${fM(totalValor)}</div><div class="l">Valor do Estoque</div></div></div>`;
+    if(!prods.length){body.innerHTML='<tr><td colspan="12" style="text-align:center;padding:32px;color:var(--w40);font-family:var(--mono);">Nenhum estoque encontrado para os filtros selecionados.</td></tr>';return;}
+    const units=_unidadesDisponiveisV25();
+    body.innerHTML=prods.map(p=>{const cl=(DB.clientes||[]).find(c=>c.id===p.clienteId),st=units.find(s=>String(s.id)===String(_siteIdDoProdutoV25(p))),valor=(parseFloat(p.qtd)||0)*(parseFloat(p.valorUnit)||0),obs=p.obsGeral||p.bloqueioObs||'';return `<tr><td class="mn bd">${p.endereco||'—'}</td><td class="mn">${p.codCliente||p.wmsId||'—'}</td><td class="bd">${p.descricao||'—'}</td><td>${_produtoClienteLabelV25(p)}</td><td>${st?_siteLabel(st):_siteNomeDoProdutoV25(p)||'—'}</td><td class="mn">${p.lote||'—'}</td><td class="mn">${fD(p.validade)}</td><td class="mn ct">${fN(p.qtd)}</td><td class="mn ct">${p.um||'UN'}</td><td class="mn ri" style="color:var(--orange2);font-weight:700;">R$ ${fM(valor)}</td><td>${statusSp(p.status)}</td><td style="max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${String(obs).replace(/"/g,'&quot;')}">${obs||'—'}</td></tr>`;}).join('');
+    setTimeout(()=>makeResizable(document.getElementById('tbMapaEstoqueGestao')),80);
+  }
+
+  // Corrige a fonte do gráfico por unidade: ID/nome são resolvidos pelo mesmo helper.
+  const _baseRenderHome=renderHome;
+  function renderHomeV25(){
+    _baseRenderHome();
+    const filtro=document.getElementById('homeFiltro')?.value||'geral';
+    if(filtro!=='site')return;
+    const siteFilter=document.getElementById('homeSiteFiltro')?.value||'';
+    const cliFilter=document.getElementById('homeClienteFiltro')?.value||'';
+    let prods=siteFilter?(DB.produtos||[]).filter(p=>_prodSiteMatchV25(p,siteFilter)):[...(DB.produtos||[])];
+    if(cliFilter)prods=prods.filter(p=>p.clienteId===cliFilter);
+    const units=_unidadesDisponiveisV25().filter(s=>!siteFilter||String(s.id)===String(siteFilter));
+    const vals=units.map(s=>prods.filter(p=>_prodSiteMatchV25(p,s.id)).reduce((a,b)=>a+(parseFloat(b.qtd)||0)*(parseFloat(b.valorUnit)||0),0));
+    const labels=units.map(_siteLabel);
+    const title=document.getElementById('chHomeFiltroTitle');if(title)title.textContent='Valor de Estoque por Unidade Logística';
+    bc('chHomeFiltro','doughnut',labels,[{data:vals,backgroundColor:palette(Math.max(labels.length,1)),borderWidth:0}]);
+  }
+
+  // Reforça a renderização de gráficos: se Chart.js não estiver disponível,
+  // o fallback visual é obrigatório; se todos os valores forem zero, mostra
+  // estado explícito em vez de deixar um quadro vazio.
+  const _baseBc=bc;
+  function bcV25(id,type,labels,datasets,opts={}){
+    const vals=(datasets?.[0]?.data||[]).map(v=>Number(v)||0);
+    const total=vals.reduce((a,b)=>a+b,0);
+    if(!labels.length || total===0){
+      const cv=document.getElementById(id);if(!cv)return;
+      if(charts[id]){try{charts[id].destroy();}catch(e){}delete charts[id];}
+      cv.style.display='none';
+      const host=cv.parentElement;let fb=host?.querySelector('.yalog-chart-fallback');
+      if(!fb&&host){fb=document.createElement('div');fb.className='yalog-chart-fallback';host.appendChild(fb);}
+      if(fb)fb.innerHTML='<div class="yalog-fallback-empty">Sem dados para os filtros selecionados.</div>';
+      return;
+    }
+    _baseBc(id,type,labels,datasets,opts);
+  }
+
+  // Override globals usados por onclicks e pelos módulos de visualização.
+  _siteIdDoProduto=_siteIdDoProdutoV25;
+  _siteNomeDoProduto=_siteNomeDoProdutoV25;
+  _unidadesDisponiveis=_unidadesDisponiveisV25;
+  _prodSiteMatch=_prodSiteMatchV25;
+  _clienteNomeOperacao=_clienteNomeOperacaoV25;
+  _clienteLabel=_clienteLabelV25;
+  _clienteLabelCurto=function(c){const s=_clienteLabelV25(c);return s.length>34?s.slice(0,31)+'…':s;};
+  _produtoClienteLabel=_produtoClienteLabelV25;
+  populateHomeSiteFiltro=populateHomeSiteFiltroV25;
+  populateHomeClienteFiltro=populateHomeClienteFiltroV25;
+  renderEstoque=renderEstoqueV25;
+  _getEstoqueFiltrado=_getEstoqueFiltradoV25;
+  initMapaEstoqueGestao=initMapaEstoqueGestaoV25;
+  renderMapaEstoqueGestao=renderMapaEstoqueGestaoV25;
+  bc=bcV25;
+  renderHome=renderHomeV25;
+
+  // Exportação do mapa passa a usar o mesmo filtro robusto.
+  _getMapaEstoqueGestaoFiltrado=_getMapaEstoqueGestaoFiltradoV25;
+
+  // Quando a tela é aberta, force uma reconstrução dos filtros depois do DOM
+  // estar pronto. Não altera dados; só garante que as opções sejam visíveis.
+  const _baseGo=go;
+  go=function(id){
+    _baseGo(id);
+    if(id==='home'){populateHomeSiteFiltroV25();populateHomeClienteFiltroV25();renderHomeV25();}
+    if(id==='estoqueList'){requestAnimationFrame(()=>renderEstoqueV25());}
+    if(id==='mapaEstoqueGestao'){requestAnimationFrame(()=>initMapaEstoqueGestaoV25());}
+  };
+
+  // API de diagnóstico para homologação. Não altera DB.
+  window.YALOG_VISION_DIAGNOSTICO=function(){
+    return {
+      unidades:_unidadesDisponiveisV25().map(x=>({id:x.id,nome:x.nome})),
+      clientes:(DB.clientes||[]).map(c=>({id:c.id,nome:_clienteLabelV25(c),nomeOriginal:c.nome,cnpj:c.cnpj||''})),
+      produtos:(DB.produtos||[]).length,
+      produtosComUnidade:(DB.produtos||[]).filter(p=>!!_siteIdDoProdutoV25(p)).length,
+      produtosComCliente:(DB.produtos||[]).filter(p=>!!p.clienteId).length
+    };
+  };
+})();
+</script>
 
 <!-- ════ MODAL · NOVO PRODUTO / CAPACIDADE POR PALETE · BUILD 013 ════ -->
 <div class="mo" id="mCadastroProdutoCap">
