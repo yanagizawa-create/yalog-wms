@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="yalog-wms-version" content="2.1.3">
+<meta name="yalog-wms-version" content="2.1.4">
 <title>WMS · v2.1.4</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,500;0,600;0,700;0,800;1,600;1,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -744,6 +744,39 @@ canvas{max-width:100%;}
 #s-home .cw>div[style*="height:200px"]{height:200px!important;position:relative;}
 #s-home .cw>div[style*="height:180px"]{height:180px!important;position:relative;}
 #s-home canvas{display:block!important;width:100%!important;height:100%!important;}
+
+/* BUILD 023 — DASHBOARD OPERACIONAL ESTÁVEL
+   Os KPIs nunca mais usam uma coluna lateral. A grade se adapta por
+   breakpoint, preservando os mesmos cards, IDs e regras de negócio. */
+#s-home .kpi-grid{
+  display:grid!important;
+  grid-template-columns:repeat(5,minmax(0,1fr))!important;
+  gap:14px!important;
+  width:100%!important;
+  min-width:0!important;
+}
+#s-home .kpi-grid .kc{min-width:0!important;width:auto!important;}
+#s-home .g2{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;min-width:0!important;}
+#s-home .g3{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;min-width:0!important;}
+#s-home .cw{min-width:0!important;width:auto!important;}
+@media(max-width:1250px){
+  #s-home .kpi-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;}
+}
+@media(max-width:1050px){
+  #s-home .kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;}
+}
+@media(max-width:900px){
+  #s-home .kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;}
+  #s-home .g2{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
+  #s-home .g3{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
+}
+@media(max-width:680px){
+  #s-home .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
+  #s-home .g2,#s-home .g3{grid-template-columns:1fr!important;}
+}
+@media(max-width:430px){
+  #s-home .kpi-grid{grid-template-columns:1fr!important;}
+}
 </style>
 </head>
 <body>
@@ -5410,15 +5443,50 @@ function _chaveRegistro(item,colecao){
   if(colecao==='capacidadeArmazem') return [item.sigla,item.siteId||''].map(x=>String(x??'')).join('¦');
   return null;
 }
+function _registroTemValor(v){
+  return v!==undefined && v!==null && !(typeof v==='string' && v.trim()==='');
+}
+function _registroDataAtualizacao(v){
+  if(!v||typeof v!=='object')return 0;
+  for(const k of ['updatedAt','atualizadoEm','updated_at']){
+    const d=Date.parse(v[k]||'');
+    if(Number.isFinite(d))return d;
+  }
+  return 0;
+}
+function _mesclarRegistroSemPerda(local,remoto){
+  const l=_cloneSeguro(local)||{}; const r=_cloneSeguro(remoto)||{};
+  const dl=_registroDataAtualizacao(l), dr=_registroDataAtualizacao(r);
+  // Se ambos possuem timestamp explícito, o registro realmente mais novo pode
+  // prevalecer. Sem timestamp confiável, o estado local é soberano para evitar
+  // que uma cópia remota antiga sobrescreva quantidade, lote, endereço etc.
+  const remotoMaisNovo=dr>0 && dl>0 && dr>dl;
+  const base=remotoMaisNovo?{...l,...r}:{...l};
+  Object.keys(r).forEach(k=>{
+    if(k==='updatedAt'||k==='atualizadoEm'||k==='updated_at')return;
+    const lv=l[k], rv=r[k];
+    if(Array.isArray(lv)&&Array.isArray(rv)){
+      const ids=new Set(lv.map(x=>JSON.stringify(x)));
+      base[k]=[...lv,...rv.filter(x=>!ids.has(JSON.stringify(x))).map(_cloneSeguro)];
+      return;
+    }
+    if(!remotoMaisNovo && !_registroTemValor(lv) && _registroTemValor(rv))base[k]=_cloneSeguro(rv);
+    else if(remotoMaisNovo && _registroTemValor(rv))base[k]=_cloneSeguro(rv);
+  });
+  return base;
+}
 function _mesclarArrayProtegido(localArr,remotoArr,colecao){
   const l=Array.isArray(localArr)?localArr:[]; const r=Array.isArray(remotoArr)?remotoArr:[];
-  if(!l.length) return _cloneSeguro(r)||[];
-  if(!r.length) return _cloneSeguro(l)||[];
-  const mapa=new Map(); const semId=[];
-  l.forEach(x=>{const k=_chaveRegistro(x,colecao); if(k) mapa.set(k,x); else semId.push(x);});
-  r.forEach(x=>{const k=_chaveRegistro(x,colecao); if(k) mapa.set(k,{...(mapa.get(k)||{}),...x}); else semId.push(x);});
-  const vistos=new Set(), saida=[];
-  mapa.forEach(v=>{const k=_chaveRegistro(v,colecao)||JSON.stringify(v); if(!vistos.has(k)){vistos.add(k);saida.push(v);}});
+  if(!l.length)return _cloneSeguro(r)||[];
+  if(!r.length)return _cloneSeguro(l)||[];
+  const mapa=new Map(), semId=[];
+  l.forEach(x=>{const k=_chaveRegistro(x,colecao); if(k)mapa.set(k,_cloneSeguro(x)); else semId.push(_cloneSeguro(x));});
+  r.forEach(x=>{const k=_chaveRegistro(x,colecao); if(k){
+    if(mapa.has(k))mapa.set(k,_mesclarRegistroSemPerda(mapa.get(k),x));
+    else mapa.set(k,_cloneSeguro(x));
+  }else semId.push(_cloneSeguro(x));});
+  const vistos=new Set(),saida=[];
+  mapa.forEach(v=>{const k=_chaveRegistro(v,colecao)||JSON.stringify(v);if(!vistos.has(k)){vistos.add(k);saida.push(v);}});
   semId.forEach(v=>{const k=JSON.stringify(v);if(!vistos.has(k)){vistos.add(k);saida.push(v);}});
   return saida;
 }
@@ -5427,8 +5495,11 @@ function _mesclarMatriz(localM,remotaM){
   Object.entries(remotaM||{}).forEach(([cli,arr])=>{
     const base=Array.isArray(out[cli])?out[cli]:[];
     const mapa=new Map();
-    base.forEach(x=>mapa.set(_matrizKey(x?.sku,_matrizItemUM(x)),x));
-    (Array.isArray(arr)?arr:[]).forEach(x=>mapa.set(_matrizKey(x?.sku,_matrizItemUM(x)),{...(mapa.get(_matrizKey(x?.sku,_matrizItemUM(x)))||{}),...x}));
+    base.forEach(x=>mapa.set(_matrizKey(x?.sku,_matrizItemUM(x)),_cloneSeguro(x)));
+    (Array.isArray(arr)?arr:[]).forEach(x=>{
+      const k=_matrizKey(x?.sku,_matrizItemUM(x));
+      mapa.set(k,mapa.has(k)?_mesclarRegistroSemPerda(mapa.get(k),x):_cloneSeguro(x));
+    });
     out[cli]=Array.from(mapa.values());
   });
   return out;
@@ -8063,7 +8134,24 @@ function renderHome(){
   const ultimos30={ent:{},sai:{}};
   const hoje=new Date();
   for(let i=29;i>=0;i--){const d=new Date(hoje);d.setDate(d.getDate()-i);const ds=d.toISOString().split('T')[0];ultimos30.ent[ds]=0;ultimos30.sai[ds]=0;}
-  DB.movimentos.forEach(m=>{const ds=m.data.split('T')[0];if(ultimos30.ent[ds]!==undefined){if(m.tipo==='ENTRADA')ultimos30.ent[ds]+=(m.qtd||0);if(m.tipo==='SAIDA')ultimos30.sai[ds]+=(m.qtd||0);}});
+  DB.movimentos.forEach(m=>{
+    const ds=String(m.data||'').split('T')[0];
+    if(ultimos30.ent[ds]!==undefined){
+      if(m.tipo==='ENTRADA')ultimos30.ent[ds]+=(parseFloat(m.qtd)||0);
+      if(m.tipo==='SAIDA')ultimos30.sai[ds]+=(parseFloat(m.qtd)||0);
+    }
+  });
+  // Carga inicial/Excel pode alimentar o estoque sem gerar movimento histórico.
+  // Nesse caso usamos entradaData dos próprios produtos como fonte operacional,
+  // sem inventar datas nem números.
+  const temEntradasMov=Object.values(ultimos30.ent).some(v=>v>0);
+  if(!temEntradasMov){
+    DB.produtos.forEach(p=>{
+      const raw=String(p.entradaData||p.dataEntrada||p.createdAt||'');
+      const ds=raw.split('T')[0];
+      if(ultimos30.ent[ds]!==undefined)ultimos30.ent[ds]+=(parseFloat(p.qtd)||0);
+    });
+  }
   const dts=Object.keys(ultimos30.ent);const lbls=dts.map(d=>d.split('-')[2]+'/'+d.split('-')[1]);
   bc('chHomeEnt','bar',lbls,[{label:'Entradas',data:dts.map(d=>ultimos30.ent[d]),backgroundColor:'rgba(251,146,60,.6)',borderColor:'#fb923c',borderWidth:1}]);
 
@@ -10367,14 +10455,14 @@ function injectDemo(){
 (function(){const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='flex';})();
 // ══════════════════════════════════════════════════════════════
 // YALOG WMS · VERSIONAMENTO CENTRALIZADO
-// Atualização 021 — Dropdowns sobrepostos ao conteúdo; barra horizontal removida sem alterar navegação ou persistência.
+// Atualização 023 — Dashboard responsivo, filtros resilientes e proteção contra sobrescrita remota de dados locais.
 // Atualize SOMENTE estes valores a cada publicação. O refresh da
 // página preserva a sessão autenticada; a versão não é usada como
 // critério de logout.
 // ══════════════════════════════════════════════════════════════
-const YALOG_WMS_VERSION = '2.1.2';
-const YALOG_WMS_BUILD = '022';
-const YALOG_WMS_UPDATE = '022';
+const YALOG_WMS_VERSION = '2.1.4';
+const YALOG_WMS_BUILD = '023';
+const YALOG_WMS_UPDATE = '023';
 const YALOG_WMS_RELEASE = `v${YALOG_WMS_VERSION} Build ${YALOG_WMS_BUILD}`;
 
 function aplicarVersaoWMS(){
@@ -10495,6 +10583,41 @@ let pendingMasterCallback=null; // callback after master auth
 // só depois do login, o próximo passo é revisar as policies da tabela
 // wms_kv_store no painel do Supabase.
 let _sessaoWmsCarregada = false;
+
+// BUILD 023 — RECUPERAÇÃO REMOTA SEM TROCAR A FONTE LOCAL
+// Se a publicação/refresh encontrar o cache local vazio ou incompleto, tenta
+// recuperar o DB operacional da mesma empresa no Supabase. O retorno é sempre
+// mesclado com a base local pelo _mesclarDBSemPerda(): o remoto só acrescenta
+// registros ausentes e nunca sobrescreve um registro local sem timestamp novo.
+async function _recuperarBaseRemotaSemPerda(companyId){
+  if(!companyId || !CoreConfig.supabaseUrl || !CoreConfig.supabaseKey)return false;
+  try{
+    const providerAnterior=CoreConfig.storageProvider;
+    const client=_obterClienteSupabase();
+    if(!client)return false;
+    await _garantirAuthAnonima(client);
+    const resposta=await client.from(SUPABASE_TABLE).select('key,value,updated_at,company_id,module_id').eq('company_id',companyId).eq('module_id',WMS_MODULE_ID);
+    if(resposta.error || !Array.isArray(resposta.data))return false;
+    const linhaDB=resposta.data.find(r=>r.key===DBKEY && r.value && typeof r.value==='object');
+    if(!linhaDB)return false;
+    const remoto=linhaDB.value;
+    const local=Core.get(DBKEY)||{};
+    const mesclado=_mesclarDBSemPerda(local,remoto);
+    const localScore=_dbPontuacao(local), mergeScore=_dbPontuacao(mesclado);
+    if(mergeScore>=localScore && JSON.stringify(mesclado)!==JSON.stringify(local)){
+      LocalStorageProvider.set(DBKEY,mesclado);
+      _salvarSnapshotGuard(mesclado,'recovery-remoto-build-023');
+      await _persistirDBCanonico(mesclado);
+      console.log('[WMS RECOVERY 023] base remota recuperada/mesclada sem perda.',{localScore,mergeScore});
+      return true;
+    }
+    return false;
+  }catch(e){
+    console.warn('[WMS RECOVERY 023] recuperação remota indisponível; mantendo base local:',e);
+    return false;
+  }
+}
+
 async function _confirmarSessaoCarregada(usuario){
   console.log('Sessão carregada');
   CoreConfig.usuarioAtual = { id:usuario.id, nome:usuario.nome, login:usuario.login, perfil:usuario.perfil };
@@ -10520,6 +10643,10 @@ async function _confirmarSessaoCarregada(usuario){
   if (companyId) {
     LocalStorageProvider._migrarParaEmpresa(companyId); // nunca apaga a chave antiga
     _companyIdLocalAtual = companyId;
+    // Recuperação independente do provider: preserva o comportamento local,
+    // mas impede que uma publicação/refresh deixe a tela vazia quando a base
+    // operacional ainda existe na empresa no Supabase.
+    await _recuperarBaseRemotaSemPerda(companyId);
     if (CoreConfig.storageProvider === 'supabase') {
       await _registrarInstalacaoWms(companyId); // não bloqueia o login se falhar
       // SPRINT YALOG-WMS-TENANT-HOTFIX-004: meta.checksums é compartilhado
@@ -22113,7 +22240,16 @@ function baixarTemplateEnderecos(fmt='xlsx'){
   function populateHomeClienteFiltroV25(){
     const sel=document.getElementById('homeClienteFiltro');if(!sel)return;
     const val=sel.value||'';
-    const clientes=[...(DB.clientes||[])].sort((a,b)=>_clienteLabelV25(a).localeCompare(_clienteLabelV25(b),'pt-BR'));
+    const mapa=new Map();
+    (DB.clientes||[]).forEach(c=>{if(c?.id!=null)mapa.set(String(c.id),c);});
+    // Fallback de continuidade: se a carga de estoque possui clienteId mas
+    // o cadastro mestre ainda não foi recuperado, o filtro continua utilizável.
+    (DB.produtos||[]).forEach(p=>{
+      if(p?.clienteId==null)return;
+      const id=String(p.clienteId);
+      if(!mapa.has(id))mapa.set(id,{id,nomeOperacao:p.nomeOperacao||p.nome_operacao||p.operacao||p.clienteNome||p.cliente_nome||''});
+    });
+    const clientes=[...mapa.values()].sort((a,b)=>_clienteLabelV25(a).localeCompare(_clienteLabelV25(b),'pt-BR'));
     sel.innerHTML='<option value="">Todos os Clientes / Operações</option>'+clientes.map(c=>`<option value="${String(c.id).replace(/"/g,'&quot;')}">${_clienteLabelV25(c)}</option>`).join('');
     if(val && [...sel.options].some(o=>o.value===val))sel.value=val;else sel.value='';
   }
@@ -22266,7 +22402,7 @@ function baixarTemplateEnderecos(fmt='xlsx'){
   const _baseGo=go;
   go=function(id){
     _baseGo(id);
-    if(id==='home'){populateHomeSiteFiltroV25();populateHomeClienteFiltroV25();renderHomeV25();}
+    if(id==='home'){populateHomeSiteFiltroV25();populateHomeClienteFiltroV25();renderHome();}
     if(id==='estoqueList'){requestAnimationFrame(()=>renderEstoqueV25());}
     if(id==='mapaEstoqueGestao'){requestAnimationFrame(()=>initMapaEstoqueGestaoV25());}
   };
@@ -22278,7 +22414,10 @@ function baixarTemplateEnderecos(fmt='xlsx'){
       clientes:(DB.clientes||[]).map(c=>({id:c.id,nome:_clienteLabelV25(c),nomeOriginal:c.nome,cnpj:c.cnpj||''})),
       produtos:(DB.produtos||[]).length,
       produtosComUnidade:(DB.produtos||[]).filter(p=>!!_siteIdDoProdutoV25(p)).length,
-      produtosComCliente:(DB.produtos||[]).filter(p=>!!p.clienteId).length
+      produtosComCliente:(DB.produtos||[]).filter(p=>!!p.clienteId).length,
+      movimentos:(DB.movimentos||[]).length,
+      enderecos:(DB.enderecos||[]).length,
+      persistencia:{provider:CoreConfig.storageProvider,idb:typeof indexedDB!=='undefined',fila:typeof SyncQueue!=='undefined'?SyncQueue.tamanho():null}
     };
   };
 })();
