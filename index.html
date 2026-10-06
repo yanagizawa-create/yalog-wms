@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="yalog-wms-version" content="2.1.2">
-<title>WMS · v2.1.2</title>
+<meta name="yalog-wms-version" content="2.1.3">
+<title>WMS · v2.1.4</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,500;0,600;0,700;0,800;1,600;1,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -34,34 +34,39 @@ html{font-size:14px;}
 body{background:var(--bg);color:var(--w);font-family:var(--sans);min-height:100vh;overflow-x:hidden;}
 a{color:inherit;text-decoration:none;}
 
-/* ══ LAYOUT ══ */
-.shell{display:flex;min-height:100vh;}
-.sb{width:236px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:200;transition:transform .3s;}
-.sb-logo{padding:20px 18px 16px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px;}
-.sb-logo-row{display:flex;align-items:center;gap:10px;cursor:pointer;}
-.sb-img{width:52px;height:52px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:16px;overflow:hidden;flex-shrink:0;}
+/* ══ LAYOUT · TOPO YALOG WMS ══ */
+.shell{display:block;min-height:100vh;}
+.sb{width:100%;height:76px;position:fixed;inset:0 0 auto 0;background:rgba(18,22,43,.98);border-bottom:1px solid var(--border);display:flex;flex-direction:row;align-items:center;z-index:200;box-shadow:0 6px 18px rgba(0,0,0,.18);transition:none;}
+.sb-logo{width:245px;flex:0 0 245px;height:76px;padding:12px 18px;border-right:1px solid var(--border);display:flex;flex-direction:row;align-items:center;gap:10px;}
+.sb-logo-row{display:flex;align-items:center;gap:10px;cursor:pointer;min-width:0;}
+.sb-img{width:42px;height:42px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:16px;overflow:hidden;flex-shrink:0;}
 .sb-img img{width:100%;height:100%;object-fit:cover;}
-.sb-name{font-family:var(--serif);font-style:italic;font-size:15px;line-height:1.2;}
-.sb-sub{font-size:8px;color:var(--w40);font-family:var(--mono);letter-spacing:.18em;text-transform:uppercase;margin-top:1px;}
-.sb-change{font-size:8px;color:var(--orange);font-family:var(--mono);letter-spacing:.1em;cursor:pointer;text-transform:uppercase;}
-.sb-change:hover{color:var(--orange2);}
-.sb-nav{flex:1;padding:12px 0;overflow-y:auto;}
-.nav-grp{
-  font-size:9px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;
-  font-family:var(--mono);color:var(--orange2);
-  padding:14px 20px 5px;margin-top:6px;
-  border-top:1px solid rgba(251,146,60,.2);
-}
-.ni{display:flex;align-items:center;gap:9px;padding:9px 18px;cursor:pointer;font-size:12px;font-weight:500;color:var(--w40);transition:background .10s,color .10s,border-color .10s;border-left:2px solid transparent;position:relative;}
-.ni:hover{background:var(--w06);color:var(--w);}
-.ni.active{background:rgba(251,146,60,.1);color:var(--orange2);border-left-color:var(--orange);}
-.ni-ic{font-size:14px;width:18px;text-align:center;}
-.ni-badge{margin-left:auto;background:var(--orange);color:#fff;font-size:8px;font-family:var(--mono);padding:1px 5px;font-weight:700;}
-.sb-foot{padding:18px 24px;border-top:1px solid var(--border);font-size:10px;color:var(--w40);font-family:var(--mono);letter-spacing:.08em;}
+.sb-name{font-family:var(--serif);font-style:italic;font-size:17px;line-height:1.1;white-space:nowrap;}
+.sb-sub{font-size:8px;color:var(--orange2);font-family:var(--mono);letter-spacing:.16em;text-transform:uppercase;margin-top:4px;white-space:nowrap;}
+.sb-change{display:none;}
+.sb-nav{padding:0 8px;overflow:visible;display:flex;align-items:center;gap:2px;flex:1;min-width:0;height:76px;scrollbar-width:none;}
+.nav-grp{display:none;}
+.top-menu-group{position:relative;display:flex;align-items:center;height:76px;flex:0 0 auto;}
+.top-menu-trigger{height:76px;border:0;background:none;color:var(--w70);padding:0 11px;cursor:pointer;white-space:nowrap;font:10px var(--sans);font-weight:600;letter-spacing:.02em;display:flex;align-items:center;gap:7px;border-bottom:3px solid transparent;transition:background .12s,color .12s,border-color .12s;}
+.top-menu-trigger:hover,.top-menu-group:focus-within .top-menu-trigger,.top-menu-trigger.has-active{background:rgba(251,146,60,.08);color:var(--w);border-bottom-color:var(--orange);}
+.top-menu-trigger .top-chevron{font-size:11px;color:var(--w40);transition:transform .15s;}
+.top-menu-group:hover .top-menu-trigger .top-chevron,.top-menu-group.open .top-menu-trigger .top-chevron{transform:rotate(180deg);}
+.top-menu-dropdown{position:absolute;top:76px;left:0;min-width:235px;max-width:310px;background:rgba(18,22,43,.99);border:1px solid var(--border2);box-shadow:0 18px 40px rgba(0,0,0,.38);padding:7px;display:none;z-index:500;border-radius:0 0 12px 12px;}
+.top-menu-group:hover .top-menu-dropdown,.top-menu-group.open .top-menu-dropdown,.top-menu-group:focus-within .top-menu-dropdown{display:block;}
+/* BUILD 021 — menus flutuam sobre a tela atual; não participam do fluxo horizontal do cabeçalho. */
+.sb,.sb-nav,.top-menu-group{overflow:visible;}
+.top-menu-dropdown{z-index:1200;}
+.top-menu-label{font:8px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--orange2);padding:8px 10px 6px;border-bottom:1px solid var(--border);margin-bottom:4px;}
+.top-menu-dropdown .ni{display:flex;align-items:center;gap:9px;width:100%;padding:9px 10px;border:0;border-left:2px solid transparent;background:transparent;cursor:pointer;font-size:11px;font-weight:500;color:var(--w40);transition:background .10s,color .10s,border-color .10s;position:relative;white-space:nowrap;border-radius:7px;}
+.top-menu-dropdown .ni:hover{background:var(--w06);color:var(--w);}
+.top-menu-dropdown .ni.active{background:rgba(251,146,60,.1);color:var(--orange2);border-left-color:var(--orange);}
+.ni-ic{font-size:14px;width:18px;text-align:center;flex:0 0 18px;}
+.ni-badge{margin-left:auto;background:var(--orange);color:#fff;font-size:8px;font-family:var(--mono);padding:1px 5px;font-weight:700;border-radius:4px;}
+.sb-foot{display:none;}
 
 /* ══ MAIN ══ */
-.main{margin-left:236px;flex:1;display:flex;flex-direction:column;min-height:100vh;}
-.topbar{height:52px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:100;}
+.main{margin-left:0;padding-top:76px;flex:1;display:flex;flex-direction:column;min-height:100vh;width:100%;}
+.topbar{height:58px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:76px;z-index:100;}
 .tb-title{font-family:var(--serif);font-style:italic;font-size:17px;}
 .tb-r{display:flex;align-items:center;gap:12px;}
 .tb-date{font-family:var(--mono);font-size:9px;color:var(--w40);letter-spacing:.1em;}
@@ -271,12 +276,33 @@ a{color:inherit;text-decoration:none;}
 
 /* RESPONSIVE */
 @media(max-width:900px){
-  .sb{transform:translateX(-100%);}
-  .sb.open{transform:translateX(0);}
-  .main{margin-left:0;}
+  .sb{height:70px;min-height:70px;overflow:visible;}
+  .sb-logo{width:190px;flex-basis:190px;height:70px;padding:10px 12px;}
+  .sb-img{width:38px;height:38px;}
+  .sb-name{font-size:15px;}
+  .sb-nav{height:70px;padding:0 4px;overflow:visible;}
+  .top-menu-group{height:70px;}
+  .top-menu-trigger{height:70px;padding:0 9px;font-size:10px;}
+  .top-menu-dropdown{position:absolute;top:70px;left:0;right:auto;max-width:310px;min-width:235px;max-height:70vh;overflow:auto;border-radius:0 0 12px 12px;}
+  .main{padding-top:70px;}
+  .topbar{top:70px;}
   .g2,.g3,.g4,.g12,.g21,.g13{grid-template-columns:1fr;}
   .kpi-grid{grid-template-columns:repeat(2,1fr);}
   .content{padding:16px;}
+}
+@media(max-width:600px){
+  .sb{height:62px;min-height:62px;overflow:visible;}
+  .sb-logo{width:155px;flex-basis:155px;height:62px;padding:8px 10px;}
+  .sb-img{width:34px;height:34px;}
+  .sb-name{font-size:14px;}
+  .sb-sub{font-size:7px;}
+  .sb-nav{height:62px;overflow:visible;}
+  .top-menu-group{height:62px;}
+  .top-menu-trigger{height:62px;padding:0 8px;font-size:9px;}
+  .top-menu-dropdown{top:62px;}
+  .main{padding-top:62px;}
+  .topbar{top:62px;padding:0 12px;}
+  .tb-title{font-size:14px;}
 }
 
 /* ══ LOGIN SCREEN ══ */
@@ -382,6 +408,9 @@ a{color:inherit;text-decoration:none;}
 .qs-hint span{font-size:9px;color:var(--w40);font-family:var(--mono);}
 /* Active nav highlight */
 .ni.active{background:rgba(251,146,60,.1);color:var(--orange2);border-left-color:var(--orange);}
+.top-menu-dropdown .ni.active{border-left-color:var(--orange);}
+.top-menu-group.is-hidden{display:none;}
+@media(max-width:900px){.sb-nav{scrollbar-width:thin;}.top-menu-trigger .top-chevron{display:none;}}
 
 
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
@@ -565,6 +594,156 @@ a{color:inherit;text-decoration:none;}
 .end-import-status.warn{color:#fbbf24;background:rgba(251,191,36,.1);}
 .end-import-sticky{position:sticky;bottom:0;background:var(--bg2);border-top:1px solid var(--border);padding-top:12px;margin-top:12px;display:flex;justify-content:flex-end;gap:8px;}
 
+
+/* BUILD 024 — experiência de filtros e leitura operacional */
+.estoque-filter-summary{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:-8px 0 12px;padding:0 2px;min-height:24px;}
+.estoque-filter-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border:1px solid rgba(251,146,60,.28);background:rgba(251,146,60,.06);color:var(--w70);font:8px var(--mono);border-radius:20px;}
+.estoque-filter-chip:first-child{color:var(--orange2);font-weight:700;}
+.estoque-filter-chip.muted{border-color:var(--border);color:var(--w40);background:transparent;}
+@media(max-width:1100px){#s-estoqueList .ph-acts{width:100%;}.estoque-filter-summary{margin-top:0;}.ph-acts select{min-width:150px;}}
+@media(max-width:700px){#s-estoqueList .ph-acts>div{width:100%;}#s-estoqueList .ph-acts input{width:100%!important;}#s-estoqueList .ph-acts select,#s-estoqueList .ph-acts button{flex:1 1 45%;min-width:0;}.estoque-filter-summary{font-size:8px;}}
+</style>
+<style id="yalog-build025-vision-filters">
+.yalog-filter-field{display:flex;flex-direction:column;gap:4px;min-width:170px;}
+.yalog-filter-field label{font:700 8px var(--mono);letter-spacing:.10em;text-transform:uppercase;color:var(--w40);padding-left:2px;}
+.yalog-filter-field select{min-width:170px;}
+.yalog-filter-search{min-width:260px;}
+.yalog-stock-filters .yalog-filter-field:nth-child(3){min-width:230px;}
+.yalog-stock-filters .yalog-filter-field:nth-child(3) select{min-width:230px;}
+.yalog-home-filters .yalog-filter-field select{min-width:190px;}
+@media(max-width:1100px){.yalog-filter-field,.yalog-filter-search,.yalog-stock-filters .yalog-filter-field:nth-child(3){min-width:0;flex:1 1 180px;}.yalog-filter-field select,.yalog-stock-filters .yalog-filter-field:nth-child(3) select{min-width:0;width:100%;}.yalog-filter-search input{width:100%!important;}}
+@media(max-width:700px){.yalog-filter-field,.yalog-filter-search{flex:1 1 100%;}.yalog-stock-filters .yalog-filter-field:nth-child(3){flex:1 1 100%;}}
+</style>
+
+<style id="yalog-build022-ui-fix">
+/* ═══════════════════════════════════════════════════════════════
+   BUILD 022 — RESPONSIVIDADE GLOBAL + MARCA + DASHBOARD RESILIENTE
+   Não altera estrutura de dados, autenticação ou persistência.
+   ═══════════════════════════════════════════════════════════════ */
+html,body{width:100%;max-width:100%;min-width:0;overflow-x:hidden;}
+.shell,.main,.content,.screen{min-width:0;max-width:100%;}
+
+/* Marca: nunca invade a primeira opção do menu. */
+.sb-logo{min-width:0;width:clamp(170px,18vw,245px);flex:0 0 clamp(170px,18vw,245px);overflow:hidden;}
+.sb-logo-row{min-width:0;width:100%;}
+.sb-brand-copy{min-width:0;max-width:100%;overflow:hidden;}
+.sb-name{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:clamp(13px,1.15vw,17px);}
+.sb-sub{white-space:nowrap;}
+.sb-version{margin-top:2px;color:var(--w40);font:7px var(--mono);letter-spacing:.10em;white-space:nowrap;}
+
+/* Navegação superior: nunca cria scrollbar horizontal. Em telas menores,
+   os itens se compactam e podem ocupar uma segunda linha dentro do próprio
+   cabeçalho; os dropdowns continuam absolutamente posicionados. */
+.sb{width:100%;max-width:100vw;overflow:visible;}
+.sb-nav{min-width:0;max-width:100%;overflow:visible;flex:1 1 auto;}
+.top-menu-group{min-width:0;}
+.top-menu-trigger{max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+.top-menu-dropdown{max-width:min(310px,calc(100vw - 16px));}
+
+/* Conteúdo: grids e formulários não podem provocar overflow da página. */
+.content{width:100%;max-width:100%;overflow-x:hidden;}
+.g2,.g3,.g4,.g12,.g21,.g13,.kpi-grid{min-width:0;}
+.cw,.card,.kc,.kpi-grid>*{min-width:0;}
+.cw{overflow:hidden;}
+.cw>div[style*="height:"]{min-width:0;max-width:100%;}
+canvas{max-width:100%;}
+.frow,.fsec,.ph,.ph-acts,.tb-r{min-width:0;max-width:100%;}
+
+/* Tablet / notebook: menu compacto em duas faixas, sem barra horizontal. */
+@media(max-width:1450px){
+  .sb-logo{width:210px;flex-basis:210px;padding-left:14px;padding-right:14px;}
+  .top-menu-trigger{padding-left:8px;padding-right:8px;font-size:9px;gap:4px;}
+}
+@media(max-width:1180px){
+  .sb-logo{width:190px;flex-basis:190px;}
+  .sb-nav{height:76px;flex-wrap:wrap;align-content:center;gap:0;overflow:visible;}
+  .top-menu-group,.top-menu-trigger{height:38px;}
+  .top-menu-trigger{padding:0 7px;font-size:8.5px;}
+  .top-menu-dropdown{top:76px;}
+  .main{padding-top:76px;}
+  .topbar{top:76px;}
+  .content{padding:20px;}
+  .tb-r{gap:7px;}
+}
+@media(max-width:900px){
+  .sb{height:96px;min-height:96px;align-items:stretch;}
+  .sb-logo{width:165px;flex:0 0 165px;height:96px;padding:10px 11px;}
+  .sb-img{width:36px;height:36px;}
+  .sb-name{font-size:13px;}
+  .sb-nav{height:96px;align-content:center;}
+  .top-menu-group,.top-menu-trigger{height:32px;}
+  .top-menu-trigger{padding:0 6px;font-size:8px;}
+  .top-menu-dropdown{top:96px;max-height:70vh;overflow:auto;}
+  .main{padding-top:96px;}
+  .topbar{top:96px;height:auto;min-height:52px;padding:8px 12px;}
+  .tb-r{flex-wrap:wrap;justify-content:flex-end;max-width:72%;}
+  .tb-date{display:none;}
+  .content{padding:14px;overflow-x:hidden;}
+  .g2,.g3,.g4,.g12,.g21,.g13{grid-template-columns:1fr!important;}
+  .kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
+  .frow{grid-template-columns:1fr!important;}
+  .tw{max-width:100%;overflow:auto;}
+}
+@media(max-width:680px){
+  .sb{height:112px;min-height:112px;}
+  .sb-logo{width:135px;flex-basis:135px;height:112px;padding:9px 8px;gap:7px;}
+  .sb-img{width:32px;height:32px;font-size:13px;}
+  .sb-name{font-size:12px;}
+  .sb-sub{font-size:7px;}
+  .sb-version{font-size:6px;}
+  .sb-nav{height:112px;}
+  .top-menu-group,.top-menu-trigger{height:28px;}
+  .top-menu-trigger{padding:0 5px;font-size:7px;gap:3px;}
+  .top-menu-trigger .top-chevron{display:none;}
+  .top-menu-dropdown{top:112px;left:0;min-width:215px;max-width:calc(100vw - 12px);}
+  .main{padding-top:112px;}
+  .topbar{top:112px;padding:7px 10px;}
+  .tb-title{font-size:14px;}
+  .tb-r{max-width:70%;gap:5px;}
+  .tb-btn{padding:6px 8px;font-size:8px;}
+  .tb-user{max-width:145px;}
+  .content{padding:10px;}
+  .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+  .kc{padding:12px;min-width:0;}
+  .kv{font-size:clamp(16px,6vw,23px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ph{gap:9px;}
+  .ph-acts{width:100%;}
+  .ph-acts select{max-width:100%;}
+}
+@media(max-width:420px){
+  .sb{height:128px;min-height:128px;}
+  .sb-logo{width:112px;flex-basis:112px;height:128px;padding:8px 6px;}
+  .sb-img{width:28px;height:28px;}
+  .sb-name{font-size:10px;}
+  .sb-nav{height:128px;}
+  .top-menu-group,.top-menu-trigger{height:25px;}
+  .top-menu-trigger{padding:0 4px;font-size:6.5px;}
+  .top-menu-dropdown{top:128px;}
+  .main{padding-top:128px;}
+  .topbar{top:128px;}
+}
+
+
+.cw>div[style*="height:"]{position:relative;min-width:0;}
+.yalog-chart-fallback{position:absolute;inset:0;padding:6px 4px;overflow:hidden;color:var(--w40);font:8px var(--mono);z-index:2;}
+.yalog-chart-fallback{background:var(--panel);display:block;}
+.yalog-chart-fallback .yalog-fallback-empty{height:100%;display:flex;align-items:center;justify-content:center;color:var(--w40);font:10px var(--mono);}
+.yalog-fallback-bars{height:100%;display:flex;align-items:flex-end;gap:7px;padding:8px 4px 18px;border-bottom:1px solid var(--border);}
+.yalog-fallback-bar{height:100%;flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;position:relative;gap:3px;}
+.yalog-fallback-fill{width:min(30px,70%);min-height:0;background:linear-gradient(180deg,var(--orange),rgba(251,146,60,.18));border-radius:4px 4px 0 0;}
+.yalog-fallback-bar b{font-size:7px;color:var(--w70);font-weight:500;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.yalog-fallback-bar span{position:absolute;bottom:-16px;max-width:62px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;}
+.yalog-fallback-donut{width:min(145px,55%);aspect-ratio:1;border-radius:50%;margin:4px auto 7px;display:grid;place-items:center;}
+.yalog-fallback-donut>div{width:52%;height:52%;border-radius:50%;background:var(--panel);border:1px solid var(--border);}
+.yalog-fallback-legend{display:flex;flex-wrap:wrap;justify-content:center;gap:5px 10px;max-height:65px;overflow:auto;}
+.yalog-fallback-legend span{display:inline-flex;align-items:center;gap:4px;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.yalog-fallback-legend i{width:7px;height:7px;border-radius:2px;display:inline-block;flex:0 0 7px;}
+
+/* Dashboard: garantir que os gráficos ocupem o card em qualquer largura. */
+#s-home .cw{min-height:240px;}
+#s-home .cw>div[style*="height:200px"]{height:200px!important;position:relative;}
+#s-home .cw>div[style*="height:180px"]{height:180px!important;position:relative;}
+#s-home canvas{display:block!important;width:100%!important;height:100%!important;}
 </style>
 </head>
 <body>
@@ -575,75 +754,126 @@ a{color:inherit;text-decoration:none;}
   <div class="sb-logo">
     <div class="sb-logo-row" onclick="openM('mLogo')">
       <div class="sb-img" id="sbLogo"><span>🏭</span></div>
-      <div><div class="sb-name" id="sbName">Seu Armazém</div><div class="sb-sub">WMS</div></div>
+      <div class="sb-brand-copy"><div class="sb-name" id="sbName">Seu Armazém</div><div class="sb-sub">WMS</div><div class="sb-version" data-wms-version>v2.1.4 Build 024</div></div>
     </div>
     <div class="sb-change" onclick="openM('mLogo')">✎ Trocar logo</div>
   </div>
-  <nav class="sb-nav">
-    <div class="nav-grp">Principal</div>
-    <div class="ni active" onclick="go('home')"><span class="ni-ic"><i data-lucide="layout-dashboard"></i></span> Visão Geral</div>
-    <div class="ni" onclick="go('ocupacao')"><span class="ni-ic"><i data-lucide="trending-up"></i></span> Ocupação &amp; Posições</div>
+  <nav class="sb-nav" id="wmsTopNav" aria-label="Navegação principal">
+    <div class="top-menu-group">
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">① DASHBOARD <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Principal</div>
+        <div class="ni active" onclick="go('home')"><span class="ni-ic"><i data-lucide="layout-dashboard"></i></span> Visão Geral</div>
+        <div class="ni" onclick="go('ocupacao')"><span class="ni-ic"><i data-lucide="trending-up"></i></span> Ocupação &amp; Posições</div>
+      </div>
+    </div>
 
-    <div class="nav-grp">Recebimento</div>
-    <div class="ni" onclick="go('recUpload')"><span class="ni-ic"><i data-lucide="upload"></i></span> Upload NF</div>
-    <div class="ni" onclick="go('recTarefas')"><span class="ni-ic"><i data-lucide="clipboard-check"></i></span> Conferência e Armazenagem <span class="ni-badge" id="bdRec">0</span></div>
-    <div class="ni" onclick="go('relRecebimento')" title="Relatórios de Recebimento"><span class="ni-ic"><i data-lucide="bar-chart-3"></i></span> Relatórios</div>
-    <div class="ni" onclick="go('armazenagem')"><span class="ni-ic"><i data-lucide="package-check"></i></span> Armazenagem <span class="ni-badge" id="bdArmazem">0</span></div>
+    <div class="top-menu-group">
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">② RECEBIMENTO <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Recebimento</div>
+        <div class="ni" onclick="go('recUpload')"><span class="ni-ic"><i data-lucide="upload"></i></span> Upload NF</div>
+        <div class="ni" onclick="go('recTarefas')"><span class="ni-ic"><i data-lucide="clipboard-check"></i></span> Conferência e Armazenagem <span class="ni-badge" id="bdRec">0</span></div>
+        <div class="ni" onclick="go('relRecebimento')"><span class="ni-ic"><i data-lucide="bar-chart-3"></i></span> Relatórios</div>
+        <div class="ni" onclick="go('armazenagem')"><span class="ni-ic"><i data-lucide="package-check"></i></span> Armazenagem <span class="ni-badge" id="bdArmazem">0</span></div>
+      </div>
+    </div>
 
-    <div class="nav-grp">Estoque</div>
-    <div class="ni" onclick="go('paletes')"><span class="ni-ic"><i data-lucide="layers"></i></span> Paletes</div>
-    <div class="ni" onclick="go('estoqueList')"><span class="ni-ic"><i data-lucide="grid-3x3"></i></span> Produtos</div>
-    <div class="ni" onclick="go('estoqueMapa')"><span class="ni-ic"><i data-lucide="map"></i></span> Mapa Armazém</div>
-    <div class="ni" onclick="go('curvaABC')"><span class="ni-ic"><i data-lucide="pie-chart"></i></span> Curva ABC</div>
-    <div class="ni" onclick="go('movimentar')"><span class="ni-ic"><i data-lucide="repeat"></i></span> Movimentar</div>
-    <div class="ni" onclick="go('tarefasMov')"><span class="ni-ic"><i data-lucide="clipboard-list"></i></span> Tarefas de Movimentação <span class="ni-badge" id="bdTarefasMov">0</span></div>
-    <div class="ni" onclick="go('relEstoque')" title="Relatórios de Estoque"><span class="ni-ic"><i data-lucide="bar-chart-3"></i></span> Relatórios</div>
-    <div class="ni" onclick="go('bloqueios')"><span class="ni-ic"><i data-lucide="ban"></i></span> Bloqueios <span class="ni-badge" id="bdBlk">0</span></div>
+    <div class="top-menu-group">
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">③ ESTOQUE <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Estoque</div>
+        <div class="ni" onclick="go('paletes')"><span class="ni-ic"><i data-lucide="layers"></i></span> Paletes</div>
+        <div class="ni" onclick="go('estoqueList')"><span class="ni-ic"><i data-lucide="grid-3x3"></i></span> Produtos</div>
+        <div class="ni" onclick="go('estoqueMapa')"><span class="ni-ic"><i data-lucide="map"></i></span> Mapa Armazém</div>
+        <div class="ni" onclick="go('curvaABC')"><span class="ni-ic"><i data-lucide="pie-chart"></i></span> Curva ABC</div>
+        <div class="ni" onclick="go('movimentar')"><span class="ni-ic"><i data-lucide="repeat"></i></span> Movimentar</div>
+        <div class="ni" onclick="go('tarefasMov')"><span class="ni-ic"><i data-lucide="clipboard-list"></i></span> Tarefas de Movimentação <span class="ni-badge" id="bdTarefasMov">0</span></div>
+        <div class="ni" onclick="go('relEstoque')"><span class="ni-ic"><i data-lucide="bar-chart-3"></i></span> Relatórios</div>
+        <div class="ni" onclick="go('bloqueios')"><span class="ni-ic"><i data-lucide="ban"></i></span> Bloqueios <span class="ni-badge" id="bdBlk">0</span></div>
+      </div>
+    </div>
 
-    <div class="nav-grp">Saída</div>
-    <div class="ni" onclick="go('sepUpload')"><span class="ni-ic"><i data-lucide="download"></i></span> Upload Pedido/NF</div>
-    <div class="ni" onclick="go('sepTarefas')"><span class="ni-ic"><i data-lucide="list-checks"></i></span> Separações <span class="ni-badge" id="bdSep">0</span></div>
-    <div class="ni" onclick="go('relSaida')" title="Relatórios de Saída"><span class="ni-ic"><i data-lucide="bar-chart-3"></i></span> Relatórios</div>
-    <div class="ni" onclick="go('devolucao')"><span class="ni-ic"><i data-lucide="undo-2"></i></span> Devoluções</div>
-    <div class="ni" onclick="go('expedicao')"><span class="ni-ic"><i data-lucide="truck"></i></span> Expedição <span class="ni-badge" id="bdExp">0</span></div>
+    <div class="top-menu-group">
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">④ SAÍDA <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Saída</div>
+        <div class="ni" onclick="go('sepUpload')"><span class="ni-ic"><i data-lucide="download"></i></span> Upload Pedido/NF</div>
+        <div class="ni" onclick="go('sepTarefas')"><span class="ni-ic"><i data-lucide="list-checks"></i></span> Separações <span class="ni-badge" id="bdSep">0</span></div>
+        <div class="ni" onclick="go('relSaida')"><span class="ni-ic"><i data-lucide="bar-chart-3"></i></span> Relatórios</div>
+        <div class="ni" onclick="go('devolucao')"><span class="ni-ic"><i data-lucide="undo-2"></i></span> Devoluções</div>
+        <div class="ni" onclick="go('expedicao')"><span class="ni-ic"><i data-lucide="truck"></i></span> Expedição <span class="ni-badge" id="bdExp">0</span></div>
+      </div>
+    </div>
 
-    <div class="nav-grp">Qualidade & Gestão</div>
-    <div class="ni" onclick="go('alertasValidade')"><span class="ni-ic"><i data-lucide="alarm-clock"></i></span> Alertas Validade <span class="ni-badge" id="bdAlerta">0</span></div>
-    <div class="ni" onclick="go('ageingReport')"><span class="ni-ic"><i data-lucide="calendar"></i></span> Ageing Report</div>
-    <div class="ni" onclick="go('custoArmazem')"><span class="ni-ic"><i data-lucide="dollar-sign"></i></span> Custo Armazém</div>
-    <div class="nav-grp">Inventário</div>
-    <div class="ni" onclick="go('invList')"><span class="ni-ic"><i data-lucide="layout-grid"></i></span> Inventários <span class="ni-badge" id="bdInv">0</span></div>
-    <div class="ni" onclick="gerarInventario('rotativo')"><span class="ni-ic"><i data-lucide="refresh-ccw"></i></span> Gerar Rotativo</div>
-    <div class="ni" onclick="gerarInventario('geral')"><span class="ni-ic"><i data-lucide="plus-circle"></i></span> Gerar Geral</div>
-    <div class="ni" onclick="go('conciliacao')"><span class="ni-ic"><i data-lucide="shuffle"></i></span> Conciliação Cliente</div>
+    <div class="top-menu-group">
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">⑤ QUALIDADE <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Qualidade &amp; Gestão</div>
+        <div class="ni" onclick="go('alertasValidade')"><span class="ni-ic"><i data-lucide="alarm-clock"></i></span> Alertas Validade <span class="ni-badge" id="bdAlerta">0</span></div>
+        <div class="ni" onclick="go('ageingReport')"><span class="ni-ic"><i data-lucide="calendar"></i></span> Ageing Report</div>
+        <div class="ni" onclick="go('custoArmazem')"><span class="ni-ic"><i data-lucide="dollar-sign"></i></span> Custo Armazém</div>
+      </div>
+    </div>
 
+    <div class="top-menu-group">
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">⑥ INVENTÁRIO <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Inventário</div>
+        <div class="ni" onclick="go('invList')"><span class="ni-ic"><i data-lucide="layout-grid"></i></span> Inventários <span class="ni-badge" id="bdInv">0</span></div>
+        <div class="ni" onclick="gerarInventario('rotativo')"><span class="ni-ic"><i data-lucide="refresh-ccw"></i></span> Gerar Rotativo</div>
+        <div class="ni" onclick="gerarInventario('geral')"><span class="ni-ic"><i data-lucide="plus-circle"></i></span> Gerar Geral</div>
+        <div class="ni" onclick="go('conciliacao')"><span class="ni-ic"><i data-lucide="shuffle"></i></span> Conciliação Cliente</div>
+      </div>
+    </div>
 
-    <div class="nav-grp">Carga & Estrutura</div>
-    <div class="ni" onclick="go('cargaEstoque')"><span class="ni-ic"><i data-lucide="upload"></i></span> Carga de Estoque</div>
-    <div class="ni" onclick="go('enderecos')"><span class="ni-ic"><i data-lucide="grid-3x3"></i></span> Endereços</div>
-    <div class="ni" onclick="go('capArmazem')" style="color:var(--b2);"><span class="ni-ic"><i data-lucide="map"></i></span> Configuração de Área Blocada</div>
-    <div class="ni" onclick="go('matrizPP')" style="color:var(--orange2);"><span class="ni-ic"><i data-lucide="layout-grid"></i></span> Matriz de Capacidade PP</div>
-    <div class="ni" onclick="abrirReimpressao()" title="Reimprimir etiquetas por Cód. Palete ou WMS"><span class="ni-ic"><i data-lucide="printer"></i></span> Etiquetas</div>
-    <div class="ni" onclick="go('clientes')"><span class="ni-ic"><i data-lucide="building-2"></i></span> Clientes</div>
-    <div class="ni" onclick="go('sites')"><span class="ni-ic"><i data-lucide="factory"></i></span> Unidades Logísticas</div>
+    <div class="top-menu-group">
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">⑦ ESTRUTURA <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Carga &amp; Estrutura</div>
+        <div class="ni" onclick="go('cargaEstoque')"><span class="ni-ic"><i data-lucide="upload"></i></span> Carga de Estoque</div>
+        <div class="ni" onclick="go('enderecos')"><span class="ni-ic"><i data-lucide="grid-3x3"></i></span> Endereços</div>
+        <div class="ni" onclick="go('capArmazem')"><span class="ni-ic"><i data-lucide="map"></i></span> Configuração de Área Blocada</div>
+        <div class="ni" onclick="go('matrizPP')"><span class="ni-ic"><i data-lucide="layout-grid"></i></span> Matriz de Capacidade PP</div>
+        <div class="ni" onclick="abrirReimpressao()"><span class="ni-ic"><i data-lucide="printer"></i></span> Etiquetas</div>
+        <div class="ni" onclick="go('clientes')"><span class="ni-ic"><i data-lucide="building-2"></i></span> Clientes</div>
+        <div class="ni" onclick="go('sites')"><span class="ni-ic"><i data-lucide="factory"></i></span> Unidades Logísticas</div>
+      </div>
+    </div>
 
-    <div class="nav-grp" id="navGestaoGrp" style="display:none;">Gestão</div>
-    <div class="ni" id="navAjuste" onclick="go('ajusteEstoque')" style="display:none;"><span class="ni-ic"><i data-lucide="scale"></i></span> Ajuste de Estoque</div>
-    <div class="ni" id="navAceite" onclick="go('masterAceite')" style="display:none;"><span class="ni-ic"><i data-lucide="key"></i></span> Aceites Master <span class="ni-badge" id="bdAceite">0</span></div>
-    <div class="ni" id="navUsuarios" onclick="go('usuarios')" style="display:none;"><span class="ni-ic"><i data-lucide="user"></i></span> Usuários</div>
-    <div class="ni" id="navLimpar" onclick="go('limparEstoque')" style="display:none;"><span class="ni-ic"><i data-lucide="trash-2"></i></span> Limpar Estoque</div>
-    <div class="ni" id="navMapaEstoqueGestao" onclick="go('mapaEstoqueGestao')" style="display:none;"><span class="ni-ic"><i data-lucide="file-spreadsheet"></i></span> Mapa de Estoque</div>
-    <div class="ni" id="navBackup" onclick="go('backup')" style="display:none;"><span class="ni-ic"><i data-lucide="save"></i></span> Backup</div>
-    <div class="ni" id="navConfigGeral" onclick="go('configGeral')" style="display:none;"><span class="ni-ic"><i data-lucide="settings"></i></span> Configurações Gerais</div>
+    <div class="top-menu-group" id="topMenuGestao" style="display:none;">
+      <span id="navGestaoGrp" style="display:none;" aria-hidden="true"></span>
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">⑧ GESTÃO <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Gestão / Administração</div>
+        <div class="ni" id="navAjuste" onclick="go('ajusteEstoque')" style="display:none;"><span class="ni-ic"><i data-lucide="scale"></i></span> Ajuste de Estoque</div>
+        <div class="ni" id="navAceite" onclick="go('masterAceite')" style="display:none;"><span class="ni-ic"><i data-lucide="key"></i></span> Aceites Master <span class="ni-badge" id="bdAceite">0</span></div>
+        <div class="ni" id="navUsuarios" onclick="go('usuarios')" style="display:none;"><span class="ni-ic"><i data-lucide="user"></i></span> Usuários</div>
+        <div class="ni" id="navLimpar" onclick="go('limparEstoque')" style="display:none;"><span class="ni-ic"><i data-lucide="trash-2"></i></span> Limpar Estoque</div>
+        <div class="ni" id="navMapaEstoqueGestao" onclick="go('mapaEstoqueGestao')" style="display:none;"><span class="ni-ic"><i data-lucide="file-spreadsheet"></i></span> Mapa de Estoque</div>
+        <div class="ni" id="navBackup" onclick="go('backup')" style="display:none;"><span class="ni-ic"><i data-lucide="save"></i></span> Backup</div>
+        <div class="ni" id="navConfigGeral" onclick="go('configGeral')" style="display:none;"><span class="ni-ic"><i data-lucide="settings"></i></span> Configurações Gerais</div>
+      </div>
+    </div>
 
-    <div class="nav-grp">Dados</div>
-    <div class="ni" onclick="go('historico')"><span class="ni-ic"><i data-lucide="layout-grid"></i></span> Movimentações</div>
-    <div class="ni" onclick="exportAll()"><span class="ni-ic"><i data-lucide="download"></i></span> Exportar CSV</div>
+    <div class="top-menu-group">
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">⑨ DADOS <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Dados</div>
+        <div class="ni" onclick="go('historico')"><span class="ni-ic"><i data-lucide="layout-grid"></i></span> Movimentações</div>
+        <div class="ni" onclick="exportAll()"><span class="ni-ic"><i data-lucide="download"></i></span> Exportar CSV</div>
+      </div>
+    </div>
 
-    <div class="nav-grp">Conta</div>
-    <div class="ni" onclick="go('minhaConta')"><span class="ni-ic"><i data-lucide="user-cog"></i></span> Minha Conta</div>
+    <div class="top-menu-group">
+      <button class="top-menu-trigger" type="button" onclick="toggleTopMenu(this.parentElement)">⑩ CONTA <span class="top-chevron">⌄</span></button>
+      <div class="top-menu-dropdown">
+        <div class="top-menu-label">Conta</div>
+        <div class="ni" onclick="go('minhaConta')"><span class="ni-ic"><i data-lucide="user-cog"></i></span> Minha Conta</div>
+      </div>
+    </div>
   </nav>
-  <div class="sb-foot">WMS • <span data-wms-version>v2.1.2 Build 006</span><br>YALOG-WMS-001 • <span data-wms-version>v2.1.2 Build 006</span><br><span data-wms-update style="color:var(--orange2);">Atualização 006</span></div>
+  <div class="sb-foot">WMS • <span data-wms-version>v2.1.4 Build 024</span><br>YALOG-WMS-001 • <span data-wms-version>v2.1.4 Build 024</span><br><span data-wms-update style="color:var(--orange2);">Atualização 024</span></div>
 </aside>
 
 <!-- ══ MAIN ══ -->
@@ -673,11 +903,14 @@ a{color:inherit;text-decoration:none;}
 <div class="screen active" id="s-home">
   <div class="ph">
     <div><div class="ph-eye">Dashboard · WMS</div><div class="ph-title">Operação do <em>Armazém</em></div></div>
-    <div class="ph-acts" style="gap:8px;">
-      <select id="homeSiteFiltro" onchange="renderHome()" class="btn btn-o btn-sm" style="cursor:pointer;">
+    <div class="ph-acts yalog-home-filters" style="gap:8px;align-items:flex-end;flex-wrap:wrap;">
+      <div class="yalog-filter-field"><label>UNIDADE LOGÍSTICA</label><select id="homeSiteFiltro" onchange="renderHome()" class="btn btn-o btn-sm">
         <option value="">Todas as Unidades Logísticas</option>
-      </select>
-      <select id="homeFiltro" onchange="renderHome()" class="btn btn-o btn-sm" style="cursor:pointer;">
+      </select></div>
+      <div class="yalog-filter-field"><label>CLIENTE / OPERAÇÃO</label><select id="homeClienteFiltro" onchange="renderHome()" class="btn btn-o btn-sm">
+        <option value="">Todos os Clientes / Operações</option>
+      </select></div>
+      <div class="yalog-filter-field"><label>VISÃO</label><select id="homeFiltro" onchange="renderHome()" class="btn btn-o btn-sm">
         <option value="geral">Visão Geral</option>
         <option value="cliente">Por Cliente</option>
         <option value="site">Por Unidade Logística</option>
@@ -1010,18 +1243,22 @@ a{color:inherit;text-decoration:none;}
 <!-- ════ ESTOQUE ════ -->
 <div class="screen" id="s-estoqueList">
   <div class="ph"><div><div class="ph-eye">Estoque</div><div class="ph-title">Produtos em <em>Estoque</em></div></div>
-    <div class="ph-acts" style="flex-wrap:wrap;gap:8px;">
-      <div style="position:relative;display:flex;align-items:center;">
-        <span style="position:absolute;left:10px;color:var(--w40);font-size:13px;pointer-events:none;">🔍</span>
-        <input type="text" id="filtEstBusca" placeholder="Buscar por nome, Cód.WMS, SKU, lote..." oninput="renderEstoque()" style="padding:8px 12px 8px 32px;background:var(--bg3);border:1px solid var(--border2);color:var(--w);font-family:var(--sans);font-size:11px;width:280px;outline:none;" onfocus="this.style.borderColor='var(--orange)'" onblur="this.style.borderColor='var(--border2)'">
+    <div class="ph-acts yalog-stock-filters" style="flex-wrap:wrap;gap:8px;align-items:flex-end;">
+      <div class="yalog-filter-field yalog-filter-search">
+        <label>BUSCA</label>
+        <div style="position:relative;display:flex;align-items:center;">
+          <span style="position:absolute;left:10px;color:var(--w40);font-size:13px;pointer-events:none;">🔍</span>
+          <input type="text" id="filtEstBusca" placeholder="Nome, Cód. WMS, SKU, lote..." oninput="renderEstoque()" style="padding:9px 12px 9px 32px;background:var(--bg3);border:1px solid var(--border2);color:var(--w);font-family:var(--sans);font-size:11px;width:260px;outline:none;" onfocus="this.style.borderColor='var(--orange)'" onblur="this.style.borderColor='var(--border2)'"></div>
       </div>
-      <select id="filtEstSite" onchange="renderEstoque()" class="btn btn-o" style="font-size:10px;cursor:pointer;padding:9px 14px;color:var(--orange2);border-color:var(--orange2);"><option value="">🏭 Todas as Unidades</option></select>
-      <select id="filtEstCliente" onchange="renderEstoque()" class="btn btn-o" style="font-size:10px;cursor:pointer;padding:9px 14px;"><option value="">Todos os Clientes</option></select>
-      <select id="filtEstStatus" onchange="renderEstoque()" class="btn btn-o" style="font-size:10px;cursor:pointer;padding:9px 14px;"><option value="">Todos os Status</option><option value="LIBERADO">Liberado</option><option value="BLOQUEADO">Bloqueado</option></select>
+      <div class="yalog-filter-field"><label>UNIDADE LOGÍSTICA</label><select id="filtEstSite" onchange="renderEstoque()" class="btn btn-o"><option value="">🏭 Todas as Unidades</option></select></div>
+      <div class="yalog-filter-field"><label>CLIENTE / OPERAÇÃO</label><select id="filtEstCliente" onchange="renderEstoque()" class="btn btn-o"><option value="">Todos os Clientes / Operações</option></select></div>
+      <div class="yalog-filter-field"><label>STATUS</label><select id="filtEstStatus" onchange="renderEstoque()" class="btn btn-o"><option value="">Todos os Status</option><option value="LIBERADO">Liberado</option><option value="BLOQUEADO">Bloqueado</option></select></div>
+      <button class="btn btn-o btn-sm" onclick="limparFiltrosEstoque()">↺ Limpar</button>
       <button class="btn btn-b btn-sm" onclick="downloadEstoqueCSV()">↓ CSV</button>
       <button class="btn btn-b btn-sm" onclick="downloadEstoqueXLSX()">↓ Excel</button>
     </div>
   </div>
+  <div id="estoqueFiltroResumo" class="estoque-filter-summary" aria-live="polite"></div>
   <div class="tw"><table class="dt">
     <thead><tr>
       <th>Cód. WMS</th><th>Cód. Cliente</th><th>Descrição</th><th>Cliente</th><th>Unidade</th>
@@ -5016,6 +5253,51 @@ function _persistirDBCanonico(db){
   return _yalogPersistQueue;
 }
 
+// BUILD 019 — SESSÃO PERSISTENTE CANÔNICA
+// A sessão do WMS não pode depender exclusivamente de sessionStorage/localStorage.
+// Publicação/refresh não é logout. O IndexedDB guarda uma cópia independente
+// da sessão para permitir a restauração mesmo se o cache síncrono falhar.
+const WMS_IDB_SESSION_KEY='sessao-wms-canonica';
+async function _idbGravarSessaoWms(sessao){
+  if(!_idbDisponivel()||!sessao)return false;
+  const conn=await _idbAbrir(); if(!conn)return false;
+  return new Promise(resolve=>{
+    try{
+      const tx=conn.transaction(WMS_IDB_STORE,'readwrite');
+      tx.objectStore(WMS_IDB_STORE).put({sessao:_cloneSeguro(sessao),salvoEm:new Date().toISOString(),schema:'YALOG-WMS-SESSION-001'},WMS_IDB_SESSION_KEY);
+      tx.oncomplete=()=>{try{conn.close();}catch(e){}resolve(true);};
+      tx.onerror=()=>{try{conn.close();}catch(e){}resolve(false);};
+      tx.onabort=()=>{try{conn.close();}catch(e){}resolve(false);};
+    }catch(e){try{conn.close();}catch(_e){}resolve(false);}
+  });
+}
+async function _idbLerSessaoWms(){
+  if(!_idbDisponivel())return null;
+  const conn=await _idbAbrir(); if(!conn)return null;
+  return new Promise(resolve=>{
+    try{
+      const tx=conn.transaction(WMS_IDB_STORE,'readonly');
+      const req=tx.objectStore(WMS_IDB_STORE).get(WMS_IDB_SESSION_KEY);
+      req.onsuccess=()=>resolve(req.result?.sessao?_cloneSeguro(req.result.sessao):null);
+      req.onerror=()=>resolve(null);
+      tx.oncomplete=()=>{try{conn.close();}catch(e){}};
+    }catch(e){try{conn.close();}catch(_e){}resolve(null);}
+  });
+}
+async function _idbRemoverSessaoWms(){
+  if(!_idbDisponivel())return false;
+  const conn=await _idbAbrir(); if(!conn)return false;
+  return new Promise(resolve=>{
+    try{
+      const tx=conn.transaction(WMS_IDB_STORE,'readwrite');
+      tx.objectStore(WMS_IDB_STORE).delete(WMS_IDB_SESSION_KEY);
+      tx.oncomplete=()=>{try{conn.close();}catch(e){}resolve(true);};
+      tx.onerror=()=>{try{conn.close();}catch(e){}resolve(false);};
+      tx.onabort=()=>{try{conn.close();}catch(e){}resolve(false);};
+    }catch(e){try{conn.close();}catch(_e){}resolve(false);}
+  });
+}
+
 if(typeof window!=='undefined' && window.addEventListener){
   window.addEventListener('beforeunload',()=>{try{_persistirDBCanonico(DB);}catch(e){}});
 }
@@ -5972,14 +6254,20 @@ const Core = {
     try {
       const raw=JSON.stringify(value);
       sessionStorage.setItem(key, raw);
-      if(key===SESSAO_KEY) localStorage.setItem(SESSAO_PERSIST_KEY, raw);
+      if(key===SESSAO_KEY){
+        try{ localStorage.setItem(SESSAO_PERSIST_KEY, raw); }catch(e){ console.warn('[Core.sessionSet] localStorage indisponível; sessão canônica será usada.',e); }
+        if(typeof _idbGravarSessaoWms==='function') _idbGravarSessaoWms(value).catch(e=>console.warn('[WMS SESSION 019] falha ao persistir sessão canônica:',e));
+      }
       return true;
     } catch(e) { console.warn('[Core.sessionSet] falha ao gravar', key, e); return false; }
   },
   sessionRemove(key) {
     try {
       sessionStorage.removeItem(key);
-      if(key===SESSAO_KEY) localStorage.removeItem(SESSAO_PERSIST_KEY);
+      if(key===SESSAO_KEY){
+        try{ localStorage.removeItem(SESSAO_PERSIST_KEY); }catch(e){}
+        if(typeof _idbRemoverSessaoWms==='function') _idbRemoverSessaoWms().catch(e=>console.warn('[WMS SESSION 019] falha ao remover sessão canônica:',e));
+      }
       return true;
     } catch(e) { console.warn('[Core.sessionRemove] falha ao remover', key, e); return false; }
   },
@@ -6346,9 +6634,9 @@ function save(){
     // Após uma limpeza total, o marcador fica até o primeiro novo estoque.
     // Isso impede a recuperação automática do estoque antigo que o Master
     // mandou excluir.
-    return ok;
+    return true;
   }
-  return ok;
+  return !!(localOk || _idbDisponivel());
 }
 function _applyLoadedData(parsed){
   if(parsed && Object.keys(parsed).length > 0){
@@ -6638,14 +6926,102 @@ function genMovId(){return`MOV-${String(DB.seqMov++).padStart(4,'0')}`;}
 function maskCNPJ(el){let v=el.value.replace(/\D/g,'');v=v.replace(/^(\d{2})(\d)/,'$1.$2');v=v.replace(/^(\d{2})\.(\d{3})(\d)/,'$1.$2.$3');v=v.replace(/\.(\d{3})(\d)/,'.$1/$2');v=v.replace(/(\d{4})(\d)/,'$1-$2');el.value=v;}
 function palette(n){const c=['#fb923c','#fdba74','#fbbf24','#4ade80','#60a5fa','#a78bfa','#f472b6','#2dd4bf','#fb923c','#a3e635'];return Array.from({length:n},(_,i)=>c[i%c.length]);}
 const charts={};
+let _yalogChartLoadPromise=null;
+function _yalogEnsureChartJs(){
+  if(typeof Chart==='function')return Promise.resolve(true);
+  if(_yalogChartLoadPromise)return _yalogChartLoadPromise;
+  _yalogChartLoadPromise=new Promise(resolve=>{
+    const urls=[
+      'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js'
+    ];
+    let i=0;
+    const tentar=()=>{
+      if(typeof Chart==='function'){resolve(true);return;}
+      if(i>=urls.length){resolve(false);return;}
+      const sc=document.createElement('script');
+      sc.src=urls[i++];sc.async=true;
+      sc.onload=()=>resolve(typeof Chart==='function');
+      sc.onerror=tentar;
+      document.head.appendChild(sc);
+    };
+    tentar();
+  });
+  return _yalogChartLoadPromise;
+}
+function _yalogChartFallback(id,type,labels,datasets){
+  const cv=document.getElementById(id);if(!cv)return;
+  const host=cv.parentElement;if(!host)return;
+  let fb=host.querySelector('.yalog-chart-fallback');
+  if(!fb){fb=document.createElement('div');fb.className='yalog-chart-fallback';host.appendChild(fb);}
+  cv.style.display='none';
+  const vals=(datasets?.[0]?.data||[]).map(v=>Math.max(0,Number(v)||0));
+  const safeLabels=(labels||[]).map(x=>String(x??'—'));
+  if(!vals.length){fb.innerHTML='<div class="yalog-fallback-empty">Sem dados para os filtros selecionados</div>';return;}
+  const pal=['#fb923c','#fbbf24','#4ade80','#60a5fa','#a78bfa','#f472b6','#2dd4bf','#a3e635'];
+  if(type==='doughnut'||type==='pie'){
+    const total=vals.reduce((a,b)=>a+b,0);
+    if(!total){fb.innerHTML='<div class="yalog-fallback-empty">Sem movimentação para os filtros selecionados</div>';return;}
+    let acc=0;const parts=vals.map((v,i)=>{const a=acc;acc+=v/total*360;return `${pal[i%pal.length]} ${a}deg ${acc}deg`;}).join(',');
+    fb.innerHTML=`<div class="yalog-fallback-donut" style="background:conic-gradient(${parts});"><div></div></div><div class="yalog-fallback-legend">${safeLabels.map((l,i)=>`<span><i style="background:${pal[i%pal.length]}"></i>${l.slice(0,24)} · ${vals[i]??0}</span>`).join('')}</div>`;
+  }else{
+    const max=Math.max(1,...vals);
+    fb.innerHTML=`<div class="yalog-fallback-bars">${safeLabels.map((l,i)=>{const v=vals[i]||0;return `<div class="yalog-fallback-bar"><div class="yalog-fallback-fill" style="height:${v?Math.max(5,(v/max)*100):0}%"></div><b>${v}</b><span>${l.slice(0,12)}</span></div>`;}).join('')}</div>`;
+  }
+}
+
+function _yalogChartFallbackClear(id){
+  const cv=document.getElementById(id);if(!cv)return;
+  cv.style.display='block';
+  cv.parentElement?.querySelector('.yalog-chart-fallback')?.remove();
+}
+
 function bc(id,type,labels,datasets,opts={}){
   const cv=document.getElementById(id);if(!cv)return;
-  if(charts[id]){charts[id].destroy();delete charts[id];}
+  if(charts[id]){try{charts[id].destroy();}catch(e){}delete charts[id];}
+  if(typeof Chart!=='function'){
+    _yalogChartFallback(id,type,labels,datasets);
+    cv.setAttribute('data-chart-waiting','1');
+    _yalogEnsureChartJs().then(ok=>{
+      if(ok){
+        document.querySelectorAll('[data-chart-waiting]').forEach(el=>el.removeAttribute('data-chart-waiting'));
+        if(typeof renderHome==='function')renderHome();
+      }
+    });
+    return;
+  }
+  _yalogChartFallbackClear(id);
   const isDn=type==='doughnut'||type==='pie';
-  charts[id]=new Chart(cv,{type,data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:isDn||datasets.length>1,labels:{color:'rgba(250,248,244,.6)',font:{family:"'JetBrains Mono',monospace",size:10},padding:10}},tooltip:{backgroundColor:'#1a1712',borderColor:'rgba(255,255,255,.1)',borderWidth:1,titleColor:'rgba(250,248,244,.9)',bodyColor:'rgba(250,248,244,.6)',titleFont:{family:"'JetBrains Mono',monospace",size:10},bodyFont:{family:"'JetBrains Mono',monospace",size:10}}},scales:isDn?{}:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'rgba(250,248,244,.5)',font:{family:"'JetBrains Mono',monospace",size:9}},border:{color:'transparent'}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'rgba(250,248,244,.5)',font:{family:"'JetBrains Mono',monospace",size:9}},border:{color:'transparent'},min:opts.yMin||undefined}}}});
+  try{
+    charts[id]=new Chart(cv,{type,data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:isDn||datasets.length>1,labels:{color:'rgba(250,248,244,.6)',font:{family:"'JetBrains Mono',monospace",size:10},padding:10}},tooltip:{backgroundColor:'#1a1712',borderColor:'rgba(255,255,255,.1)',borderWidth:1,titleColor:'rgba(250,248,244,.9)',bodyColor:'rgba(250,248,244,.6)',titleFont:{family:"'JetBrains Mono',monospace",size:10},bodyFont:{family:"'JetBrains Mono',monospace",size:10}}},scales:isDn?{}:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'rgba(250,248,244,.5)',font:{family:"'JetBrains Mono',monospace",size:9}},border:{color:'transparent'}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'rgba(250,248,244,.5)',font:{family:"'JetBrains Mono',monospace",size:9}},border:{color:'transparent'},min:opts.yMin||undefined}}}});
+  }catch(err){
+    console.warn('[YALOG DASHBOARD] Falha ao renderizar gráfico',id,err);
+    _yalogChartFallback(id,type,labels,datasets);
+    cv.removeAttribute('data-chart-waiting');
+    _yalogChartFallback(id,type,labels,datasets);
+  }
 }
 function statusSp(s){return s==='LIBERADO'?'<span class="sp sp-lib">LIBERADO</span>':s==='BLOQUEADO'?'<span class="sp sp-blk">BLOQUEADO</span>':s==='PENDENTE'?'<span class="sp sp-pen">PENDENTE</span>':s==='EXPEDIDO'?'<span class="sp sp-exp">EXPEDIDO</span>':'<span class="sp sp-ok">'+s+'</span>';}
 function barcode(num){let h='<div class="barcode-wrap"><div class="barcode-bars">';const encoded=String(num).split('').map(c=>parseInt(c));for(let i=0;i<80;i++){const w=Math.random()>0.5?2:3;h+=`<div class="barcode-bar" style="width:${w}px;height:${30+Math.random()*20}px;"></div>`;}h+=`</div><div class="barcode-num">${num}</div></div>`;return h;}
+
+// ══════════════════════════════════════════════════════════════
+// TOP NAVIGATION · dropdowns sem alterar a navegação funcional
+// ══════════════════════════════════════════════════════════════
+function toggleTopMenu(group){
+  document.querySelectorAll('.top-menu-group.open').forEach(g=>{if(g!==group)g.classList.remove('open');});
+  if(group)group.classList.toggle('open');
+}
+function closeTopMenus(){document.querySelectorAll('.top-menu-group.open').forEach(g=>g.classList.remove('open'));}
+function syncTopNavActive(){
+  document.querySelectorAll('.top-menu-group').forEach(g=>{
+    const active=g.querySelector('.top-menu-dropdown .ni.active');
+    const trigger=g.querySelector('.top-menu-trigger');
+    if(trigger)trigger.classList.toggle('has-active',!!active);
+  });
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.top-menu-group'))closeTopMenus();
+});
 
 // ══════════════════════════════════════════════════════════════
 // NAVIGATION
@@ -6655,6 +7031,8 @@ function go(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById('s-'+id).classList.add('active');
   document.querySelectorAll('.ni').forEach(n=>{n.classList.remove('active');if(n.getAttribute('onclick')&&n.getAttribute('onclick').includes("'"+id+"'"))n.classList.add('active');});
+  syncTopNavActive();
+  closeTopMenus();
   document.getElementById('tbTitle').textContent=TITLES[id]||id;
   // módulos originais
   if(id==='home'){populateHomeSiteFiltro();renderHome();}
@@ -7527,8 +7905,11 @@ function verificarLimiteArea(enderecoAlvo){
 
 function renderHome(){
   populateHomeSiteFiltro();
+  populateHomeClienteFiltro();
   const siteFilter=document.getElementById('homeSiteFiltro')?.value||'';
-  let prods=siteFilter?DB.produtos.filter(p=>p.site===siteFilter):DB.produtos;
+  const clienteFilter=document.getElementById('homeClienteFiltro')?.value||'';
+  let prods=siteFilter?DB.produtos.filter(p=>_prodSiteMatch(p,siteFilter)):[...DB.produtos];
+  if(clienteFilter)prods=prods.filter(p=>p.clienteId===clienteFilter);
   const filtro=document.getElementById('homeFiltro')?.value||'geral';
   // Normaliza tipos (localStorage pode ter strings)
   prods.forEach(p=>{p.qtd=parseFloat(p.qtd)||0;p.valorUnit=parseFloat(p.valorUnit)||0;});
@@ -7690,7 +8071,7 @@ function renderHome(){
   const ftitle=document.getElementById('chHomeFiltroTitle');
   if(filtro==='geral'||filtro==='cliente'){
     const clis=[...new Set(prods.map(p=>p.clienteId))];
-    const cliNomes=clis.map(id=>{const c=DB.clientes.find(x=>x.id===id);return c?c.nome:id;});
+    const cliNomes=clis.map(id=>{const c=DB.clientes.find(x=>x.id===id);return c?_clienteLabel(c):id;});
     const cliVals=clis.map(id=>prods.filter(p=>p.clienteId===id).reduce((a,b)=>a+(parseFloat(b.qtd)||0)*(parseFloat(b.valorUnit)||0),0));
     const totalCheck=cliVals.reduce((a,b)=>a+b,0);
     if(totalCheck===0){
@@ -7704,7 +8085,7 @@ function renderHome(){
     }
   } else if(filtro==='site'){
     const sites=(DB.sites||[]);
-    const siteNomes=sites.length?sites.map(s=>s.nome):['Sem site'];
+    const siteNomes=sites.length?sites.map(s=>_siteLabel(s)):['Sem site'];
     const siteVals=sites.length
       ?sites.map(s=>prods.filter(p=>p.site===s.id).reduce((a,b)=>a+(b.qtd||0)*(b.valorUnit||0),0))
       :[totalVal];
@@ -7713,14 +8094,14 @@ function renderHome(){
   } else if(filtro==='bloqueado'){
     const blkProd=prods.filter(p=>p.status==='BLOQUEADO');
     const clis=[...new Set(blkProd.map(p=>p.clienteId))];
-    const cliNomes=clis.map(id=>{const c=DB.clientes.find(x=>x.id===id);return c?c.nome:id;});
+    const cliNomes=clis.map(id=>{const c=DB.clientes.find(x=>x.id===id);return c?_clienteLabel(c):id;});
     const cliQtds=clis.map(id=>blkProd.filter(p=>p.clienteId===id).reduce((a,b)=>a+(b.qtd||0),0));
     if(ftitle)ftitle.textContent='Produtos Bloqueados por Cliente';
     bc('chHomeFiltro','bar',cliNomes,[{label:'Qtd Bloqueada',data:cliQtds,backgroundColor:'rgba(248,113,113,.7)'}]);
   } else if(filtro==='disponivel'){
     const livProd=prods.filter(p=>p.status==='LIBERADO');
     const clis=[...new Set(livProd.map(p=>p.clienteId))];
-    const cliNomes=clis.map(id=>{const c=DB.clientes.find(x=>x.id===id);return c?c.nome:id;});
+    const cliNomes=clis.map(id=>{const c=DB.clientes.find(x=>x.id===id);return c?_clienteLabel(c):id;});
     const cliVals=clis.map(id=>livProd.filter(p=>p.clienteId===id).reduce((a,b)=>a+(b.qtd||0)*(b.valorUnit||0),0));
     if(ftitle)ftitle.textContent='Disponível por Cliente (R$)';
     bc('chHomeFiltro','doughnut',cliNomes,[{data:cliVals,backgroundColor:palette(clis.length),borderWidth:0}]);
@@ -7738,7 +8119,7 @@ function renderHome(){
   // Valor por cliente
   const cliAll=[...new Set(prods.map(p=>p.clienteId))];
   const cliVA=cliAll.map(id=>prods.filter(p=>p.clienteId===id).reduce((a,b)=>a+(b.qtd||0)*(b.valorUnit||0),0));
-  bc('chHomeValor','bar',cliAll.map(id=>{const c=DB.clientes.find(x=>x.id===id);return c?c.nome.substring(0,8):id;}),
+  bc('chHomeValor','bar',cliAll.map(id=>{const c=DB.clientes.find(x=>x.id===id);return c?_clienteLabelCurto(c):id;}),
     [{label:'R$',data:cliVA,backgroundColor:palette(cliAll.length)}]);
 
   // Alertas
@@ -8519,82 +8900,163 @@ function verRecebimento(id){
 }
 
 // ══════════════════════════════════════════════════════════════
-// ESTOQUE
+// BUILD 023 — VISÃO / FILTROS / IDENTIDADE OPERACIONAL
+// Helpers para nunca expor CNPJ como nome principal da operação.
 // ══════════════════════════════════════════════════════════════
+function _isCnpjLike(v){
+  const s=String(v||'').trim();
+  const n=s.replace(/\D/g,'');
+  return n.length>=11 && n.length<=14 && n===s.replace(/\D/g,'') && (s.includes('.')||s.includes('/')||s.includes('-')||/^\d+$/.test(s));
+}
+function _clienteNomeOperacao(c){
+  if(!c)return '';
+  const candidatos=[
+    c.nomeOperacao,c.nome_operacao,c.operacao,c.operacaoNome,c.operacao_nome,
+    c.nomeExibicao,c.nome_exibicao,c.fantasia,c.nomeFantasia,c.nome_fantasia,
+    c.razaoSocial,c.razao_social,c.nomeCliente,c.nome_cliente,c.clienteNome,c.cliente_nome,
+    c.descricao,c.cliente,c.nome
+  ];
+  for(const v of candidatos){
+    const x=String(v??'').trim();
+    if(!x)continue;
+    if(_isCnpjLike(x))continue;
+    return x;
+  }
+  return '';
+}
+function _clienteLabel(c, opts={}){
+  if(!c)return 'Cliente não identificado';
+  const principal=_clienteNomeOperacao(c);
+  const cnpj=String(c.cnpj||c.CNPJ||c.cnpjCliente||c.cnpj_cliente||'').trim();
+  if(opts.withCnpj && principal && cnpj && principal!==cnpj)return `${principal} · ${cnpj}`;
+  if(principal)return principal;
+  if(cnpj)return `Cliente · ${cnpj}`;
+  return 'Cliente não identificado';
+}
+function _clienteLabelCurto(c){
+  const s=_clienteLabel(c);
+  return s.length>34?s.slice(0,31)+'…':s;
+}
+function _produtoClienteLabel(p){
+  if(!p)return 'Cliente não identificado';
+  const c=(DB.clientes||[]).find(x=>x.id===p.clienteId);
+  if(c)return _clienteLabel(c);
+  for(const v of [p.nomeOperacao,p.nome_operacao,p.operacao,p.clienteNome,p.cliente_nome,p.razaoSocial,p.razao_social,p.fantasia,p.nomeCliente,p.nome_cliente,p.cliente]){
+    const x=String(v??'').trim();
+    if(x&&!_isCnpjLike(x))return x;
+  }
+  const cnpj=String(p.cnpjCliente||p.cnpj_cliente||p.cnpj||'').trim();
+  return cnpj?`Cliente · ${cnpj}`:'Cliente não identificado';
+}
+function _siteIdDoProduto(p){return p?.site||p?.siteId||p?.unidadeId||p?.unidade_id||null;}
+function _siteNomeDoProduto(p){
+  for(const v of [p?.siteNome,p?.site_nome,p?.nomeSite,p?.nome_site,p?.unidadeNome,p?.unidade_nome,p?.unidade,p?.site]){
+    const x=String(v??'').trim();
+    if(x && !_isCnpjLike(x))return x;
+  }
+  return '';
+}
+function _siteLabel(s){
+  if(!s)return 'Unidade não identificada';
+  return String(s.nome||s.descricao||s.cidade||s.nomeUnidade||s.nome_unidade||s.id||'Unidade').trim();
+}
+function _unidadesDisponiveis(){
+  const map=new Map();
+  (DB.sites||[]).forEach(s=>map.set(String(s.id),{id:s.id,nome:_siteLabel(s)}));
+  (DB.produtos||[]).forEach(p=>{
+    const id=_siteIdDoProduto(p);
+    if(!id)return;
+    const key=String(id);
+    if(!map.has(key))map.set(key,{id,nome:_siteNomeDoProduto(p)||`Unidade ${id}`});
+  });
+  return [...map.values()].sort((a,b)=>String(a.nome).localeCompare(String(b.nome),'pt-BR'));
+}
+function _prodSiteMatch(p,siteId){return String(_siteIdDoProduto(p)||'')===String(siteId||'');}
+function _getClientesComEstoque(prods){
+  const ids=new Set((prods||[]).map(p=>p.clienteId).filter(Boolean));
+  return (DB.clientes||[]).filter(c=>ids.has(c.id));
+}
+function _getSitesComEstoque(prods){
+  const ids=new Set((prods||[]).map(_siteIdDoProduto).filter(Boolean).map(String));
+  return _unidadesDisponiveis().filter(s=>ids.has(String(s.id)));
+}
+
 function renderEstoque(){
-  // Popula select Sites
-  // Lê valores ANTES de reescrever innerHTML (evita reset pelo browser)
   const filtSite=document.getElementById('filtEstSite')?.value||'';
   const filtCli=document.getElementById('filtEstCliente')?.value||'';
   const filtSt=document.getElementById('filtEstStatus')?.value||'';
-
-  // Popula sites (restaura valor após reescrita)
-  const siteEl=document.getElementById('filtEstSite');
-  if(siteEl){
-    siteEl.innerHTML='<option value="">🏭 Todas as Unidades</option>'+(DB.sites||[]).map(s=>`<option value="${s.id}">${s.nome}</option>`).join('');
-    if(filtSite)siteEl.value=filtSite;
-  }
-
-  // Filtra produtos
-  const prodsBase=filtSite ? DB.produtos.filter(p=>p.site===filtSite) : [...DB.produtos];
-
-  // Popula clientes (restaura valor após reescrita)
-  const cliEl=document.getElementById('filtEstCliente');
-  if(cliEl){
-    const clis=[...new Set(prodsBase.map(p=>p.clienteId))];
-    cliEl.innerHTML='<option value="">Todos os Clientes</option>'+clis.map(id=>{const cx=DB.clientes.find(x=>x.id===id);return`<option value="${id}">${cx?cx.nome:id}</option>`;}).join('');
-    if(filtCli)cliEl.value=filtCli;
-  }
-
   const filtBusca=(document.getElementById('filtEstBusca')?.value||'').toLowerCase().trim();
-  let prods=[...prodsBase];
+  const siteEl=document.getElementById('filtEstSite');
+  const cliEl=document.getElementById('filtEstCliente');
+
+  if(siteEl){
+    siteEl.innerHTML='<option value="">🏭 Todas as Unidades</option>'+_unidadesDisponiveis().map(s=>`<option value="${s.id}">${_siteLabel(s)}</option>`).join('');
+    siteEl.value=filtSite;
+  }
+
+  let base=[...(DB.produtos||[])];
+  if(filtSite)base=base.filter(p=>_prodSiteMatch(p,filtSite));
+
+  if(cliEl){
+    const clientes=[...(DB.clientes||[])].sort((a,b)=>_clienteLabel(a).localeCompare(_clienteLabel(b),'pt-BR'));
+    cliEl.innerHTML='<option value="">Todos os Clientes / Operações</option>'+clientes.map(c=>{
+      const qtd=base.filter(p=>p.clienteId===c.id).length;
+      return `<option value="${c.id}">${_clienteLabel(c)}${qtd?` · ${qtd} itens`:''}</option>`;
+    }).join('');
+    cliEl.value=filtCli;
+  }
+
+  let prods=base;
   if(filtCli)prods=prods.filter(p=>p.clienteId===filtCli);
   if(filtSt)prods=prods.filter(p=>p.status===filtSt);
-  if(filtBusca)prods=prods.filter(p=>
-    (p.descricao||'').toLowerCase().includes(filtBusca)||
-    (p.wmsId||'').toLowerCase().includes(filtBusca)||
-    (p.codCliente||'').toLowerCase().includes(filtBusca)||
-    (p.lote||'').toLowerCase().includes(filtBusca)||
-    (p.endereco||'').toLowerCase().includes(filtBusca)
-  );
+  if(filtBusca)prods=prods.filter(p=>{
+    const hay=[p.descricao,p.wmsId,p.codCliente,p.lote,p.endereco,_produtoClienteLabel(p),_siteNomeDoProduto(p)].map(v=>String(v||'').toLowerCase());
+    return hay.some(v=>v.includes(filtBusca));
+  });
+
+  const resumo=document.getElementById('estoqueFiltroResumo');
+  if(resumo){
+    const s=filtSite?_unidadesDisponiveis().find(x=>String(x.id)===String(filtSite)):null;
+    const c=filtCli?(DB.clientes||[]).find(x=>x.id===filtCli):null;
+    resumo.innerHTML=`<span class="estoque-filter-chip">${fN(prods.length)} item(ns)</span>${s?`<span class="estoque-filter-chip">🏭 ${_siteLabel(s)}</span>`:'<span class="estoque-filter-chip muted">🏭 Todas as unidades</span>'}${c?`<span class="estoque-filter-chip">👤 ${_clienteLabel(c)}</span>`:'<span class="estoque-filter-chip muted">👤 Todos os clientes / operações</span>'}${filtSt?`<span class="estoque-filter-chip">● ${filtSt}</span>`:''}`;
+  }
 
   const tb=document.getElementById('tbEstoque');
-  if(!tb)return; // guard: tela pode não estar ativa
+  if(!tb)return;
   if(!prods.length){
-    tb.innerHTML='<tr><td colspan="13" style="text-align:center;padding:32px;color:var(--w40);font-family:var(--mono);">Nenhum produto encontrado. Total no banco: '+DB.produtos.length+'</td></tr>';
+    tb.innerHTML='<tr><td colspan="15" style="text-align:center;padding:40px;color:var(--w40);font-family:var(--mono);">Nenhum produto encontrado com os filtros selecionados. Total no banco: '+(DB.produtos||[]).length+'</td></tr>';
     return;
   }
   tb.innerHTML=prods.map(p=>{
-    const cl=DB.clientes.find(c=>c.id===p.clienteId);
-    const st=(DB.sites||[]).find(s=>s.id===p.site);
+    const cl=(DB.clientes||[]).find(c=>c.id===p.clienteId);
+    const clienteLabel=_produtoClienteLabel(p);
+    const siteId=_siteIdDoProduto(p);
+    const st=_unidadesDisponiveis().find(s=>String(s.id)===String(siteId));
     const venc=p.validade&&p.validade<nowDate();
     return`<tr>
       <td class="mn" style="color:var(--orange2);font-weight:600;">${p.wmsId}<br><span style="font-size:7px;font-family:var(--mono);opacity:.6;">${p.tipoEntrada||'—'}</span></td>
       <td class="mn">${p.codCliente||'—'}</td>
-      <td class="bd">${p.descricao}</td>
-      <td>${cl?cl.nome:'—'}</td>
-      <td class="mn" style="color:var(--b2);font-size:9px;">${st?st.nome:'—'}</td>
+      <td class="bd">${p.descricao||'—'}</td>
+      <td title="${(cl?_clienteLabel(cl,{withCnpj:true}):clienteLabel).replace(/"/g,'&quot;')}">${clienteLabel}</td>
+      <td class="mn" style="color:var(--b2);font-size:9px;">${st?_siteLabel(st):_siteNomeDoProduto(p)||'—'}</td>
       <td class="mn">${p.endereco||'—'}</td>
       <td class="ct mn"><span style="font-size:9px;font-family:var(--mono);padding:1px 5px;border-radius:2px;background:${p.tipoPalete==='FECHADO'?'rgba(52,211,153,.15)':p.tipoPalete==='MISTO'?'rgba(96,165,250,.15)':'transparent'};color:${p.tipoPalete==='FECHADO'?'#34d399':p.tipoPalete==='MISTO'?'#60a5fa':'var(--w20)'};">${p.tipoPalete||'—'}</span></td>
       <td class="mn">${p.lote||'—'}</td>
-      <td class="mn" style="${venc?'color:#f87171;':''}">
-        ${fD(p.validade)}${venc?' ⚠️':''}
-      </td>
-      <td class="mn ct">${fN(p.qtd)}</td>
-      <td class="mn ct" style="color:var(--b2);">${p.um||'UN'}</td>
+      <td class="mn" style="${venc?'color:#f87171;':''}">${fD(p.validade)}${venc?' ⚠️':''}</td>
+      <td class="mn ct">${fN(p.qtd)}</td><td class="mn ct" style="color:var(--b2);">${p.um||'UN'}</td>
       <td class="mn ct" style="color:var(--orange2);font-weight:700;">${(()=>{const r=calcPPReal(p.clienteId,p.codCliente,p.qtd,p.um);return r.temMatriz?r.pp:'—';})()}</td>
-      <td class="mn ri">R$ ${fM(p.valorUnit)}</td>
-      <td class="ct">${statusSp(p.status)}</td>
-      <td>
-        <div style="display:flex;gap:4px;flex-wrap:wrap;">
-          ${p.status==='LIBERADO'?`<button class="btn btn-r btn-xs" onclick="openBloquear('${p.wmsId}')">🔒</button>`:`<button class="btn btn-g btn-xs" onclick="openLiberar('${p.wmsId}')">🔓</button>`}
-          <button class="btn btn-o btn-xs" onclick="editQtd('${p.wmsId}')">✏</button>
-        </div>
-      </td>
+      <td class="mn ri">R$ ${fM(p.valorUnit)}</td><td class="ct">${statusSp(p.status)}</td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap;">${p.status==='LIBERADO'?`<button class="btn btn-r btn-xs" onclick="openBloquear('${p.wmsId}')">🔒</button>`:`<button class="btn btn-g btn-xs" onclick="openLiberar('${p.wmsId}')">🔓</button>`}<button class="btn btn-o btn-xs" onclick="editQtd('${p.wmsId}')">✏</button></div></td>
     </tr>`;
   }).join('');
   setTimeout(()=>makeResizable(document.querySelector('#tbEstoque')?.closest('table')),80);
 }
+
+function limparFiltrosEstoque(){
+  ['filtEstBusca','filtEstSite','filtEstCliente','filtEstStatus'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  renderEstoque();
+}
+
 function openBloquear(wmsId){document.getElementById('blkWmsId').value=wmsId;openM('mBloquear');}
 function openLiberar(wmsId){document.getElementById('libWmsId').value=wmsId;openM('mLiberar');}
 function confirmarBloqueio(){
@@ -9905,14 +10367,14 @@ function injectDemo(){
 (function(){const ov=document.getElementById('loadingOverlay');if(ov)ov.style.display='flex';})();
 // ══════════════════════════════════════════════════════════════
 // YALOG WMS · VERSIONAMENTO CENTRALIZADO
-// Atualização 018 — Persistência canônica local, recuperação multi-fonte e proteção transacional contra perda de estoque/históricos; exclusão somente por ação autorizada do Master.
+// Atualização 021 — Dropdowns sobrepostos ao conteúdo; barra horizontal removida sem alterar navegação ou persistência.
 // Atualize SOMENTE estes valores a cada publicação. O refresh da
 // página preserva a sessão autenticada; a versão não é usada como
 // critério de logout.
 // ══════════════════════════════════════════════════════════════
 const YALOG_WMS_VERSION = '2.1.2';
-const YALOG_WMS_BUILD = '018';
-const YALOG_WMS_UPDATE = '018';
+const YALOG_WMS_BUILD = '022';
+const YALOG_WMS_UPDATE = '022';
 const YALOG_WMS_RELEASE = `v${YALOG_WMS_VERSION} Build ${YALOG_WMS_BUILD}`;
 
 function aplicarVersaoWMS(){
@@ -10278,7 +10740,20 @@ async function _tentarRestaurarSessaoWms(){
   // tentamos revalidá-lo primeiro; se não houver, o WMS restaura diretamente
   // a identidade local. Logout continua sendo o único caminho que remove
   // explicitamente as duas cópias da sessão.
-  const salva=Core.sessionGet(SESSAO_KEY);
+  let salva=Core.sessionGet(SESSAO_KEY);
+  // BUILD 019: publicação/refresh não é logout. Se sessionStorage/localStorage
+  // não trouxerem a sessão, tenta a cópia canônica no IndexedDB antes de pedir
+  // novo login. A sessão canônica só é removida por logout explícito/reset.
+  if(!salva && typeof _idbLerSessaoWms==='function'){
+    try{
+      const canonica=await _idbLerSessaoWms();
+      if(canonica){
+        salva=canonica;
+        Core.sessionSet(SESSAO_KEY,canonica);
+        console.log('[WMS SESSION 019] sessão restaurada pelo IndexedDB após publicação/refresh.');
+      }
+    }catch(e){ console.warn('[WMS SESSION 019] falha ao ler sessão canônica:',e); }
+  }
   if(!salva || !salva.company_id || !salva.login || !salva.role) return false;
 
   // 1) Sessão SSO: se houver token, tenta revalidar no backend.
@@ -10393,8 +10868,9 @@ async function initLogin(){
 
   // 3. Sessão ausente/expirada/revogada e sem handoff: mostrar login manual.
   if(overlay) overlay.style.display='none';
+  // BUILD 019: ausência temporária de sessão não autoriza exclusão da sessão
+  // persistente. Somente Logout explícito ou Reset Master remove a sessão.
   usuarioAtual=null;
-  Core.sessionRemove(SESSAO_KEY);
   document.getElementById('loginBoxFirstAccess').style.display='none';
   document.getElementById('loginBoxNormal').style.display='block';
   document.getElementById('loginOverlay').style.display='flex';
@@ -10647,8 +11123,10 @@ async function fazerLogin(){
       showT('Bem-vindo, '+usuario.nome+'!','ok');
     }
   }catch(e){
-    console.error('[WMS] Erro no login:',e);
-    errEl.textContent='Erro inesperado ao entrar. Tente novamente.';
+    console.error('[WMS LOGIN 019] Erro inesperado:',e);
+    const msg=String(e?.message||e||'Erro desconhecido');
+    errEl.textContent='Erro inesperado ao entrar. A sessão não foi encerrada. Tente novamente.';
+    errEl.title=msg;
     errEl.style.display='block';
   }finally{
     if(btn){ btn.disabled=false; btn.textContent='Entrar →'; }
@@ -13594,6 +14072,12 @@ function updateNavByPerfil(){
   if(navMapa)navMapa.style.display=(isLiderOuMaster||perfil==='analista')?'':'none';
   const navCfg=document.getElementById('navConfigGeral');
   if(navCfg)navCfg.style.display=isMasterPerfil?'':'none';
+  const topGestao=document.getElementById('topMenuGestao');
+  if(topGestao){
+    const hasVisible=[navAjuste,navAceite,navU,navL,navB,navMapa,navCfg].some(el=>el&&el.style.display!=='none');
+    topGestao.style.display=hasVisible?'':'none';
+  }
+  syncTopNavActive();
 }
 
 function previewLogo(input){
@@ -14033,7 +14517,17 @@ function populateHomeSiteFiltro(){
   if(!sel)return;
   const val=sel.value;
   sel.innerHTML='<option value="">Todas as Unidades Logísticas</option>'
-    +(DB.sites||[]).map(s=>`<option value="${s.id}">${s.nome}</option>`).join('');
+    +_unidadesDisponiveis().map(s=>`<option value="${s.id}">${_siteLabel(s)}</option>`).join('');
+  if(val)sel.value=val;
+}
+
+function populateHomeClienteFiltro(){
+  const sel=document.getElementById('homeClienteFiltro');
+  if(!sel)return;
+  const val=sel.value;
+  const clientes=[...(DB.clientes||[])].sort((a,b)=>_clienteLabel(a).localeCompare(_clienteLabel(b),'pt-BR'));
+  sel.innerHTML='<option value="">Todos os Clientes / Operações</option>'
+    +clientes.map(c=>`<option value="${c.id}">${_clienteLabel(c)}</option>`).join('');
   if(val)sel.value=val;
 }
 
@@ -14061,7 +14555,7 @@ function initMapaEstoqueGestao(){
   const cliAtual=cliEl.value||'';
   siteEl.innerHTML='<option value="">Todas as Unidades</option>'+(DB.sites||[]).map(s=>`<option value="${s.id}">${s.nome}</option>`).join('');
   if(siteAtual)siteEl.value=siteAtual;
-  const base=siteAtual?(DB.produtos||[]).filter(p=>p.site===siteAtual):(DB.produtos||[]);
+  const base=siteAtual?(DB.produtos||[]).filter(p=>_prodSiteMatch(p,siteAtual)):(DB.produtos||[]);
   const ids=[...new Set(base.map(p=>p.clienteId).filter(Boolean))];
   cliEl.innerHTML='<option value="">Todos os Clientes</option>'+ids.map(id=>{const c=(DB.clientes||[]).find(x=>x.id===id);return `<option value="${id}">${c?c.nome:id}</option>`;}).join('');
   if(cliAtual && ids.includes(cliAtual))cliEl.value=cliAtual;
@@ -14083,7 +14577,7 @@ function renderMapaEstoqueGestao(){
   if(!siteEl||!cliEl)return;
   const siteAtual=siteEl.value||'';
   const cliAtual=cliEl.value||'';
-  const base=siteAtual?(DB.produtos||[]).filter(p=>p.site===siteAtual):(DB.produtos||[]);
+  const base=siteAtual?(DB.produtos||[]).filter(p=>_prodSiteMatch(p,siteAtual)):(DB.produtos||[]);
   const ids=[...new Set(base.map(p=>p.clienteId).filter(Boolean))];
   cliEl.innerHTML='<option value="">Todos os Clientes</option>'+ids.map(id=>{const c=(DB.clientes||[]).find(x=>x.id===id);return `<option value="${id}">${c?c.nome:id}</option>`;}).join('');
   if(cliAtual && ids.includes(cliAtual))cliEl.value=cliAtual; else if(cliAtual)cliEl.value='';
@@ -21505,7 +21999,290 @@ function baixarTemplateEnderecos(fmt='xlsx'){
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws1,'CARGA_ENDERECOS');XLSX.utils.book_append_sheet(wb,ws2,'INSTRUCOES');
   XLSX.writeFile(wb,'YALog_Template_Carga_Enderecos.xlsx');
   showT('Template de endereços baixado com UNIDADE + SITE','ok');
-}</script>
+}
+
+// ══════════════════════════════════════════════════════════════
+// BUILD 025 — VISÃO / FILTROS / GRÁFICOS — CORREÇÃO CIRÚRGICA
+// Objetivo: não alterar persistência, autenticação, estrutura operacional
+// ou regras de estoque. Apenas normaliza a camada de leitura/visualização.
+// ══════════════════════════════════════════════════════════════
+(function(){
+  const _baseClienteNomeOperacao = typeof _clienteNomeOperacao==='function' ? _clienteNomeOperacao : null;
+
+  function _yalogSafeText(v){return String(v??'').trim();}
+  function _yalogIsCnpj(v){return typeof _isCnpjLike==='function' ? _isCnpjLike(v) : (/^\d{11,14}$/.test(_yalogSafeText(v).replace(/\D/g,'')));}
+
+  // Resolve uma unidade independentemente de o estoque legado guardar
+  // site como ID, siteId, nome da unidade ou nome legado.
+  function _yalogFindSite(raw){
+    const token=_yalogSafeText(raw);
+    if(!token)return null;
+    const sites=DB.sites||[];
+    return sites.find(s=>String(s.id)===token)
+      ||sites.find(s=>_yalogSafeText(s.nome).toLowerCase()===token.toLowerCase())
+      ||sites.find(s=>_yalogSafeText(s.descricao).toLowerCase()===token.toLowerCase())
+      ||null;
+  }
+
+  function _siteIdDoProdutoV25(p){
+    if(!p)return null;
+    const raw=p.siteId??p.site??p.unidadeId??p.unidade_id??null;
+    if(raw==null||raw==='')return null;
+    const site=_yalogFindSite(raw);
+    return site?site.id:raw;
+  }
+  function _siteNomeDoProdutoV25(p){
+    const site=_yalogFindSite(p?.siteId??p?.site??p?.unidadeId??p?.unidade_id);
+    if(site)return _siteLabel(site);
+    for(const v of [p?.siteNome,p?.site_nome,p?.nomeSite,p?.nome_site,p?.unidadeNome,p?.unidade_nome,p?.unidade,p?.site]){
+      const x=_yalogSafeText(v); if(x&&!_yalogIsCnpj(x))return x;
+    }
+    return '';
+  }
+
+  // Exponha sempre o cadastro de unidades; se o legado só tiver o nome
+  // gravado no estoque/endereços/paletes, cria uma opção de leitura sem
+  // alterar o banco.
+  function _unidadesDisponiveisV25(){
+    const map=new Map();
+    const add=(id,nome,meta={})=>{
+      const k=_yalogSafeText(id||nome); if(!k)return;
+      const site=_yalogFindSite(k);
+      const sid=site?.id||id||nome;
+      const label=site?_siteLabel(site):(_yalogSafeText(nome)||`Unidade ${sid}`);
+      if(!map.has(String(sid)))map.set(String(sid),{id:sid,nome:label,...meta});
+    };
+    (DB.sites||[]).forEach(s=>add(s.id,s.nome,s));
+    (DB.produtos||[]).forEach(p=>{const raw=p?.siteId??p?.site??p?.unidadeId??p?.unidade_id;if(raw) add(_siteIdDoProdutoV25(p),_siteNomeDoProdutoV25(p));});
+    (DB.enderecos||[]).forEach(e=>{const raw=e?.siteId??e?.site??e?.unidadeId??e?.unidade_id;if(raw) add(raw,_yalogFindSite(raw)?.nome||raw);});
+    (DB.paletes||[]).forEach(p=>{const raw=p?.siteId??p?.site??p?.unidadeId??p?.unidade_id;if(raw) add(raw,_yalogFindSite(raw)?.nome||raw);});
+    return [...map.values()].sort((a,b)=>String(a.nome).localeCompare(String(b.nome),'pt-BR'));
+  }
+
+  function _prodSiteMatchV25(p,siteId){return String(_siteIdDoProdutoV25(p)||'')===String(siteId||'');}
+
+  // Nome operacional: usa campos explícitos do cadastro; se o cadastro
+  // legado tiver apenas CNPJ, procura um nome operacional gravado no próprio
+  // estoque. Nunca inventa um nome e nunca apresenta CNPJ como nome principal.
+  function _clienteNomeOperacaoV25(c){
+    if(!c)return '';
+    const candidatos=[
+      c.nomeOperacao,c.nome_operacao,c.operacao,c.operacaoNome,c.operacao_nome,
+      c.nomeExibicao,c.nome_exibicao,c.fantasia,c.nomeFantasia,c.nome_fantasia,
+      c.razaoSocial,c.razao_social,c.nomeCliente,c.nome_cliente,c.clienteNome,c.cliente_nome,
+      c.descricao,c.cliente,c.nome
+    ];
+    for(const v of candidatos){const x=_yalogSafeText(v);if(x&&!_yalogIsCnpj(x))return x;}
+    const prods=(DB.produtos||[]).filter(p=>p.clienteId===c.id);
+    for(const p of prods){
+      for(const v of [p.nomeOperacao,p.nome_operacao,p.operacao,p.clienteNome,p.cliente_nome,p.razaoSocial,p.razao_social,p.fantasia,p.nomeCliente,p.nome_cliente,p.cliente]){
+        const x=_yalogSafeText(v);if(x&&!_yalogIsCnpj(x))return x;
+      }
+    }
+    return '';
+  }
+  function _clienteLabelV25(c,opts={}){
+    if(!c)return 'Cliente não identificado';
+    const principal=_clienteNomeOperacaoV25(c);
+    const cnpj=_yalogSafeText(c.cnpj||c.CNPJ||c.cnpjCliente||c.cnpj_cliente||'');
+    if(principal && opts.withCnpj && cnpj)return `${principal} · ${cnpj}`;
+    if(principal)return principal;
+    // Evita o comportamento anterior de transformar CNPJ em nome da operação.
+    return cnpj ? 'Nome operacional não cadastrado' : 'Cliente não identificado';
+  }
+  function _produtoClienteLabelV25(p){
+    if(!p)return 'Cliente não identificado';
+    const c=(DB.clientes||[]).find(x=>x.id===p.clienteId);
+    if(c){const n=_clienteNomeOperacaoV25(c);if(n)return n;}
+    for(const v of [p.nomeOperacao,p.nome_operacao,p.operacao,p.clienteNome,p.cliente_nome,p.razaoSocial,p.razao_social,p.fantasia,p.nomeCliente,p.nome_cliente,p.cliente]){
+      const x=_yalogSafeText(v);if(x&&!_yalogIsCnpj(x))return x;
+    }
+    return 'Nome operacional não cadastrado';
+  }
+
+  // Substitui somente os helpers de visualização. O restante do WMS continua
+  // usando suas estruturas originais.
+  window._yalogVision={siteId:_siteIdDoProdutoV25,siteName:_siteNomeDoProdutoV25,units:_unidadesDisponiveisV25,siteMatch:_prodSiteMatchV25,clientName:_clienteNomeOperacaoV25,clientLabel:_clienteLabelV25};
+
+  function populateHomeSiteFiltroV25(){
+    const sel=document.getElementById('homeSiteFiltro');if(!sel)return;
+    const val=sel.value||'';
+    sel.innerHTML='<option value="">Todas as Unidades Logísticas</option>'+_unidadesDisponiveisV25().map(s=>`<option value="${String(s.id).replace(/"/g,'&quot;')}">${_siteLabel(s)}</option>`).join('');
+    if(val && [...sel.options].some(o=>o.value===val))sel.value=val;else sel.value='';
+  }
+  function populateHomeClienteFiltroV25(){
+    const sel=document.getElementById('homeClienteFiltro');if(!sel)return;
+    const val=sel.value||'';
+    const clientes=[...(DB.clientes||[])].sort((a,b)=>_clienteLabelV25(a).localeCompare(_clienteLabelV25(b),'pt-BR'));
+    sel.innerHTML='<option value="">Todos os Clientes / Operações</option>'+clientes.map(c=>`<option value="${String(c.id).replace(/"/g,'&quot;')}">${_clienteLabelV25(c)}</option>`).join('');
+    if(val && [...sel.options].some(o=>o.value===val))sel.value=val;else sel.value='';
+  }
+
+  function renderEstoqueV25(){
+    const siteSel=document.getElementById('filtEstSite'), cliSel=document.getElementById('filtEstCliente');
+    const selectedSite=siteSel?.value||'', selectedCli=cliSel?.value||'';
+    const status=document.getElementById('filtEstStatus')?.value||'';
+    const busca=_yalogSafeText(document.getElementById('filtEstBusca')?.value).toLowerCase();
+    const unidades=_unidadesDisponiveisV25();
+    if(siteSel){
+      siteSel.innerHTML='<option value="">🏭 Todas as Unidades</option>'+unidades.map(s=>`<option value="${String(s.id).replace(/"/g,'&quot;')}">${_siteLabel(s)}</option>`).join('');
+      if(selectedSite && [...siteSel.options].some(o=>o.value===selectedSite))siteSel.value=selectedSite;else siteSel.value='';
+    }
+    const siteValue=siteSel?.value||'';
+    let base=[...(DB.produtos||[])];
+    if(siteValue)base=base.filter(p=>_prodSiteMatchV25(p,siteValue));
+    const clientes=[...(DB.clientes||[])].sort((a,b)=>_clienteLabelV25(a).localeCompare(_clienteLabelV25(b),'pt-BR'));
+    if(cliSel){
+      cliSel.innerHTML='<option value="">Todos os Clientes / Operações</option>'+clientes.map(c=>{
+        const qtd=base.filter(p=>p.clienteId===c.id).length;
+        return `<option value="${String(c.id).replace(/"/g,'&quot;')}">${_clienteLabelV25(c)}${qtd?` · ${qtd}`:''}</option>`;
+      }).join('');
+      if(selectedCli && [...cliSel.options].some(o=>o.value===selectedCli))cliSel.value=selectedCli;else cliSel.value='';
+    }
+    const cliValue=cliSel?.value||'';
+    let prods=base;
+    if(cliValue)prods=prods.filter(p=>p.clienteId===cliValue);
+    if(status)prods=prods.filter(p=>String(p.status||'')===status);
+    if(busca)prods=prods.filter(p=>[p.descricao,p.wmsId,p.codCliente,p.lote,p.endereco,_produtoClienteLabelV25(p),_siteNomeDoProdutoV25(p)].some(v=>_yalogSafeText(v).toLowerCase().includes(busca)));
+    const resumo=document.getElementById('estoqueFiltroResumo');
+    if(resumo){
+      const s=siteValue?unidades.find(x=>String(x.id)===String(siteValue)):null;
+      const c=cliValue?(DB.clientes||[]).find(x=>x.id===cliValue):null;
+      resumo.innerHTML=`<span class="estoque-filter-chip">${fN(prods.length)} item(ns) exibido(s)</span><span class="estoque-filter-chip ${s?'':'muted'}">🏭 ${s?_siteLabel(s):'Todas as unidades'}</span><span class="estoque-filter-chip ${c?'':'muted'}">👤 ${c?_clienteLabelV25(c):'Todos os clientes / operações'}</span>${status?`<span class="estoque-filter-chip">● ${status}</span>`:''}`;
+    }
+    const tb=document.getElementById('tbEstoque');if(!tb)return;
+    if(!prods.length){tb.innerHTML=`<tr><td colspan="15" style="text-align:center;padding:40px;color:var(--w40);font-family:var(--mono);">Nenhum produto encontrado com os filtros selecionados.<br><span style="font-size:9px;opacity:.7;">Base operacional: ${(DB.produtos||[]).length} item(ns).</span></td></tr>`;return;}
+    tb.innerHTML=prods.map(p=>{
+      const cl=(DB.clientes||[]).find(c=>c.id===p.clienteId);
+      const clienteLabel=_produtoClienteLabelV25(p);
+      const siteId=_siteIdDoProdutoV25(p);const st=unidades.find(s=>String(s.id)===String(siteId));
+      const venc=p.validade&&p.validade<nowDate();
+      const title=cl&&cl.cnpj?`${clienteLabel} · ${cl.cnpj}`:clienteLabel;
+      return `<tr><td class="mn" style="color:var(--orange2);font-weight:600;">${p.wmsId||'—'}<br><span style="font-size:7px;font-family:var(--mono);opacity:.6;">${p.tipoEntrada||'—'}</span></td><td class="mn">${p.codCliente||'—'}</td><td class="bd">${p.descricao||'—'}</td><td title="${String(title).replace(/"/g,'&quot;')}">${clienteLabel}</td><td class="mn" style="color:var(--b2);font-size:9px;">${st?_siteLabel(st):_siteNomeDoProdutoV25(p)||'—'}</td><td class="mn">${p.endereco||'—'}</td><td class="ct mn">${p.tipoPalete||'—'}</td><td class="mn">${p.lote||'—'}</td><td class="mn" style="${venc?'color:#f87171;':''}">${fD(p.validade)}${venc?' ⚠️':''}</td><td class="mn ct">${fN(p.qtd)}</td><td class="mn ct" style="color:var(--b2);">${p.um||'UN'}</td><td class="mn ct" style="color:var(--orange2);font-weight:700;">${(()=>{const r=calcPPReal(p.clienteId,p.codCliente,p.qtd,p.um);return r.temMatriz?r.pp:'—';})()}</td><td class="mn ri">R$ ${fM(p.valorUnit)}</td><td class="ct">${statusSp(p.status)}</td><td><div style="display:flex;gap:4px;flex-wrap:wrap;">${p.status==='LIBERADO'?`<button class="btn btn-r btn-xs" onclick="openBloquear('${p.wmsId}')">🔒</button>`:`<button class="btn btn-g btn-xs" onclick="openLiberar('${p.wmsId}')">🔓</button>`}<button class="btn btn-o btn-xs" onclick="editQtd('${p.wmsId}')">✏</button></div></td></tr>`;
+    }).join('');
+    setTimeout(()=>makeResizable(document.querySelector('#tbEstoque')?.closest('table')),80);
+  }
+
+  function _getEstoqueFiltradoV25(){
+    const site=document.getElementById('filtEstSite')?.value||'',cli=document.getElementById('filtEstCliente')?.value||'',st=document.getElementById('filtEstStatus')?.value||'',q=_yalogSafeText(document.getElementById('filtEstBusca')?.value).toLowerCase();
+    let prods=site?(DB.produtos||[]).filter(p=>_prodSiteMatchV25(p,site)):[...(DB.produtos||[])];
+    if(cli)prods=prods.filter(p=>p.clienteId===cli);if(st)prods=prods.filter(p=>p.status===st);
+    if(q)prods=prods.filter(p=>[p.descricao,p.wmsId,p.codCliente,p.lote,p.endereco,_produtoClienteLabelV25(p),_siteNomeDoProdutoV25(p)].some(v=>_yalogSafeText(v).toLowerCase().includes(q)));
+    return prods;
+  }
+
+  // Mapa de Estoque: mesmo resolver do módulo Produtos; não volta a usar p.site===id.
+  function _getMapaEstoqueGestaoFiltradoV25(){
+    const site=document.getElementById('mapaEstoqueSite')?.value||'',cli=document.getElementById('mapaEstoqueCliente')?.value||'';
+    let prods=[...(DB.produtos||[])];if(site)prods=prods.filter(p=>_prodSiteMatchV25(p,site));if(cli)prods=prods.filter(p=>p.clienteId===cli);
+    return prods.sort((a,b)=>String(a.endereco||'').localeCompare(String(b.endereco||''),undefined,{numeric:true})||String(a.codCliente||'').localeCompare(String(b.codCliente||''))||String(a.lote||'').localeCompare(String(b.lote||'')));
+  }
+  function initMapaEstoqueGestaoV25(){
+    const siteEl=document.getElementById('mapaEstoqueSite'),cliEl=document.getElementById('mapaEstoqueCliente');if(!siteEl||!cliEl)return;
+    const siteAtual=siteEl.value||'',cliAtual=cliEl.value||'',units=_unidadesDisponiveisV25();
+    siteEl.innerHTML='<option value="">Todas as Unidades</option>'+units.map(s=>`<option value="${String(s.id).replace(/"/g,'&quot;')}">${_siteLabel(s)}</option>`).join('');
+    if(siteAtual && [...siteEl.options].some(o=>o.value===siteAtual))siteEl.value=siteAtual;else siteEl.value='';
+    const base=siteEl.value?(DB.produtos||[]).filter(p=>_prodSiteMatchV25(p,siteEl.value)):(DB.produtos||[]);
+    const ids=[...new Set(base.map(p=>p.clienteId).filter(Boolean))];
+    cliEl.innerHTML='<option value="">Todos os Clientes / Operações</option>'+ids.map(id=>{const c=(DB.clientes||[]).find(x=>x.id===id);return `<option value="${id}">${c?_clienteLabelV25(c):'Cliente não identificado'}</option>`;}).join('');
+    if(cliAtual&&[...cliEl.options].some(o=>o.value===cliAtual))cliEl.value=cliAtual;else cliEl.value='';
+    renderMapaEstoqueGestaoV25();
+  }
+  function renderMapaEstoqueGestaoV25(){
+    const siteEl=document.getElementById('mapaEstoqueSite'),cliEl=document.getElementById('mapaEstoqueCliente');if(!siteEl||!cliEl)return;
+    const siteAtual=siteEl.value||'',cliAtual=cliEl.value||'';
+    const base=siteAtual?(DB.produtos||[]).filter(p=>_prodSiteMatchV25(p,siteAtual)):(DB.produtos||[]);
+    const ids=[...new Set(base.map(p=>p.clienteId).filter(Boolean))];
+    cliEl.innerHTML='<option value="">Todos os Clientes / Operações</option>'+ids.map(id=>{const c=(DB.clientes||[]).find(x=>x.id===id);return `<option value="${id}">${c?_clienteLabelV25(c):'Cliente não identificado'}</option>`;}).join('');
+    if(cliAtual&&ids.includes(cliAtual))cliEl.value=cliAtual;else if(cliAtual)cliEl.value='';
+    const prods=_getMapaEstoqueGestaoFiltradoV25(),body=document.getElementById('tbMapaEstoqueGestaoBody'),resumo=document.getElementById('mapaEstoqueResumo');if(!body||!resumo)return;
+    const totalQtd=prods.reduce((s,p)=>s+(parseFloat(p.qtd)||0),0),totalValor=prods.reduce((s,p)=>s+(parseFloat(p.qtd)||0)*(parseFloat(p.valorUnit)||0),0),ends=new Set(prods.map(p=>p.endereco).filter(Boolean)).size;
+    resumo.innerHTML=`<div class="end-import-stat" style="margin:0;"><div><div class="v">${fN(prods.length)}</div><div class="l">Linhas</div></div><div><div class="v">${fN(ends)}</div><div class="l">Endereços</div></div><div><div class="v">${fN(totalQtd)}</div><div class="l">Quantidade</div></div><div><div class="v">R$ ${fM(totalValor)}</div><div class="l">Valor do Estoque</div></div></div>`;
+    if(!prods.length){body.innerHTML='<tr><td colspan="12" style="text-align:center;padding:32px;color:var(--w40);font-family:var(--mono);">Nenhum estoque encontrado para os filtros selecionados.</td></tr>';return;}
+    const units=_unidadesDisponiveisV25();
+    body.innerHTML=prods.map(p=>{const cl=(DB.clientes||[]).find(c=>c.id===p.clienteId),st=units.find(s=>String(s.id)===String(_siteIdDoProdutoV25(p))),valor=(parseFloat(p.qtd)||0)*(parseFloat(p.valorUnit)||0),obs=p.obsGeral||p.bloqueioObs||'';return `<tr><td class="mn bd">${p.endereco||'—'}</td><td class="mn">${p.codCliente||p.wmsId||'—'}</td><td class="bd">${p.descricao||'—'}</td><td>${_produtoClienteLabelV25(p)}</td><td>${st?_siteLabel(st):_siteNomeDoProdutoV25(p)||'—'}</td><td class="mn">${p.lote||'—'}</td><td class="mn">${fD(p.validade)}</td><td class="mn ct">${fN(p.qtd)}</td><td class="mn ct">${p.um||'UN'}</td><td class="mn ri" style="color:var(--orange2);font-weight:700;">R$ ${fM(valor)}</td><td>${statusSp(p.status)}</td><td style="max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${String(obs).replace(/"/g,'&quot;')}">${obs||'—'}</td></tr>`;}).join('');
+    setTimeout(()=>makeResizable(document.getElementById('tbMapaEstoqueGestao')),80);
+  }
+
+  // Corrige a fonte do gráfico por unidade: ID/nome são resolvidos pelo mesmo helper.
+  const _baseRenderHome=renderHome;
+  function renderHomeV25(){
+    _baseRenderHome();
+    const filtro=document.getElementById('homeFiltro')?.value||'geral';
+    if(filtro!=='site')return;
+    const siteFilter=document.getElementById('homeSiteFiltro')?.value||'';
+    const cliFilter=document.getElementById('homeClienteFiltro')?.value||'';
+    let prods=siteFilter?(DB.produtos||[]).filter(p=>_prodSiteMatchV25(p,siteFilter)):[...(DB.produtos||[])];
+    if(cliFilter)prods=prods.filter(p=>p.clienteId===cliFilter);
+    const units=_unidadesDisponiveisV25().filter(s=>!siteFilter||String(s.id)===String(siteFilter));
+    const vals=units.map(s=>prods.filter(p=>_prodSiteMatchV25(p,s.id)).reduce((a,b)=>a+(parseFloat(b.qtd)||0)*(parseFloat(b.valorUnit)||0),0));
+    const labels=units.map(_siteLabel);
+    const title=document.getElementById('chHomeFiltroTitle');if(title)title.textContent='Valor de Estoque por Unidade Logística';
+    bc('chHomeFiltro','doughnut',labels,[{data:vals,backgroundColor:palette(Math.max(labels.length,1)),borderWidth:0}]);
+  }
+
+  // Reforça a renderização de gráficos: se Chart.js não estiver disponível,
+  // o fallback visual é obrigatório; se todos os valores forem zero, mostra
+  // estado explícito em vez de deixar um quadro vazio.
+  const _baseBc=bc;
+  function bcV25(id,type,labels,datasets,opts={}){
+    const vals=(datasets?.[0]?.data||[]).map(v=>Number(v)||0);
+    const total=vals.reduce((a,b)=>a+b,0);
+    if(!labels.length || total===0){
+      const cv=document.getElementById(id);if(!cv)return;
+      if(charts[id]){try{charts[id].destroy();}catch(e){}delete charts[id];}
+      cv.style.display='none';
+      const host=cv.parentElement;let fb=host?.querySelector('.yalog-chart-fallback');
+      if(!fb&&host){fb=document.createElement('div');fb.className='yalog-chart-fallback';host.appendChild(fb);}
+      if(fb)fb.innerHTML='<div class="yalog-fallback-empty">Sem dados para os filtros selecionados.</div>';
+      return;
+    }
+    _baseBc(id,type,labels,datasets,opts);
+  }
+
+  // Override globals usados por onclicks e pelos módulos de visualização.
+  _siteIdDoProduto=_siteIdDoProdutoV25;
+  _siteNomeDoProduto=_siteNomeDoProdutoV25;
+  _unidadesDisponiveis=_unidadesDisponiveisV25;
+  _prodSiteMatch=_prodSiteMatchV25;
+  _clienteNomeOperacao=_clienteNomeOperacaoV25;
+  _clienteLabel=_clienteLabelV25;
+  _clienteLabelCurto=function(c){const s=_clienteLabelV25(c);return s.length>34?s.slice(0,31)+'…':s;};
+  _produtoClienteLabel=_produtoClienteLabelV25;
+  populateHomeSiteFiltro=populateHomeSiteFiltroV25;
+  populateHomeClienteFiltro=populateHomeClienteFiltroV25;
+  renderEstoque=renderEstoqueV25;
+  _getEstoqueFiltrado=_getEstoqueFiltradoV25;
+  initMapaEstoqueGestao=initMapaEstoqueGestaoV25;
+  renderMapaEstoqueGestao=renderMapaEstoqueGestaoV25;
+  bc=bcV25;
+  renderHome=renderHomeV25;
+
+  // Exportação do mapa passa a usar o mesmo filtro robusto.
+  _getMapaEstoqueGestaoFiltrado=_getMapaEstoqueGestaoFiltradoV25;
+
+  // Quando a tela é aberta, force uma reconstrução dos filtros depois do DOM
+  // estar pronto. Não altera dados; só garante que as opções sejam visíveis.
+  const _baseGo=go;
+  go=function(id){
+    _baseGo(id);
+    if(id==='home'){populateHomeSiteFiltroV25();populateHomeClienteFiltroV25();renderHomeV25();}
+    if(id==='estoqueList'){requestAnimationFrame(()=>renderEstoqueV25());}
+    if(id==='mapaEstoqueGestao'){requestAnimationFrame(()=>initMapaEstoqueGestaoV25());}
+  };
+
+  // API de diagnóstico para homologação. Não altera DB.
+  window.YALOG_VISION_DIAGNOSTICO=function(){
+    return {
+      unidades:_unidadesDisponiveisV25().map(x=>({id:x.id,nome:x.nome})),
+      clientes:(DB.clientes||[]).map(c=>({id:c.id,nome:_clienteLabelV25(c),nomeOriginal:c.nome,cnpj:c.cnpj||''})),
+      produtos:(DB.produtos||[]).length,
+      produtosComUnidade:(DB.produtos||[]).filter(p=>!!_siteIdDoProdutoV25(p)).length,
+      produtosComCliente:(DB.produtos||[]).filter(p=>!!p.clienteId).length
+    };
+  };
+})();
+</script>
 
 <!-- ════ MODAL · NOVO PRODUTO / CAPACIDADE POR PALETE · BUILD 013 ════ -->
 <div class="mo" id="mCadastroProdutoCap">
