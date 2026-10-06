@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="yalog-wms-version" content="2.1.3">
-<title>WMS · v2.1.3</title>
+<title>WMS · v2.1.4</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,500;0,600;0,700;0,800;1,600;1,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -595,7 +595,7 @@ a{color:inherit;text-decoration:none;}
 .end-import-sticky{position:sticky;bottom:0;background:var(--bg2);border-top:1px solid var(--border);padding-top:12px;margin-top:12px;display:flex;justify-content:flex-end;gap:8px;}
 
 
-/* BUILD 023 — experiência de filtros e leitura operacional */
+/* BUILD 024 — experiência de filtros e leitura operacional */
 .estoque-filter-summary{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:-8px 0 12px;padding:0 2px;min-height:24px;}
 .estoque-filter-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border:1px solid rgba(251,146,60,.28);background:rgba(251,146,60,.06);color:var(--w70);font:8px var(--mono);border-radius:20px;}
 .estoque-filter-chip:first-child{color:var(--orange2);font-weight:700;}
@@ -715,6 +715,7 @@ canvas{max-width:100%;}
 
 .cw>div[style*="height:"]{position:relative;min-width:0;}
 .yalog-chart-fallback{position:absolute;inset:0;padding:6px 4px;overflow:hidden;color:var(--w40);font:8px var(--mono);z-index:2;}
+.yalog-chart-fallback{background:var(--panel);display:block;}
 .yalog-chart-fallback .yalog-fallback-empty{height:100%;display:flex;align-items:center;justify-content:center;color:var(--w40);font:10px var(--mono);}
 .yalog-fallback-bars{height:100%;display:flex;align-items:flex-end;gap:7px;padding:8px 4px 18px;border-bottom:1px solid var(--border);}
 .yalog-fallback-bar{height:100%;flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;position:relative;gap:3px;}
@@ -742,7 +743,7 @@ canvas{max-width:100%;}
   <div class="sb-logo">
     <div class="sb-logo-row" onclick="openM('mLogo')">
       <div class="sb-img" id="sbLogo"><span>🏭</span></div>
-      <div class="sb-brand-copy"><div class="sb-name" id="sbName">Seu Armazém</div><div class="sb-sub">WMS</div><div class="sb-version" data-wms-version>v2.1.2 Build 022</div></div>
+      <div class="sb-brand-copy"><div class="sb-name" id="sbName">Seu Armazém</div><div class="sb-sub">WMS</div><div class="sb-version" data-wms-version>v2.1.4 Build 024</div></div>
     </div>
     <div class="sb-change" onclick="openM('mLogo')">✎ Trocar logo</div>
   </div>
@@ -861,7 +862,7 @@ canvas{max-width:100%;}
       </div>
     </div>
   </nav>
-  <div class="sb-foot">WMS • <span data-wms-version>v2.1.2 Build 022</span><br>YALOG-WMS-001 • <span data-wms-version>v2.1.2 Build 022</span><br><span data-wms-update style="color:var(--orange2);">Atualização 022</span></div>
+  <div class="sb-foot">WMS • <span data-wms-version>v2.1.4 Build 024</span><br>YALOG-WMS-001 • <span data-wms-version>v2.1.4 Build 024</span><br><span data-wms-update style="color:var(--orange2);">Atualização 024</span></div>
 </aside>
 
 <!-- ══ MAIN ══ -->
@@ -6942,19 +6943,20 @@ function _yalogChartFallback(id,type,labels,datasets){
   if(!fb){fb=document.createElement('div');fb.className='yalog-chart-fallback';host.appendChild(fb);}
   cv.style.display='none';
   const vals=(datasets?.[0]?.data||[]).map(v=>Math.max(0,Number(v)||0));
-  if(!labels?.length || !vals.some(v=>v>0)){
-    fb.innerHTML='<div class="yalog-fallback-empty">Sem dados para os filtros selecionados</div>';
-    return;
-  }
+  const safeLabels=(labels||[]).map(x=>String(x??'—'));
+  if(!vals.length){fb.innerHTML='<div class="yalog-fallback-empty">Sem dados para os filtros selecionados</div>';return;}
+  const pal=['#fb923c','#fbbf24','#4ade80','#60a5fa','#a78bfa','#f472b6','#2dd4bf','#a3e635'];
   if(type==='doughnut'||type==='pie'){
-    const total=vals.reduce((a,b)=>a+b,0)||1;
-    let acc=0;const parts=vals.map((v,i)=>{const a=acc;acc+=v/total*360;return `${palette(Math.max(vals.length,1))[i%10]} ${a}deg ${acc}deg`;}).join(',');
-    fb.innerHTML=`<div class="yalog-fallback-donut" style="background:conic-gradient(${parts});"><div></div></div><div class="yalog-fallback-legend">${labels.map((l,i)=>`<span><i style="background:${palette(Math.max(vals.length,1))[i%10]}"></i>${String(l||'—').slice(0,24)} · ${vals[i]??0}</span>`).join('')}</div>`;
+    const total=vals.reduce((a,b)=>a+b,0);
+    if(!total){fb.innerHTML='<div class="yalog-fallback-empty">Sem movimentação para os filtros selecionados</div>';return;}
+    let acc=0;const parts=vals.map((v,i)=>{const a=acc;acc+=v/total*360;return `${pal[i%pal.length]} ${a}deg ${acc}deg`;}).join(',');
+    fb.innerHTML=`<div class="yalog-fallback-donut" style="background:conic-gradient(${parts});"><div></div></div><div class="yalog-fallback-legend">${safeLabels.map((l,i)=>`<span><i style="background:${pal[i%pal.length]}"></i>${l.slice(0,24)} · ${vals[i]??0}</span>`).join('')}</div>`;
   }else{
     const max=Math.max(1,...vals);
-    fb.innerHTML=`<div class="yalog-fallback-bars">${labels.map((l,i)=>{const v=vals[i]||0;return `<div class="yalog-fallback-bar"><div class="yalog-fallback-fill" style="height:${Math.max(v?4:0,(v/max)*100)}%"></div><b>${v}</b><span>${String(l||'—').slice(0,12)}</span></div>`;}).join('')}</div>`;
+    fb.innerHTML=`<div class="yalog-fallback-bars">${safeLabels.map((l,i)=>{const v=vals[i]||0;return `<div class="yalog-fallback-bar"><div class="yalog-fallback-fill" style="height:${v?Math.max(5,(v/max)*100):0}%"></div><b>${v}</b><span>${l.slice(0,12)}</span></div>`;}).join('')}</div>`;
   }
 }
+
 function _yalogChartFallbackClear(id){
   const cv=document.getElementById(id);if(!cv)return;
   cv.style.display='block';
@@ -6981,6 +6983,7 @@ function bc(id,type,labels,datasets,opts={}){
     charts[id]=new Chart(cv,{type,data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:isDn||datasets.length>1,labels:{color:'rgba(250,248,244,.6)',font:{family:"'JetBrains Mono',monospace",size:10},padding:10}},tooltip:{backgroundColor:'#1a1712',borderColor:'rgba(255,255,255,.1)',borderWidth:1,titleColor:'rgba(250,248,244,.9)',bodyColor:'rgba(250,248,244,.6)',titleFont:{family:"'JetBrains Mono',monospace",size:10},bodyFont:{family:"'JetBrains Mono',monospace",size:10}}},scales:isDn?{}:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'rgba(250,248,244,.5)',font:{family:"'JetBrains Mono',monospace",size:9}},border:{color:'transparent'}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'rgba(250,248,244,.5)',font:{family:"'JetBrains Mono',monospace",size:9}},border:{color:'transparent'},min:opts.yMin||undefined}}}});
   }catch(err){
     console.warn('[YALOG DASHBOARD] Falha ao renderizar gráfico',id,err);
+    _yalogChartFallback(id,type,labels,datasets);
     cv.removeAttribute('data-chart-waiting');
     _yalogChartFallback(id,type,labels,datasets);
   }
@@ -7892,7 +7895,7 @@ function renderHome(){
   populateHomeClienteFiltro();
   const siteFilter=document.getElementById('homeSiteFiltro')?.value||'';
   const clienteFilter=document.getElementById('homeClienteFiltro')?.value||'';
-  let prods=siteFilter?DB.produtos.filter(p=>p.site===siteFilter):[...DB.produtos];
+  let prods=siteFilter?DB.produtos.filter(p=>_prodSiteMatch(p,siteFilter)):[...DB.produtos];
   if(clienteFilter)prods=prods.filter(p=>p.clienteId===clienteFilter);
   const filtro=document.getElementById('homeFiltro')?.value||'geral';
   // Normaliza tipos (localStorage pode ter strings)
@@ -8887,32 +8890,82 @@ function verRecebimento(id){
 // BUILD 023 — VISÃO / FILTROS / IDENTIDADE OPERACIONAL
 // Helpers para nunca expor CNPJ como nome principal da operação.
 // ══════════════════════════════════════════════════════════════
+function _isCnpjLike(v){
+  const s=String(v||'').trim();
+  const n=s.replace(/\D/g,'');
+  return n.length>=11 && n.length<=14 && n===s.replace(/\D/g,'') && (s.includes('.')||s.includes('/')||s.includes('-')||/^\d+$/.test(s));
+}
+function _clienteNomeOperacao(c){
+  if(!c)return '';
+  const candidatos=[
+    c.nomeOperacao,c.nome_operacao,c.operacao,c.operacaoNome,c.operacao_nome,
+    c.nomeExibicao,c.nome_exibicao,c.fantasia,c.nomeFantasia,c.nome_fantasia,
+    c.razaoSocial,c.razao_social,c.nomeCliente,c.nome_cliente,c.clienteNome,c.cliente_nome,
+    c.descricao,c.cliente,c.nome
+  ];
+  for(const v of candidatos){
+    const x=String(v??'').trim();
+    if(!x)continue;
+    if(_isCnpjLike(x))continue;
+    return x;
+  }
+  return '';
+}
 function _clienteLabel(c, opts={}){
-  if(!c) return 'Cliente não identificado';
-  const nome=String(c.nome||'').trim();
-  const oper=String(c.operacao||c.nomeOperacao||c.clienteNome||c.razaoSocial||c.fantasia||'').trim();
-  const cnpj=String(c.cnpj||'').trim();
-  const soNumeros=nome.replace(/\D/g,'');
-  const nomeEhCnpj=nome && soNumeros.length>=11 && soNumeros===nome.replace(/\D/g,'');
-  const principal=(nomeEhCnpj ? (oper||'') : nome)||oper||cnpj||c.id||'Cliente';
-  if(opts.withCnpj && cnpj && principal!==cnpj) return `${principal} · ${cnpj}`;
-  return principal;
+  if(!c)return 'Cliente não identificado';
+  const principal=_clienteNomeOperacao(c);
+  const cnpj=String(c.cnpj||c.CNPJ||c.cnpjCliente||c.cnpj_cliente||'').trim();
+  if(opts.withCnpj && principal && cnpj && principal!==cnpj)return `${principal} · ${cnpj}`;
+  if(principal)return principal;
+  if(cnpj)return `Cliente · ${cnpj}`;
+  return 'Cliente não identificado';
 }
 function _clienteLabelCurto(c){
   const s=_clienteLabel(c);
   return s.length>34?s.slice(0,31)+'…':s;
 }
-function _siteLabel(s){
-  if(!s) return 'Unidade não identificada';
-  return String(s.nome||s.descricao||s.cidade||s.id||'Unidade').trim();
+function _produtoClienteLabel(p){
+  if(!p)return 'Cliente não identificado';
+  const c=(DB.clientes||[]).find(x=>x.id===p.clienteId);
+  if(c)return _clienteLabel(c);
+  for(const v of [p.nomeOperacao,p.nome_operacao,p.operacao,p.clienteNome,p.cliente_nome,p.razaoSocial,p.razao_social,p.fantasia,p.nomeCliente,p.nome_cliente,p.cliente]){
+    const x=String(v??'').trim();
+    if(x&&!_isCnpjLike(x))return x;
+  }
+  const cnpj=String(p.cnpjCliente||p.cnpj_cliente||p.cnpj||'').trim();
+  return cnpj?`Cliente · ${cnpj}`:'Cliente não identificado';
 }
+function _siteIdDoProduto(p){return p?.site||p?.siteId||p?.unidadeId||p?.unidade_id||null;}
+function _siteNomeDoProduto(p){
+  for(const v of [p?.siteNome,p?.site_nome,p?.nomeSite,p?.nome_site,p?.unidadeNome,p?.unidade_nome,p?.unidade,p?.site]){
+    const x=String(v??'').trim();
+    if(x && !_isCnpjLike(x))return x;
+  }
+  return '';
+}
+function _siteLabel(s){
+  if(!s)return 'Unidade não identificada';
+  return String(s.nome||s.descricao||s.cidade||s.nomeUnidade||s.nome_unidade||s.id||'Unidade').trim();
+}
+function _unidadesDisponiveis(){
+  const map=new Map();
+  (DB.sites||[]).forEach(s=>map.set(String(s.id),{id:s.id,nome:_siteLabel(s)}));
+  (DB.produtos||[]).forEach(p=>{
+    const id=_siteIdDoProduto(p);
+    if(!id)return;
+    const key=String(id);
+    if(!map.has(key))map.set(key,{id,nome:_siteNomeDoProduto(p)||`Unidade ${id}`});
+  });
+  return [...map.values()].sort((a,b)=>String(a.nome).localeCompare(String(b.nome),'pt-BR'));
+}
+function _prodSiteMatch(p,siteId){return String(_siteIdDoProduto(p)||'')===String(siteId||'');}
 function _getClientesComEstoque(prods){
   const ids=new Set((prods||[]).map(p=>p.clienteId).filter(Boolean));
   return (DB.clientes||[]).filter(c=>ids.has(c.id));
 }
 function _getSitesComEstoque(prods){
-  const ids=new Set((prods||[]).map(p=>p.site).filter(Boolean));
-  return (DB.sites||[]).filter(s=>ids.has(s.id));
+  const ids=new Set((prods||[]).map(_siteIdDoProduto).filter(Boolean).map(String));
+  return _unidadesDisponiveis().filter(s=>ids.has(String(s.id)));
 }
 
 function renderEstoque(){
@@ -8920,76 +8973,67 @@ function renderEstoque(){
   const filtCli=document.getElementById('filtEstCliente')?.value||'';
   const filtSt=document.getElementById('filtEstStatus')?.value||'';
   const filtBusca=(document.getElementById('filtEstBusca')?.value||'').toLowerCase().trim();
-
   const siteEl=document.getElementById('filtEstSite');
   const cliEl=document.getElementById('filtEstCliente');
+
   if(siteEl){
-    const atual=siteEl.value;
-    siteEl.innerHTML='<option value="">🏭 Todas as Unidades</option>'+(DB.sites||[]).map(s=>`<option value="${s.id}">${_siteLabel(s)}</option>`).join('');
-    if(atual)siteEl.value=atual;
+    siteEl.innerHTML='<option value="">🏭 Todas as Unidades</option>'+_unidadesDisponiveis().map(s=>`<option value="${s.id}">${_siteLabel(s)}</option>`).join('');
+    siteEl.value=filtSite;
   }
 
-  const baseSite=filtSite?DB.produtos.filter(p=>p.site===filtSite):[...DB.produtos];
+  let base=[...(DB.produtos||[])];
+  if(filtSite)base=base.filter(p=>_prodSiteMatch(p,filtSite));
+
   if(cliEl){
-    const atual=cliEl.value;
-    // Gestão diária: lista todos os clientes cadastrados, não apenas os
-    // que aparecem no subconjunto momentaneamente filtrado.
     const clientes=[...(DB.clientes||[])].sort((a,b)=>_clienteLabel(a).localeCompare(_clienteLabel(b),'pt-BR'));
     cliEl.innerHTML='<option value="">Todos os Clientes / Operações</option>'+clientes.map(c=>{
-      const qtd=baseSite.filter(p=>p.clienteId===c.id).length;
+      const qtd=base.filter(p=>p.clienteId===c.id).length;
       return `<option value="${c.id}">${_clienteLabel(c)}${qtd?` · ${qtd} itens`:''}</option>`;
     }).join('');
-    if(atual)cliEl.value=atual;
+    cliEl.value=filtCli;
   }
 
-  let prods=[...baseSite];
+  let prods=base;
   if(filtCli)prods=prods.filter(p=>p.clienteId===filtCli);
   if(filtSt)prods=prods.filter(p=>p.status===filtSt);
-  if(filtBusca)prods=prods.filter(p=>
-    (p.descricao||'').toLowerCase().includes(filtBusca)||
-    (p.wmsId||'').toLowerCase().includes(filtBusca)||
-    (p.codCliente||'').toLowerCase().includes(filtBusca)||
-    (p.lote||'').toLowerCase().includes(filtBusca)||
-    (p.endereco||'').toLowerCase().includes(filtBusca)||
-    _clienteLabel(DB.clientes.find(c=>c.id===p.clienteId)).toLowerCase().includes(filtBusca)
-  );
+  if(filtBusca)prods=prods.filter(p=>{
+    const hay=[p.descricao,p.wmsId,p.codCliente,p.lote,p.endereco,_produtoClienteLabel(p),_siteNomeDoProduto(p)].map(v=>String(v||'').toLowerCase());
+    return hay.some(v=>v.includes(filtBusca));
+  });
 
   const resumo=document.getElementById('estoqueFiltroResumo');
   if(resumo){
-    const s=filtSite?(DB.sites||[]).find(x=>x.id===filtSite):null;
+    const s=filtSite?_unidadesDisponiveis().find(x=>String(x.id)===String(filtSite)):null;
     const c=filtCli?(DB.clientes||[]).find(x=>x.id===filtCli):null;
-    resumo.innerHTML=`<span class="estoque-filter-chip">${prods.length} item(ns)</span>${s?`<span class="estoque-filter-chip">🏭 ${_siteLabel(s)}</span>`:'<span class="estoque-filter-chip muted">🏭 Todas as unidades</span>'}${c?`<span class="estoque-filter-chip">👤 ${_clienteLabel(c)}</span>`:'<span class="estoque-filter-chip muted">👤 Todos os clientes</span>'}${filtSt?`<span class="estoque-filter-chip">● ${filtSt}</span>`:''}`;
+    resumo.innerHTML=`<span class="estoque-filter-chip">${fN(prods.length)} item(ns)</span>${s?`<span class="estoque-filter-chip">🏭 ${_siteLabel(s)}</span>`:'<span class="estoque-filter-chip muted">🏭 Todas as unidades</span>'}${c?`<span class="estoque-filter-chip">👤 ${_clienteLabel(c)}</span>`:'<span class="estoque-filter-chip muted">👤 Todos os clientes / operações</span>'}${filtSt?`<span class="estoque-filter-chip">● ${filtSt}</span>`:''}`;
   }
 
   const tb=document.getElementById('tbEstoque');
   if(!tb)return;
   if(!prods.length){
-    tb.innerHTML='<tr><td colspan="15" style="text-align:center;padding:40px;color:var(--w40);font-family:var(--mono);">Nenhum produto encontrado com os filtros selecionados. Total no banco: '+DB.produtos.length+'</td></tr>';
+    tb.innerHTML='<tr><td colspan="15" style="text-align:center;padding:40px;color:var(--w40);font-family:var(--mono);">Nenhum produto encontrado com os filtros selecionados. Total no banco: '+(DB.produtos||[]).length+'</td></tr>';
     return;
   }
   tb.innerHTML=prods.map(p=>{
-    const cl=DB.clientes.find(c=>c.id===p.clienteId);
-    const st=(DB.sites||[]).find(s=>s.id===p.site);
+    const cl=(DB.clientes||[]).find(c=>c.id===p.clienteId);
+    const clienteLabel=_produtoClienteLabel(p);
+    const siteId=_siteIdDoProduto(p);
+    const st=_unidadesDisponiveis().find(s=>String(s.id)===String(siteId));
     const venc=p.validade&&p.validade<nowDate();
     return`<tr>
       <td class="mn" style="color:var(--orange2);font-weight:600;">${p.wmsId}<br><span style="font-size:7px;font-family:var(--mono);opacity:.6;">${p.tipoEntrada||'—'}</span></td>
       <td class="mn">${p.codCliente||'—'}</td>
       <td class="bd">${p.descricao||'—'}</td>
-      <td title="${_clienteLabel(cl,{withCnpj:true}).replace(/"/g,'&quot;')}">${_clienteLabel(cl)}</td>
-      <td class="mn" style="color:var(--b2);font-size:9px;">${st?_siteLabel(st):'—'}</td>
+      <td title="${(cl?_clienteLabel(cl,{withCnpj:true}):clienteLabel).replace(/"/g,'&quot;')}">${clienteLabel}</td>
+      <td class="mn" style="color:var(--b2);font-size:9px;">${st?_siteLabel(st):_siteNomeDoProduto(p)||'—'}</td>
       <td class="mn">${p.endereco||'—'}</td>
       <td class="ct mn"><span style="font-size:9px;font-family:var(--mono);padding:1px 5px;border-radius:2px;background:${p.tipoPalete==='FECHADO'?'rgba(52,211,153,.15)':p.tipoPalete==='MISTO'?'rgba(96,165,250,.15)':'transparent'};color:${p.tipoPalete==='FECHADO'?'#34d399':p.tipoPalete==='MISTO'?'#60a5fa':'var(--w20)'};">${p.tipoPalete||'—'}</span></td>
       <td class="mn">${p.lote||'—'}</td>
       <td class="mn" style="${venc?'color:#f87171;':''}">${fD(p.validade)}${venc?' ⚠️':''}</td>
-      <td class="mn ct">${fN(p.qtd)}</td>
-      <td class="mn ct" style="color:var(--b2);">${p.um||'UN'}</td>
+      <td class="mn ct">${fN(p.qtd)}</td><td class="mn ct" style="color:var(--b2);">${p.um||'UN'}</td>
       <td class="mn ct" style="color:var(--orange2);font-weight:700;">${(()=>{const r=calcPPReal(p.clienteId,p.codCliente,p.qtd,p.um);return r.temMatriz?r.pp:'—';})()}</td>
-      <td class="mn ri">R$ ${fM(p.valorUnit)}</td>
-      <td class="ct">${statusSp(p.status)}</td>
-      <td><div style="display:flex;gap:4px;flex-wrap:wrap;">
-        ${p.status==='LIBERADO'?`<button class="btn btn-r btn-xs" onclick="openBloquear('${p.wmsId}')">🔒</button>`:`<button class="btn btn-g btn-xs" onclick="openLiberar('${p.wmsId}')">🔓</button>`}
-        <button class="btn btn-o btn-xs" onclick="editQtd('${p.wmsId}')">✏</button>
-      </div></td>
+      <td class="mn ri">R$ ${fM(p.valorUnit)}</td><td class="ct">${statusSp(p.status)}</td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap;">${p.status==='LIBERADO'?`<button class="btn btn-r btn-xs" onclick="openBloquear('${p.wmsId}')">🔒</button>`:`<button class="btn btn-g btn-xs" onclick="openLiberar('${p.wmsId}')">🔓</button>`}<button class="btn btn-o btn-xs" onclick="editQtd('${p.wmsId}')">✏</button></div></td>
     </tr>`;
   }).join('');
   setTimeout(()=>makeResizable(document.querySelector('#tbEstoque')?.closest('table')),80);
@@ -14460,9 +14504,10 @@ function populateHomeSiteFiltro(){
   if(!sel)return;
   const val=sel.value;
   sel.innerHTML='<option value="">Todas as Unidades Logísticas</option>'
-    +(DB.sites||[]).map(s=>`<option value="${s.id}">${_siteLabel(s)}</option>`).join('');
+    +_unidadesDisponiveis().map(s=>`<option value="${s.id}">${_siteLabel(s)}</option>`).join('');
   if(val)sel.value=val;
 }
+
 function populateHomeClienteFiltro(){
   const sel=document.getElementById('homeClienteFiltro');
   if(!sel)return;
@@ -14497,7 +14542,7 @@ function initMapaEstoqueGestao(){
   const cliAtual=cliEl.value||'';
   siteEl.innerHTML='<option value="">Todas as Unidades</option>'+(DB.sites||[]).map(s=>`<option value="${s.id}">${s.nome}</option>`).join('');
   if(siteAtual)siteEl.value=siteAtual;
-  const base=siteAtual?(DB.produtos||[]).filter(p=>p.site===siteAtual):(DB.produtos||[]);
+  const base=siteAtual?(DB.produtos||[]).filter(p=>_prodSiteMatch(p,siteAtual)):(DB.produtos||[]);
   const ids=[...new Set(base.map(p=>p.clienteId).filter(Boolean))];
   cliEl.innerHTML='<option value="">Todos os Clientes</option>'+ids.map(id=>{const c=(DB.clientes||[]).find(x=>x.id===id);return `<option value="${id}">${c?c.nome:id}</option>`;}).join('');
   if(cliAtual && ids.includes(cliAtual))cliEl.value=cliAtual;
@@ -14519,7 +14564,7 @@ function renderMapaEstoqueGestao(){
   if(!siteEl||!cliEl)return;
   const siteAtual=siteEl.value||'';
   const cliAtual=cliEl.value||'';
-  const base=siteAtual?(DB.produtos||[]).filter(p=>p.site===siteAtual):(DB.produtos||[]);
+  const base=siteAtual?(DB.produtos||[]).filter(p=>_prodSiteMatch(p,siteAtual)):(DB.produtos||[]);
   const ids=[...new Set(base.map(p=>p.clienteId).filter(Boolean))];
   cliEl.innerHTML='<option value="">Todos os Clientes</option>'+ids.map(id=>{const c=(DB.clientes||[]).find(x=>x.id===id);return `<option value="${id}">${c?c.nome:id}</option>`;}).join('');
   if(cliAtual && ids.includes(cliAtual))cliEl.value=cliAtual; else if(cliAtual)cliEl.value='';
