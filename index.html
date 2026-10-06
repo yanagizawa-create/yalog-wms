@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="yalog-wms-version" content="2.1.2">
-<title>WMS · v2.1.2</title>
+<meta name="yalog-wms-version" content="2.1.3">
+<title>WMS · v2.1.3</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,500;0,600;0,700;0,800;1,600;1,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -594,6 +594,14 @@ a{color:inherit;text-decoration:none;}
 .end-import-status.warn{color:#fbbf24;background:rgba(251,191,36,.1);}
 .end-import-sticky{position:sticky;bottom:0;background:var(--bg2);border-top:1px solid var(--border);padding-top:12px;margin-top:12px;display:flex;justify-content:flex-end;gap:8px;}
 
+
+/* BUILD 023 — experiência de filtros e leitura operacional */
+.estoque-filter-summary{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:-8px 0 12px;padding:0 2px;min-height:24px;}
+.estoque-filter-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border:1px solid rgba(251,146,60,.28);background:rgba(251,146,60,.06);color:var(--w70);font:8px var(--mono);border-radius:20px;}
+.estoque-filter-chip:first-child{color:var(--orange2);font-weight:700;}
+.estoque-filter-chip.muted{border-color:var(--border);color:var(--w40);background:transparent;}
+@media(max-width:1100px){#s-estoqueList .ph-acts{width:100%;}.estoque-filter-summary{margin-top:0;}.ph-acts select{min-width:150px;}}
+@media(max-width:700px){#s-estoqueList .ph-acts>div{width:100%;}#s-estoqueList .ph-acts input{width:100%!important;}#s-estoqueList .ph-acts select,#s-estoqueList .ph-acts button{flex:1 1 45%;min-width:0;}.estoque-filter-summary{font-size:8px;}}
 </style>
 
 <style id="yalog-build022-ui-fix">
@@ -705,7 +713,9 @@ canvas{max-width:100%;}
 }
 
 
-.yalog-chart-fallback{position:absolute;inset:0;padding:6px 4px;overflow:hidden;color:var(--w40);font:8px var(--mono);}
+.cw>div[style*="height:"]{position:relative;min-width:0;}
+.yalog-chart-fallback{position:absolute;inset:0;padding:6px 4px;overflow:hidden;color:var(--w40);font:8px var(--mono);z-index:2;}
+.yalog-chart-fallback .yalog-fallback-empty{height:100%;display:flex;align-items:center;justify-content:center;color:var(--w40);font:10px var(--mono);}
 .yalog-fallback-bars{height:100%;display:flex;align-items:flex-end;gap:7px;padding:8px 4px 18px;border-bottom:1px solid var(--border);}
 .yalog-fallback-bar{height:100%;flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;position:relative;gap:3px;}
 .yalog-fallback-fill{width:min(30px,70%);min-height:0;background:linear-gradient(180deg,var(--orange),rgba(251,146,60,.18));border-radius:4px 4px 0 0;}
@@ -884,6 +894,9 @@ canvas{max-width:100%;}
     <div class="ph-acts" style="gap:8px;">
       <select id="homeSiteFiltro" onchange="renderHome()" class="btn btn-o btn-sm" style="cursor:pointer;">
         <option value="">Todas as Unidades Logísticas</option>
+      </select>
+      <select id="homeClienteFiltro" onchange="renderHome()" class="btn btn-o btn-sm" style="cursor:pointer;">
+        <option value="">Todos os Clientes / Operações</option>
       </select>
       <select id="homeFiltro" onchange="renderHome()" class="btn btn-o btn-sm" style="cursor:pointer;">
         <option value="geral">Visão Geral</option>
@@ -1226,10 +1239,12 @@ canvas{max-width:100%;}
       <select id="filtEstSite" onchange="renderEstoque()" class="btn btn-o" style="font-size:10px;cursor:pointer;padding:9px 14px;color:var(--orange2);border-color:var(--orange2);"><option value="">🏭 Todas as Unidades</option></select>
       <select id="filtEstCliente" onchange="renderEstoque()" class="btn btn-o" style="font-size:10px;cursor:pointer;padding:9px 14px;"><option value="">Todos os Clientes</option></select>
       <select id="filtEstStatus" onchange="renderEstoque()" class="btn btn-o" style="font-size:10px;cursor:pointer;padding:9px 14px;"><option value="">Todos os Status</option><option value="LIBERADO">Liberado</option><option value="BLOQUEADO">Bloqueado</option></select>
+      <button class="btn btn-o btn-sm" onclick="limparFiltrosEstoque()">↺ Limpar</button>
       <button class="btn btn-b btn-sm" onclick="downloadEstoqueCSV()">↓ CSV</button>
       <button class="btn btn-b btn-sm" onclick="downloadEstoqueXLSX()">↓ Excel</button>
     </div>
   </div>
+  <div id="estoqueFiltroResumo" class="estoque-filter-summary" aria-live="polite"></div>
   <div class="tw"><table class="dt">
     <thead><tr>
       <th>Cód. WMS</th><th>Cód. Cliente</th><th>Descrição</th><th>Cliente</th><th>Unidade</th>
@@ -6927,6 +6942,10 @@ function _yalogChartFallback(id,type,labels,datasets){
   if(!fb){fb=document.createElement('div');fb.className='yalog-chart-fallback';host.appendChild(fb);}
   cv.style.display='none';
   const vals=(datasets?.[0]?.data||[]).map(v=>Math.max(0,Number(v)||0));
+  if(!labels?.length || !vals.some(v=>v>0)){
+    fb.innerHTML='<div class="yalog-fallback-empty">Sem dados para os filtros selecionados</div>';
+    return;
+  }
   if(type==='doughnut'||type==='pie'){
     const total=vals.reduce((a,b)=>a+b,0)||1;
     let acc=0;const parts=vals.map((v,i)=>{const a=acc;acc+=v/total*360;return `${palette(Math.max(vals.length,1))[i%10]} ${a}deg ${acc}deg`;}).join(',');
@@ -6963,6 +6982,7 @@ function bc(id,type,labels,datasets,opts={}){
   }catch(err){
     console.warn('[YALOG DASHBOARD] Falha ao renderizar gráfico',id,err);
     cv.removeAttribute('data-chart-waiting');
+    _yalogChartFallback(id,type,labels,datasets);
   }
 }
 function statusSp(s){return s==='LIBERADO'?'<span class="sp sp-lib">LIBERADO</span>':s==='BLOQUEADO'?'<span class="sp sp-blk">BLOQUEADO</span>':s==='PENDENTE'?'<span class="sp sp-pen">PENDENTE</span>':s==='EXPEDIDO'?'<span class="sp sp-exp">EXPEDIDO</span>':'<span class="sp sp-ok">'+s+'</span>';}
@@ -7869,8 +7889,11 @@ function verificarLimiteArea(enderecoAlvo){
 
 function renderHome(){
   populateHomeSiteFiltro();
+  populateHomeClienteFiltro();
   const siteFilter=document.getElementById('homeSiteFiltro')?.value||'';
-  let prods=siteFilter?DB.produtos.filter(p=>p.site===siteFilter):DB.produtos;
+  const clienteFilter=document.getElementById('homeClienteFiltro')?.value||'';
+  let prods=siteFilter?DB.produtos.filter(p=>p.site===siteFilter):[...DB.produtos];
+  if(clienteFilter)prods=prods.filter(p=>p.clienteId===clienteFilter);
   const filtro=document.getElementById('homeFiltro')?.value||'geral';
   // Normaliza tipos (localStorage pode ter strings)
   prods.forEach(p=>{p.qtd=parseFloat(p.qtd)||0;p.valorUnit=parseFloat(p.valorUnit)||0;});
@@ -8032,7 +8055,7 @@ function renderHome(){
   const ftitle=document.getElementById('chHomeFiltroTitle');
   if(filtro==='geral'||filtro==='cliente'){
     const clis=[...new Set(prods.map(p=>p.clienteId))];
-    const cliNomes=clis.map(id=>{const c=DB.clientes.find(x=>x.id===id);return c?c.nome:id;});
+    const cliNomes=clis.map(id=>{const c=DB.clientes.find(x=>x.id===id);return c?_clienteLabel(c):id;});
     const cliVals=clis.map(id=>prods.filter(p=>p.clienteId===id).reduce((a,b)=>a+(parseFloat(b.qtd)||0)*(parseFloat(b.valorUnit)||0),0));
     const totalCheck=cliVals.reduce((a,b)=>a+b,0);
     if(totalCheck===0){
@@ -8046,7 +8069,7 @@ function renderHome(){
     }
   } else if(filtro==='site'){
     const sites=(DB.sites||[]);
-    const siteNomes=sites.length?sites.map(s=>s.nome):['Sem site'];
+    const siteNomes=sites.length?sites.map(s=>_siteLabel(s)):['Sem site'];
     const siteVals=sites.length
       ?sites.map(s=>prods.filter(p=>p.site===s.id).reduce((a,b)=>a+(b.qtd||0)*(b.valorUnit||0),0))
       :[totalVal];
@@ -8055,14 +8078,14 @@ function renderHome(){
   } else if(filtro==='bloqueado'){
     const blkProd=prods.filter(p=>p.status==='BLOQUEADO');
     const clis=[...new Set(blkProd.map(p=>p.clienteId))];
-    const cliNomes=clis.map(id=>{const c=DB.clientes.find(x=>x.id===id);return c?c.nome:id;});
+    const cliNomes=clis.map(id=>{const c=DB.clientes.find(x=>x.id===id);return c?_clienteLabel(c):id;});
     const cliQtds=clis.map(id=>blkProd.filter(p=>p.clienteId===id).reduce((a,b)=>a+(b.qtd||0),0));
     if(ftitle)ftitle.textContent='Produtos Bloqueados por Cliente';
     bc('chHomeFiltro','bar',cliNomes,[{label:'Qtd Bloqueada',data:cliQtds,backgroundColor:'rgba(248,113,113,.7)'}]);
   } else if(filtro==='disponivel'){
     const livProd=prods.filter(p=>p.status==='LIBERADO');
     const clis=[...new Set(livProd.map(p=>p.clienteId))];
-    const cliNomes=clis.map(id=>{const c=DB.clientes.find(x=>x.id===id);return c?c.nome:id;});
+    const cliNomes=clis.map(id=>{const c=DB.clientes.find(x=>x.id===id);return c?_clienteLabel(c):id;});
     const cliVals=clis.map(id=>livProd.filter(p=>p.clienteId===id).reduce((a,b)=>a+(b.qtd||0)*(b.valorUnit||0),0));
     if(ftitle)ftitle.textContent='Disponível por Cliente (R$)';
     bc('chHomeFiltro','doughnut',cliNomes,[{data:cliVals,backgroundColor:palette(clis.length),borderWidth:0}]);
@@ -8080,7 +8103,7 @@ function renderHome(){
   // Valor por cliente
   const cliAll=[...new Set(prods.map(p=>p.clienteId))];
   const cliVA=cliAll.map(id=>prods.filter(p=>p.clienteId===id).reduce((a,b)=>a+(b.qtd||0)*(b.valorUnit||0),0));
-  bc('chHomeValor','bar',cliAll.map(id=>{const c=DB.clientes.find(x=>x.id===id);return c?c.nome.substring(0,8):id;}),
+  bc('chHomeValor','bar',cliAll.map(id=>{const c=DB.clientes.find(x=>x.id===id);return c?_clienteLabelCurto(c):id;}),
     [{label:'R$',data:cliVA,backgroundColor:palette(cliAll.length)}]);
 
   // Alertas
@@ -8861,35 +8884,65 @@ function verRecebimento(id){
 }
 
 // ══════════════════════════════════════════════════════════════
-// ESTOQUE
+// BUILD 023 — VISÃO / FILTROS / IDENTIDADE OPERACIONAL
+// Helpers para nunca expor CNPJ como nome principal da operação.
 // ══════════════════════════════════════════════════════════════
+function _clienteLabel(c, opts={}){
+  if(!c) return 'Cliente não identificado';
+  const nome=String(c.nome||'').trim();
+  const oper=String(c.operacao||c.nomeOperacao||c.clienteNome||c.razaoSocial||c.fantasia||'').trim();
+  const cnpj=String(c.cnpj||'').trim();
+  const soNumeros=nome.replace(/\D/g,'');
+  const nomeEhCnpj=nome && soNumeros.length>=11 && soNumeros===nome.replace(/\D/g,'');
+  const principal=(nomeEhCnpj ? (oper||'') : nome)||oper||cnpj||c.id||'Cliente';
+  if(opts.withCnpj && cnpj && principal!==cnpj) return `${principal} · ${cnpj}`;
+  return principal;
+}
+function _clienteLabelCurto(c){
+  const s=_clienteLabel(c);
+  return s.length>34?s.slice(0,31)+'…':s;
+}
+function _siteLabel(s){
+  if(!s) return 'Unidade não identificada';
+  return String(s.nome||s.descricao||s.cidade||s.id||'Unidade').trim();
+}
+function _getClientesComEstoque(prods){
+  const ids=new Set((prods||[]).map(p=>p.clienteId).filter(Boolean));
+  return (DB.clientes||[]).filter(c=>ids.has(c.id));
+}
+function _getSitesComEstoque(prods){
+  const ids=new Set((prods||[]).map(p=>p.site).filter(Boolean));
+  return (DB.sites||[]).filter(s=>ids.has(s.id));
+}
+
 function renderEstoque(){
-  // Popula select Sites
-  // Lê valores ANTES de reescrever innerHTML (evita reset pelo browser)
   const filtSite=document.getElementById('filtEstSite')?.value||'';
   const filtCli=document.getElementById('filtEstCliente')?.value||'';
   const filtSt=document.getElementById('filtEstStatus')?.value||'';
-
-  // Popula sites (restaura valor após reescrita)
-  const siteEl=document.getElementById('filtEstSite');
-  if(siteEl){
-    siteEl.innerHTML='<option value="">🏭 Todas as Unidades</option>'+(DB.sites||[]).map(s=>`<option value="${s.id}">${s.nome}</option>`).join('');
-    if(filtSite)siteEl.value=filtSite;
-  }
-
-  // Filtra produtos
-  const prodsBase=filtSite ? DB.produtos.filter(p=>p.site===filtSite) : [...DB.produtos];
-
-  // Popula clientes (restaura valor após reescrita)
-  const cliEl=document.getElementById('filtEstCliente');
-  if(cliEl){
-    const clis=[...new Set(prodsBase.map(p=>p.clienteId))];
-    cliEl.innerHTML='<option value="">Todos os Clientes</option>'+clis.map(id=>{const cx=DB.clientes.find(x=>x.id===id);return`<option value="${id}">${cx?cx.nome:id}</option>`;}).join('');
-    if(filtCli)cliEl.value=filtCli;
-  }
-
   const filtBusca=(document.getElementById('filtEstBusca')?.value||'').toLowerCase().trim();
-  let prods=[...prodsBase];
+
+  const siteEl=document.getElementById('filtEstSite');
+  const cliEl=document.getElementById('filtEstCliente');
+  if(siteEl){
+    const atual=siteEl.value;
+    siteEl.innerHTML='<option value="">🏭 Todas as Unidades</option>'+(DB.sites||[]).map(s=>`<option value="${s.id}">${_siteLabel(s)}</option>`).join('');
+    if(atual)siteEl.value=atual;
+  }
+
+  const baseSite=filtSite?DB.produtos.filter(p=>p.site===filtSite):[...DB.produtos];
+  if(cliEl){
+    const atual=cliEl.value;
+    // Gestão diária: lista todos os clientes cadastrados, não apenas os
+    // que aparecem no subconjunto momentaneamente filtrado.
+    const clientes=[...(DB.clientes||[])].sort((a,b)=>_clienteLabel(a).localeCompare(_clienteLabel(b),'pt-BR'));
+    cliEl.innerHTML='<option value="">Todos os Clientes / Operações</option>'+clientes.map(c=>{
+      const qtd=baseSite.filter(p=>p.clienteId===c.id).length;
+      return `<option value="${c.id}">${_clienteLabel(c)}${qtd?` · ${qtd} itens`:''}</option>`;
+    }).join('');
+    if(atual)cliEl.value=atual;
+  }
+
+  let prods=[...baseSite];
   if(filtCli)prods=prods.filter(p=>p.clienteId===filtCli);
   if(filtSt)prods=prods.filter(p=>p.status===filtSt);
   if(filtBusca)prods=prods.filter(p=>
@@ -8897,13 +8950,21 @@ function renderEstoque(){
     (p.wmsId||'').toLowerCase().includes(filtBusca)||
     (p.codCliente||'').toLowerCase().includes(filtBusca)||
     (p.lote||'').toLowerCase().includes(filtBusca)||
-    (p.endereco||'').toLowerCase().includes(filtBusca)
+    (p.endereco||'').toLowerCase().includes(filtBusca)||
+    _clienteLabel(DB.clientes.find(c=>c.id===p.clienteId)).toLowerCase().includes(filtBusca)
   );
 
+  const resumo=document.getElementById('estoqueFiltroResumo');
+  if(resumo){
+    const s=filtSite?(DB.sites||[]).find(x=>x.id===filtSite):null;
+    const c=filtCli?(DB.clientes||[]).find(x=>x.id===filtCli):null;
+    resumo.innerHTML=`<span class="estoque-filter-chip">${prods.length} item(ns)</span>${s?`<span class="estoque-filter-chip">🏭 ${_siteLabel(s)}</span>`:'<span class="estoque-filter-chip muted">🏭 Todas as unidades</span>'}${c?`<span class="estoque-filter-chip">👤 ${_clienteLabel(c)}</span>`:'<span class="estoque-filter-chip muted">👤 Todos os clientes</span>'}${filtSt?`<span class="estoque-filter-chip">● ${filtSt}</span>`:''}`;
+  }
+
   const tb=document.getElementById('tbEstoque');
-  if(!tb)return; // guard: tela pode não estar ativa
+  if(!tb)return;
   if(!prods.length){
-    tb.innerHTML='<tr><td colspan="13" style="text-align:center;padding:32px;color:var(--w40);font-family:var(--mono);">Nenhum produto encontrado. Total no banco: '+DB.produtos.length+'</td></tr>';
+    tb.innerHTML='<tr><td colspan="15" style="text-align:center;padding:40px;color:var(--w40);font-family:var(--mono);">Nenhum produto encontrado com os filtros selecionados. Total no banco: '+DB.produtos.length+'</td></tr>';
     return;
   }
   tb.innerHTML=prods.map(p=>{
@@ -8913,30 +8974,32 @@ function renderEstoque(){
     return`<tr>
       <td class="mn" style="color:var(--orange2);font-weight:600;">${p.wmsId}<br><span style="font-size:7px;font-family:var(--mono);opacity:.6;">${p.tipoEntrada||'—'}</span></td>
       <td class="mn">${p.codCliente||'—'}</td>
-      <td class="bd">${p.descricao}</td>
-      <td>${cl?cl.nome:'—'}</td>
-      <td class="mn" style="color:var(--b2);font-size:9px;">${st?st.nome:'—'}</td>
+      <td class="bd">${p.descricao||'—'}</td>
+      <td title="${_clienteLabel(cl,{withCnpj:true}).replace(/"/g,'&quot;')}">${_clienteLabel(cl)}</td>
+      <td class="mn" style="color:var(--b2);font-size:9px;">${st?_siteLabel(st):'—'}</td>
       <td class="mn">${p.endereco||'—'}</td>
       <td class="ct mn"><span style="font-size:9px;font-family:var(--mono);padding:1px 5px;border-radius:2px;background:${p.tipoPalete==='FECHADO'?'rgba(52,211,153,.15)':p.tipoPalete==='MISTO'?'rgba(96,165,250,.15)':'transparent'};color:${p.tipoPalete==='FECHADO'?'#34d399':p.tipoPalete==='MISTO'?'#60a5fa':'var(--w20)'};">${p.tipoPalete||'—'}</span></td>
       <td class="mn">${p.lote||'—'}</td>
-      <td class="mn" style="${venc?'color:#f87171;':''}">
-        ${fD(p.validade)}${venc?' ⚠️':''}
-      </td>
+      <td class="mn" style="${venc?'color:#f87171;':''}">${fD(p.validade)}${venc?' ⚠️':''}</td>
       <td class="mn ct">${fN(p.qtd)}</td>
       <td class="mn ct" style="color:var(--b2);">${p.um||'UN'}</td>
       <td class="mn ct" style="color:var(--orange2);font-weight:700;">${(()=>{const r=calcPPReal(p.clienteId,p.codCliente,p.qtd,p.um);return r.temMatriz?r.pp:'—';})()}</td>
       <td class="mn ri">R$ ${fM(p.valorUnit)}</td>
       <td class="ct">${statusSp(p.status)}</td>
-      <td>
-        <div style="display:flex;gap:4px;flex-wrap:wrap;">
-          ${p.status==='LIBERADO'?`<button class="btn btn-r btn-xs" onclick="openBloquear('${p.wmsId}')">🔒</button>`:`<button class="btn btn-g btn-xs" onclick="openLiberar('${p.wmsId}')">🔓</button>`}
-          <button class="btn btn-o btn-xs" onclick="editQtd('${p.wmsId}')">✏</button>
-        </div>
-      </td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap;">
+        ${p.status==='LIBERADO'?`<button class="btn btn-r btn-xs" onclick="openBloquear('${p.wmsId}')">🔒</button>`:`<button class="btn btn-g btn-xs" onclick="openLiberar('${p.wmsId}')">🔓</button>`}
+        <button class="btn btn-o btn-xs" onclick="editQtd('${p.wmsId}')">✏</button>
+      </div></td>
     </tr>`;
   }).join('');
   setTimeout(()=>makeResizable(document.querySelector('#tbEstoque')?.closest('table')),80);
 }
+
+function limparFiltrosEstoque(){
+  ['filtEstBusca','filtEstSite','filtEstCliente','filtEstStatus'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  renderEstoque();
+}
+
 function openBloquear(wmsId){document.getElementById('blkWmsId').value=wmsId;openM('mBloquear');}
 function openLiberar(wmsId){document.getElementById('libWmsId').value=wmsId;openM('mLiberar');}
 function confirmarBloqueio(){
@@ -14397,7 +14460,16 @@ function populateHomeSiteFiltro(){
   if(!sel)return;
   const val=sel.value;
   sel.innerHTML='<option value="">Todas as Unidades Logísticas</option>'
-    +(DB.sites||[]).map(s=>`<option value="${s.id}">${s.nome}</option>`).join('');
+    +(DB.sites||[]).map(s=>`<option value="${s.id}">${_siteLabel(s)}</option>`).join('');
+  if(val)sel.value=val;
+}
+function populateHomeClienteFiltro(){
+  const sel=document.getElementById('homeClienteFiltro');
+  if(!sel)return;
+  const val=sel.value;
+  const clientes=[...(DB.clientes||[])].sort((a,b)=>_clienteLabel(a).localeCompare(_clienteLabel(b),'pt-BR'));
+  sel.innerHTML='<option value="">Todos os Clientes / Operações</option>'
+    +clientes.map(c=>`<option value="${c.id}">${_clienteLabel(c)}</option>`).join('');
   if(val)sel.value=val;
 }
 
