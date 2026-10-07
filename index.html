@@ -4344,11 +4344,14 @@ const LocalStorageProvider = {
   // Sem empresa autenticada ainda (_companyIdLocalAtual null), o
   // comportamento é IDÊNTICO ao anterior a esta sprint.
   _chaveFisica(key) {
-    // BUILD 018 — A base operacional local possui UMA chave canônica por
-    // instalação. O tenant é responsabilidade do Supabase quando o modo
-    // online for ativado; ele NÃO pode mudar a chave local durante o MVP.
-    // Isso evita que uma nova sessão/login encontre uma chave tenant vazia
-    // e faça o estoque parecer perdido.
+    // BUILD 023 — persistência operacional tenant-aware.
+    // Antes do login, preserva a chave legada/global para compatibilidade.
+    // Depois do login, o DB operacional passa a ter uma chave física própria
+    // da empresa. A chave global NUNCA é apagada e continua sendo fonte de
+    // migração/recuperação legada.
+    if(key===DBKEY && _companyIdLocalAtual){
+      return 'wms:' + _companyIdLocalAtual + ':' + DBKEY;
+    }
     return key;
   },
   // Migração automática e não-destrutiva: se o dispositivo já tem dado
@@ -5181,6 +5184,7 @@ const WMS_IDB_NAME='YALOG_WMS_LOCAL_DB';
 const WMS_IDB_VERSION=1;
 const WMS_IDB_STORE='estado';
 const WMS_IDB_KEY='db-canonico';
+function _idbKeyEmpresa(companyId){ return 'db-canonico:' + (companyId || 'global'); }
 function _idbDisponivel(){return typeof indexedDB!=='undefined';}
 function _idbAbrir(){
   return new Promise((resolve,reject)=>{
@@ -5193,35 +5197,55 @@ function _idbAbrir(){
     }catch(e){resolve(null);}
   });
 }
-async function _idbLerDB(){
+async function _idbLerDB(companyId=_companyIdLocalAtual){
   const db=await _idbAbrir(); if(!db)return null;
   return new Promise(resolve=>{
-    try{const tx=db.transaction(WMS_IDB_STORE,'readonly');const req=tx.objectStore(WMS_IDB_STORE).get(WMS_IDB_KEY);req.onsuccess=()=>{const v=req.result;resolve(v&&v.db?_cloneSeguro(v.db):null);};req.onerror=()=>resolve(null);tx.oncomplete=()=>{try{db.close();}catch(e){}};}catch(e){try{db.close();}catch(_e){}resolve(null);}
+    try{
+      const tx=db.transaction(WMS_IDB_STORE,'readonly');
+      const store=tx.objectStore(WMS_IDB_STORE);
+      const primaryKey=_idbKeyEmpresa(companyId);
+      const req=store.get(primaryKey);
+      req.onsuccess=()=>{
+        let v=req.result;
+        // Migração de continuidade: se a chave tenant ainda não existe,
+        // tenta a chave global antiga. Nunca apaga a chave global aqui.
+        if(!v && companyId) {
+          try {
+            const reqLegacy=store.get(WMS_IDB_KEY);
+            reqLegacy.onsuccess=()=>resolve(reqLegacy.result&&reqLegacy.result.db?_cloneSeguro(reqLegacy.result.db):null);
+            reqLegacy.onerror=()=>resolve(null);
+            return;
+          } catch(e){}
+        }
+        resolve(v&&v.db?_cloneSeguro(v.db):null);
+      };
+      req.onerror=()=>resolve(null);
+      tx.oncomplete=()=>{try{db.close();}catch(e){}};
+    }catch(e){try{db.close();}catch(_e){}resolve(null);}
   });
 }
 let _yalogPersistQueue=Promise.resolve();
 let _yalogLastPersistPromise=Promise.resolve();
-async function _idbGravarDB(db){
+async function _idbGravarDB(db,companyId=_companyIdLocalAtual){
   if(!_idbDisponivel()||!db)return false;
   const clone=_cloneSeguro(db); if(!clone)return false;
-  const base={db:clone,salvoEm:new Date().toISOString(),build:YALOG_WMS_UPDATE||'018',schema:'YALOG-WMS-CANONICAL-001'};
+  const base={db:clone,company_id:companyId||null,salvoEm:new Date().toISOString(),build:YALOG_WMS_UPDATE||'023',schema:'YALOG-WMS-CANONICAL-002'};
   const conn=await _idbAbrir(); if(!conn)return false;
   return new Promise(resolve=>{
     try{
       const tx=conn.transaction(WMS_IDB_STORE,'readwrite');
-      tx.objectStore(WMS_IDB_STORE).put(base,WMS_IDB_KEY);
+      tx.objectStore(WMS_IDB_STORE).put(base,_idbKeyEmpresa(companyId));
       tx.oncomplete=()=>{try{conn.close();}catch(e){}resolve(true);};
       tx.onerror=()=>{try{conn.close();}catch(e){}resolve(false);};
       tx.onabort=()=>{try{conn.close();}catch(e){}resolve(false);};
     }catch(e){try{conn.close();}catch(_e){}resolve(false);}
   });
 }
-function _persistirDBCanonico(db){
+function _persistirDBCanonico(db,companyId=_companyIdLocalAtual){
   const snapshot=_cloneSeguro(db);
   if(!snapshot) return Promise.resolve(false);
-  // Serializa as gravações: uma atualização nunca pode terminar depois
-  // de uma gravação mais nova e sobrescrever o estado canônico.
-  _yalogPersistQueue=_yalogPersistQueue.catch(()=>false).then(()=>_idbGravarDB(snapshot));
+  // Serializa as gravações e fixa o tenant no envelope/chave física.
+  _yalogPersistQueue=_yalogPersistQueue.catch(()=>false).then(()=>_idbGravarDB(snapshot,companyId));
   _yalogLastPersistPromise=_yalogPersistQueue;
   return _yalogPersistQueue;
 }
@@ -5312,13 +5336,12 @@ function _mesclarLegacySemSobrescreverCanonico(canonico, legado){
   (Array.isArray(l.capacidadeArmazem)?l.capacidadeArmazem:[]).forEach(x=>{const id=_chaveRegistro(x,'capacidadeArmazem');if(!capIds.has(id)){out.capacidadeArmazem.push(_cloneSeguro(x));capIds.add(id);}});
   return out;
 }
-async function _recuperarMelhorBasePersistida(baseAtual){
+async function _recuperarMelhorBasePersistida(baseAtual,companyId=_companyIdLocalAtual){
   let melhor=_cloneSeguro(baseAtual)||{};
-  // BUILD 018: IndexedDB é a fonte canônica local. Quando existe um banco
-  // canônico válido, fontes antigas do localStorage só podem acrescentar
-  // registros que não existam nele; jamais podem sobrescrever estoque atual,
-  // quantidades, lotes ou históricos canônicos com uma cópia antiga.
-  const idb=await _idbLerDB();
+  // BUILD 023: IndexedDB canônico é tenant-aware. Uma base vazia nunca
+  // vence uma base válida. A chave global anterior só participa como
+  // migração de continuidade quando a chave da empresa ainda não existe.
+  const idb=await _idbLerDB(companyId);
   const temCanonico=idb && !_dbEhZeragemTotal(idb);
   if(temCanonico) melhor=_mesclarDBSemPerda(melhor,idb);
   const candidatos=_localStorageCandidatosDB();
@@ -5350,6 +5373,89 @@ function _dbEhZeragemTotal(d){
   const capVazia=!Array.isArray(d.capacidadeArmazem)||d.capacidadeArmazem.length===0;
   return campos.every(k=>Array.isArray(d[k])&&d[k].length===0) && matrVazia && capVazia;
 }
+
+function _dbOperacionalVazio(d){
+  if(!d || typeof d!=='object') return true;
+  const campos=['clientes','sites','enderecos','produtos','movimentos','tarefasRec','tarefasMov','tarefasSep','inventarios','paletes','transportadoras','docas','contratos','devolucoes','ajustes'];
+  const semColecoes=campos.every(k=>!Array.isArray(d[k])||d[k].length===0);
+  const semMatriz=!d.matrizCapacidade || !Object.values(d.matrizCapacidade).some(v=>Array.isArray(v)&&v.length>0);
+  const semCap=!Array.isArray(d.capacidadeArmazem)||d.capacidadeArmazem.length===0;
+  return semColecoes && semMatriz && semCap;
+}
+
+const WMS_DATA_SAFETY_KEY='wms_data_safety_state_v023';
+function _dataSafetyState(){
+  try{return JSON.parse(localStorage.getItem(WMS_DATA_SAFETY_KEY)||'null')||{};}catch(e){return {};}
+}
+function _dataSafetyRegistrar(patch={}){
+  try{
+    const atual=_dataSafetyState();
+    const estado={...atual,...patch,updated_at:new Date().toISOString(),build:'022-DATA-SAFETY'};
+    localStorage.setItem(WMS_DATA_SAFETY_KEY,JSON.stringify(estado));
+    return estado;
+  }catch(e){return null;}
+}
+function _dataSafetyResumo(d){
+  const c=_dbContagens(d||{});
+  return {score:_dbPontuacao(d||{}),contagens:c,checksum:_checksum(JSON.stringify(d||{}))};
+}
+async function _dataSafetyRecoverFromSupabase(companyId){
+  if(!companyId) return {ok:false,source:null,reason:'sem-company-id',remoteRows:0};
+  try{
+    const client=_obterClienteSupabase();
+    if(!client) return {ok:false,source:null,reason:'sem-cliente-supabase',remoteRows:0};
+    const resultado=await SupabaseProvider.buscarTudo();
+    if(!resultado.ok) return {ok:false,source:null,reason:resultado.motivo||'erro-select',remoteRows:0};
+    const rowDb=(resultado.dados||[]).find(r=>r.key===DBKEY && r.value && typeof r.value==='object');
+    if(!rowDb){
+      _dataSafetyRegistrar({company_id:companyId,remote_status:'EMPTY_OR_NO_DB_ROW',remote_rows:(resultado.dados||[]).length});
+      return {ok:true,source:null,reason:'remote-empty',remoteRows:(resultado.dados||[]).length};
+    }
+    const remoteDb=_cloneSeguro(rowDb.value)||{};
+    const localDb=_cloneSeguro(DB)||{};
+    if(_dbTemDadosProtegidos(localDb)) _salvarSnapshotGuard(localDb,'antes-recuperacao-supabase');
+    const merged=_mesclarDBSemPerda(localDb,remoteDb);
+    DB=merged;
+    _salvarSnapshotGuard(DB,'recuperacao-supabase-build023');
+    await _persistirDBCanonico(DB,companyId);
+    // O espelho local tenant-aware é atualizado sem habilitar escrita remota.
+    LocalStorageProvider.set(DBKEY,DB);
+    _dataSafetyRegistrar({company_id:companyId,remote_status:'RECOVERED',remote_rows:(resultado.dados||[]).length,source:'supabase',before:_dataSafetyResumo(localDb),remote:_dataSafetyResumo(remoteDb),after:_dataSafetyResumo(DB),last_known_good:true});
+    return {ok:true,source:'supabase',reason:'recovered',remoteRows:(resultado.dados||[]).length};
+  }catch(e){
+    _dataSafetyRegistrar({company_id:companyId,remote_status:'ERROR',reason:String(e)});
+    return {ok:false,source:null,reason:String(e),remoteRows:0};
+  }
+}
+
+async function _dataSafetyPrepareTenant(companyId){
+  if(!companyId) return {ok:false,source:'none',reason:'sem-company-id'};
+  _companyIdLocalAtual=companyId;
+  LocalStorageProvider._migrarParaEmpresa(companyId);
+  let local=await _recuperarMelhorBasePersistida(Core.get(DBKEY)||{},companyId);
+  if(local && !_dbEhZeragemTotal(local)){
+    DB=local;
+    _salvarSnapshotGuard(DB,'last-known-good-before-login');
+    await _persistirDBCanonico(DB,companyId);
+    LocalStorageProvider.set(DBKEY,DB);
+  }
+  const remoto=await _dataSafetyRecoverFromSupabase(companyId);
+  if(remoto.source==='supabase') return remoto;
+  // REMOTE EMPTY/ERROR: preserva a melhor base local. Nunca grava vazio remoto.
+  if(_dbTemDadosProtegidos(DB)){
+    _salvarSnapshotGuard(DB,'last-known-good-preservado');
+    _dataSafetyRegistrar({company_id:companyId,source:'local',remote_status:remoto.reason||'unknown',last_known_good:true,best_local:_dataSafetyResumo(DB)});
+    return {ok:true,source:'local',reason:remoto.reason||'local-preserved'};
+  }
+  return {ok:remoto.ok,source:'none',reason:remoto.reason||'sem-base'};
+}
+
+window.YALogDataSafety={
+  state:()=>_dataSafetyState(),
+  counts:()=>_dbContagens(DB||{}),
+  diagnose:async(companyId=_companyIdLocalAtual)=>({company_id:companyId,local:_dataSafetyResumo(DB||{}),idb:_dataSafetyResumo(await _idbLerDB(companyId)||{}),guard:_dataSafetyResumo(_dbSnapshotAtual()||{}),state:_dataSafetyState()}),
+  recover:async(companyId=_companyIdLocalAtual)=>_dataSafetyPrepareTenant(companyId)
+};
 function _dbContagens(d){
   const r={};
   if(!d||typeof d!=='object')return r;
@@ -6549,14 +6655,16 @@ function save(){
   // guards antigos continuam sendo lidos para recuperação, mas o banco
   // canônico novo fica somente no IndexedDB.
   if(!_idbDisponivel()) _produtoGuardSalvar(DB);
-  // REGRA DEFINITIVA: toda gravação válida gera snapshot integral antes do
-  // envio ao provider. Isso inclui clientes/cadastros, mesmo sem estoque.
-  // Uma publicação/refresh jamais deve depender do HTML para reconstruir dados.
-  if(_dbEhZeragemTotal(DB) && !DB._estoqueLimpoEm && !DB._masterDataDeletion){
+  // REGRA DEFINITIVA: uma base operacional vazia OU parcialmente vazia
+  // nunca pode substituir uma LAST KNOWN GOOD BASE. Isso inclui o caso
+  // crítico do login: DB pode conter apenas o usuário recém-autenticado e,
+  // mesmo assim, continuar operacionalmente vazio.
+  if(!DB._estoqueLimpoEm && !DB._masterDataDeletion){
     const guard=_dbSnapshotAtual();
-    if(_dbTemDadosProtegidos(guard)){
-      console.warn('[WMS DATA GUARD] save() bloqueado: DB vazio sem autorização Master.');
+    if(_dbTemDadosProtegidos(guard) && _dbOperacionalVazio(DB) && !_dbOperacionalVazio(guard)){
+      console.warn('[WMS DATA GUARD 023] save() bloqueado: base operacional vazia/partial sem autorização Master.');
       DB=_cloneSeguro(guard);
+      _dataSafetyRegistrar({event:'BLOCKED_PARTIAL_EMPTY_SAVE',reason:'local-empty-cannot-overwrite-last-known-good',company_id:_companyIdLocalAtual||'global'});
       return false;
     }
   }
@@ -6851,7 +6959,7 @@ async function load(){
   // A fonte atual pode estar vazia ou incompleta; primeiro reunimos DB local,
   // snapshots antigos, vaults e IndexedDB. Só depois o WMS aplica migrações.
   let d=Core.get(DBKEY);
-  try{ d=await _recuperarMelhorBasePersistida(d||{}); }catch(e){ console.warn('[WMS PERSISTENCE 017] recuperação pré-load falhou:',e); }
+  try{ d=await _recuperarMelhorBasePersistida(d||{},_companyIdLocalAtual); }catch(e){ console.warn('[WMS PERSISTENCE 017] recuperação pré-load falhou:',e); }
   const guard=_dbSnapshotAtual();
   const temMasterDeletion=!!(d?._masterDataDeletion||d?._estoqueLimpoEm);
 
@@ -10268,9 +10376,10 @@ function injectDemo(){
 // critério de logout.
 // ══════════════════════════════════════════════════════════════
 const YALOG_WMS_VERSION = '2.1.2';
-const YALOG_WMS_BUILD = '022';
-const YALOG_WMS_UPDATE = '022';
+const YALOG_WMS_BUILD = '023';
+const YALOG_WMS_UPDATE = '023';
 const YALOG_WMS_RELEASE = `v${YALOG_WMS_VERSION} Build ${YALOG_WMS_BUILD}`;
+const YALOG_WMS_PERSISTENCE_HOTFIX='DATA-SAFETY-023';
 
 function aplicarVersaoWMS(){
   try{
@@ -10413,27 +10522,26 @@ async function _confirmarSessaoCarregada(usuario){
      ═══════════════════════════════════════════════════════════ */
   const companyId = usuario.company_id;
   if (companyId) {
-    LocalStorageProvider._migrarParaEmpresa(companyId); // nunca apaga a chave antiga
-    _companyIdLocalAtual = companyId;
-    if (CoreConfig.storageProvider === 'supabase') {
-      await _registrarInstalacaoWms(companyId); // não bloqueia o login se falhar
-      // SPRINT YALOG-WMS-TENANT-HOTFIX-004: meta.checksums é compartilhado
-      // por chave lógica (não por empresa) — uma entrada antiga (boot,
-      // teste manual, sessão anterior) pode ter um timestamp local mais
-      // recente que o updated_at real do Supabase, fazendo
-      // _aplicarComResolucaoDeConflito descartar o valor recém-buscado
-      // mesmo com buscarTudo() correto. Invalidar aqui garante que o
-      // fetch pós-login seja sempre tratado como autoritativo para o DB
-      // operacional — reaproveita CacheManager.invalidarCache (já
-      // existente); CacheManager em si não foi alterado. Continua seguro:
-      // se houver uma escrita local pendente na fila, o próprio
-      // _aplicarComResolucaoDeConflito (via SyncQueue._pendentes) ainda
-      // a protege, independente desta invalidação.
-      CacheManager.invalidarCache(DBKEY);
-      try { await CacheManager.sincronizacaoInicial(); } // agora filtrado por company_id/module_id
-      catch(e) { console.warn('[WMS TENANT] sincronização pós-login falhou, seguindo com cache local:', e); }
+    // BUILD 023 — DATA SAFETY: identifica o tenant ANTES de qualquer save
+    // pós-login, recupera a melhor base local e consulta o Supabase em modo
+    // de recuperação. Uma resposta remota vazia/erro nunca sobrescreve a
+    // base local conhecida.
+    try {
+      const safety=await _dataSafetyPrepareTenant(companyId);
+      console.log('[WMS DATA SAFETY 023] preparação do tenant:',safety);
+      // Só habilita sincronização remota quando o Supabase efetivamente
+      // entregou uma base operacional. Remote EMPTY/ERROR permanece local,
+      // evitando criar/propagar uma base parcial.
+      if(safety.source==='supabase'){
+        CoreConfig.storageProvider='supabase';
+        await _registrarInstalacaoWms(companyId);
+        CacheManager.invalidarCache(DBKEY);
+      }
+    } catch(e) {
+      console.warn('[WMS DATA SAFETY 023] recuperação tenant falhou — preservando base local:',e);
+      _dataSafetyRegistrar({company_id:companyId,remote_status:'RECOVERY_EXCEPTION',reason:String(e)});
     }
-    try { await load(); } // recarrega DB pela chave física já correta da empresa
+    try { await load(); }
     catch(e) { console.warn('[WMS TENANT] falha ao recarregar DB da empresa, mantendo estado em memória:', e); }
     renderLogo();
   } else {
@@ -10869,6 +10977,16 @@ async function fazerLogin(){
         id: authOperacional.usuario.id, nome: authOperacional.usuario.nome, login: authOperacional.usuario.login,
         perfil: authOperacional.usuario.perfil, company_id: companyId, platformRole: null, ativo: true,
       };
+      // BUILD 023 — recuperação tenant-aware ANTES do primeiro save pós-login.
+      // O usuário já foi autenticado; portanto podemos recuperar a base correta
+      // sem abrir dados operacionais antes da autenticação.
+      try {
+        const safety=await _dataSafetyPrepareTenant(companyId);
+        console.log('[WMS DATA SAFETY 023] recuperação antes do primeiro save:',safety);
+        if(safety.source==='supabase') CoreConfig.storageProvider='supabase';
+      } catch(e) {
+        console.warn('[WMS DATA SAFETY 023] recuperação pré-save falhou:',e);
+      }
       // DB.usuarios só é populado/atualizado DEPOIS de autenticar —
       // nunca antes, nunca como pré-condição. Aqui vira exclusivamente
       // cache de interface (telas, listas), nunca mais fonte de decisão.
@@ -10938,6 +11056,15 @@ async function fazerLogin(){
           errEl.textContent='Usuário não encontrado.';
           errEl.style.display='block';
           return;
+        }
+        // BUILD 023 — mesmo Data Safety Guard para o fluxo Master: a base
+        // operacional é recuperada antes de qualquer save local pós-login.
+        try {
+          const safety=await _dataSafetyPrepareTenant(companyId);
+          console.log('[WMS DATA SAFETY 023] recuperação Master antes do save:',safety);
+          if(safety.source==='supabase') CoreConfig.storageProvider='supabase';
+        } catch(e) {
+          console.warn('[WMS DATA SAFETY 023] recuperação Master pré-save falhou:',e);
         }
         // Item 7: o Master é espelhado localmente — é assim que aparece
         // (protegido, sem editar/excluir) na tela de Usuários do WMS.
