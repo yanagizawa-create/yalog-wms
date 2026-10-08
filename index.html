@@ -18008,6 +18008,24 @@ function planejAtualizarPreview(){
   if(cliId) prods=prods.filter(p=>p.clienteId===cliId);
   const prodsNasRuas=prods.filter(p=>ruas.some(r=>p.endereco===r||p.endereco.startsWith(r+'-')));
 
+  // A prévia precisa usar a mesma unidade operacional da confirmação:
+  // 1 tarefa por endereço físico. Mantemos o cálculo local para não
+  // depender de variáveis declaradas dentro de confirmarPlanejamento().
+  const endMapPreview=new Map();
+  (DB.enderecos||[]).forEach(e=>{
+    const addr=String(e.addr||'').trim();
+    if(!addr||!ruas.some(r=>addr===r||addr.startsWith(r+'-')))return;
+    if(siteId && e.siteId && String(e.siteId)!==String(siteId))return;
+    endMapPreview.set(addr,e);
+  });
+  prodsNasRuas.forEach(p=>{
+    const addr=String(p.endereco||'').trim();
+    if(!addr||endMapPreview.has(addr))return;
+    const pts=addr.split('-');
+    endMapPreview.set(addr,{addr,area:pts.length>=2?pts.slice(0,2).join('-'):pts[0]||addr});
+  });
+  const enderecosOrdPreview=[...endMapPreview.values()];
+
   const st=DB.sites?.find(s=>s.id===siteId);
   const cl=DB.clientes.find(c=>c.id===cliId);
   const el=document.getElementById('planejPreview');
@@ -18029,7 +18047,7 @@ function planejAtualizarPreview(){
       <div><div style="font-size:8px;color:var(--w40);text-transform:uppercase;">Produtos</div>
         <div style="font-weight:700;">${prodsNasRuas.length}</div></div>
       <div><div style="font-size:8px;color:var(--w40);text-transform:uppercase;">Tarefas</div>
-        <div style="font-weight:700;">${enderecosOrd.length} (1 por endereço)</div></div>
+        <div style="font-weight:700;">${enderecosOrdPreview.length} (1 por endereço)</div></div>
     </div>`;
   const info=document.getElementById('planejRuasInfo');
   if(info)info.textContent=ruas.length+' rua(s) selecionada(s) · '+prodsNasRuas.length+' produto(s)';
