@@ -8856,59 +8856,6 @@ window.onload=function(){
 
 
 
-<style>
-/* INV 2.0 BUILD 003 — experiência operacional ContaLog para Conferente/Operador */
-.inv20-exec .inv20-shell{max-width:860px;margin:0 auto}.inv20-exec-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.inv20-exec-kicker{font:800 9px var(--mono);letter-spacing:.16em;color:#2dd4bf}.inv20-exec-title{font:800 24px var(--serif);font-style:italic}.inv20-exec-title em{color:#f97316;font-style:normal}.inv20-wave-card{background:#0a1424;border:1px solid rgba(45,212,191,.22);padding:14px;margin:10px 0;border-radius:14px}.inv20-wave-card.active{border-color:rgba(249,115,22,.55);box-shadow:0 0 0 1px rgba(249,115,22,.08)}.inv20-wave-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.inv20-wave-name{font:800 13px var(--mono);color:#fff}.inv20-wave-meta{font:800 8px var(--mono);color:#7890aa;margin-top:5px}.inv20-next{margin-top:12px;padding:13px;background:#07111f;border:1px solid rgba(255,255,255,.08);border-radius:10px}.inv20-next small{display:block;font:800 8px var(--mono);color:#7890aa;letter-spacing:.12em}.inv20-next strong{display:block;margin-top:5px;font:800 20px var(--mono);color:#2dd4bf}.inv20-open{width:100%;min-height:48px;margin-top:10px;background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;border:0;border-radius:9px;font:800 10px var(--sans);letter-spacing:.1em;cursor:pointer}.inv20-open:active{transform:translateY(1px)}
-/* contagem cega em modo foco */
-body.inv20-counting #mExecInv .md{width:min(96vw,860px);max-width:860px;max-height:calc(100vh - 18px);padding:18px;border-color:rgba(45,212,191,.28)}body.inv20-counting #mExecInv .mt{font-size:18px}body.inv20-counting #mExecInvHeader{position:sticky;top:0;z-index:2}.inv20-blind-grid{grid-template-columns:1fr 1fr!important}.inv20-blind-grid input,.inv20-blind-grid select{min-height:46px;font-size:13px!important}body.inv20-counting #blindDesc,body.inv20-counting #blindUm{cursor:pointer}body.inv20-counting #blindDesc:focus,body.inv20-counting #blindUm:focus{border-color:#2dd4bf;box-shadow:0 0 0 2px rgba(45,212,191,.12)}
-@media(max-width:600px){.inv20-exec{padding:0 2px}.inv20-exec-title{font-size:21px}.inv20-wave-card{padding:12px}.inv20-blind-grid{grid-template-columns:1fr!important}body.inv20-counting #mExecInv .md{width:100%;max-height:calc(100vh - 10px);margin:5px;padding:14px}body.inv20-counting #mExecInvHeader{position:relative}}
-</style>
-<script>
-(function(){
-  const _isInvExecutor=()=>{const p=String(usuarioAtual?.perfil||'').toLowerCase();return p==='operador'||p==='conferente';};
-  const _identityValues=()=>[usuarioAtual?.id,usuarioAtual?.login,usuarioAtual?.nome].map(v=>String(v??'').trim().toLowerCase()).filter(Boolean);
-  const _ondaIsMine=(o)=>{const ids=_identityValues();return ids.length>0&&[o?.contadorId,o?.contadorLogin,o?.contador].some(v=>ids.includes(String(v??'').trim().toLowerCase()));};
-  const _nextTask=(inv,o)=>_ondaTarefas(inv,o).find(t=>!inv2TaskDone(t));
-  window.inv20AbrirContagem=function(invId,ondaId,tarefaId){
-    if(!_isInvExecutor()){showT('A execução do Inventário 2.0 é destinada aos perfis Conferente e Operador.','err');return;}
-    const inv=DB.inventarios?.find(x=>x.id===invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===ondaId),t=inv&&inv.tarefas?.find(x=>x.id===tarefaId);
-    if(!inv||!o||!t||!_ondaIsMine(o)){showT('Esta onda não está atribuída ao seu usuário.','err');return;}
-    if(t.ondaId!==o.id){showT('O endereço não pertence à sua onda.','err');return;}
-    if(inv2TaskDone(t)){showT('Este endereço já foi concluído.','ok');return;}
-    t.status='ANDAMENTO';t.resp=usuarioAtual?.nome||usuarioAtual?.login||'—';t.pegoEm=t.pegoEm||now();o.status='EM_CONTAGEM';o.inicioEm=o.inicioEm||now();save();
-    window._inv20ExecContext={invId,ondaId,tarefaId};
-    document.body.classList.add('inv20-counting');
-    _renderContagemCegaInv(invId,tarefaId,1);
-  };
-  window.renderInv20Operador=function(){
-    const body=document.getElementById('inv20Body'),ctx=document.getElementById('inv20Context');if(!body||!ctx)return;
-    const nome=usuarioAtual?.nome||usuarioAtual?.login||'Usuário';
-    const cards=[]; (inv2Active()||[]).forEach(inv=>_normalizarOndasInv(inv).forEach(o=>{if(_ondaIsMine(o))cards.push({inv,o});}));
-    ctx.innerHTML='<div class="inv20-note">EXECUÇÃO · '+esc(nome)+' · PERFIL '+esc(String(usuarioAtual?.perfil||'').toUpperCase())+'</div>';
-    if(!cards.length){body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-kicker">MINHA OPERAÇÃO</div><div class="inv20-exec-title">Nenhuma <em>onda disponível</em></div><div class="inv20-note" style="margin-top:10px">Quando uma onda for liberada para este usuário, ela aparecerá automaticamente aqui.</div></div>';return;}
-    body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-head"><div><div class="inv20-exec-kicker">MINHAS ONDAS</div><div class="inv20-exec-title">Contagem <em>operacional</em></div></div><button class="inv20-btn ghost" onclick="renderInv2()">↻ Atualizar</button></div>'+cards.map(({inv,o})=>{const ts=_ondaTarefas(inv,o),next=_nextTask(inv,o),p=inv2WavePct(inv,o),done=ts.filter(inv2TaskDone).length;return '<div class="inv20-wave-card '+(next?'active':'')+'"><div class="inv20-wave-top"><div><div class="inv20-wave-name">ONDA '+String(o.numero).padStart(3,'0')+'</div><div class="inv20-wave-meta">'+esc(o.escopo||inv.id)+' · '+done+'/'+ts.length+' ENDEREÇOS CONCLUÍDOS</div></div><div style="font:800 10px var(--mono);color:#4ade80">'+p+'%</div></div><div class="inv20-next"><small>PRÓXIMO ENDEREÇO</small><strong>'+esc(next?.endereco||'ONDA CONCLUÍDA')+'</strong><div style="font:800 8px var(--mono);color:#7890aa;margin-top:5px">RUA '+esc(next?.rua||'—')+' · LADO '+esc(next?.lado||'—')+' · NÍVEL '+String(next?.nivel??'00').padStart(2,'0')+'</div></div>'+(next?'<button class="inv20-open" onclick="inv20AbrirContagem(\''+esc(inv.id)+'\',\''+esc(o.id)+'\',\''+esc(next.id)+'\')">ABRIR CONTAGEM</button>':'')+'</div>';}).join('')+'</div>';
-  };
-  const _renderInv2Base=window.renderInv2;
-  window.renderInv2=function(){if(_isInvExecutor()){renderInv20Operador();return;}return _renderInv2Base.apply(this,arguments);};
-  const _goBase=window.go;
-  window.go=function(id){if(_isInvExecutor()&&id==='inv2'){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('s-inv2')?.classList.add('active');const tt=document.getElementById('tbTitle');if(tt)tt.textContent='INV 2.0 · MINHAS ONDAS';renderInv20Operador();return;}return _goBase.apply(this,arguments);};
-  const _fecharCegoBase=window._fecharEnderecoCegoInv;
-  window._fecharEnderecoCegoInv=function(){
-    const c=window._inv20ExecContext;
-    _fecharCegoBase.apply(this,arguments);
-    document.body.classList.remove('inv20-counting');
-    if(!c)return;
-    const inv=DB.inventarios?.find(x=>x.id===c.invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===c.ondaId);if(!inv||!o)return;
-    const next=_nextTask(inv,o);window._inv20ExecContext=null;
-    if(next){setTimeout(()=>inv20AbrirContagem(inv.id,o.id,next.id),180);}
-    else{setTimeout(()=>{go('inv2');showT('Onda '+String(o.numero).padStart(3,'0')+' concluída.','ok');},180);}
-  };
-  // reabre a execução cega com o foco correto e abre a lista de seleção quando o navegador permitir
-  const _renderCegaBase=window._renderContagemCegaInv;
-  window._renderContagemCegaInv=function(invId,tarefaId,rodada){_renderCegaBase.apply(this,arguments);setTimeout(()=>{const d=document.getElementById('blindDesc'),u=document.getElementById('blindUm');if(d)d.classList.add('inv20-blind-grid');document.getElementById('blindSku')?.focus();},80);};
-  document.addEventListener('DOMContentLoaded',()=>{if(_isInvExecutor()&&document.getElementById('s-inv2')?.classList.contains('active'))renderInv20Operador();});
-})();
-</script>
 </body></html>`);
   w.document.close();
 }
@@ -10111,59 +10058,6 @@ td{padding:6px 8px;border-bottom:1px solid #eee;font-size:10px;}.ct{text-align:c
   <div class="ass-box">Motorista / Transportadora<br><br>Nome: ____________________<br><br>Data/Hora: _______________</div>
 </div>
 <script>window.addEventListener('load',()=>setTimeout(()=>window.print(),400));<\/script>
-<style>
-/* INV 2.0 BUILD 003 — experiência operacional ContaLog para Conferente/Operador */
-.inv20-exec .inv20-shell{max-width:860px;margin:0 auto}.inv20-exec-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.inv20-exec-kicker{font:800 9px var(--mono);letter-spacing:.16em;color:#2dd4bf}.inv20-exec-title{font:800 24px var(--serif);font-style:italic}.inv20-exec-title em{color:#f97316;font-style:normal}.inv20-wave-card{background:#0a1424;border:1px solid rgba(45,212,191,.22);padding:14px;margin:10px 0;border-radius:14px}.inv20-wave-card.active{border-color:rgba(249,115,22,.55);box-shadow:0 0 0 1px rgba(249,115,22,.08)}.inv20-wave-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.inv20-wave-name{font:800 13px var(--mono);color:#fff}.inv20-wave-meta{font:800 8px var(--mono);color:#7890aa;margin-top:5px}.inv20-next{margin-top:12px;padding:13px;background:#07111f;border:1px solid rgba(255,255,255,.08);border-radius:10px}.inv20-next small{display:block;font:800 8px var(--mono);color:#7890aa;letter-spacing:.12em}.inv20-next strong{display:block;margin-top:5px;font:800 20px var(--mono);color:#2dd4bf}.inv20-open{width:100%;min-height:48px;margin-top:10px;background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;border:0;border-radius:9px;font:800 10px var(--sans);letter-spacing:.1em;cursor:pointer}.inv20-open:active{transform:translateY(1px)}
-/* contagem cega em modo foco */
-body.inv20-counting #mExecInv .md{width:min(96vw,860px);max-width:860px;max-height:calc(100vh - 18px);padding:18px;border-color:rgba(45,212,191,.28)}body.inv20-counting #mExecInv .mt{font-size:18px}body.inv20-counting #mExecInvHeader{position:sticky;top:0;z-index:2}.inv20-blind-grid{grid-template-columns:1fr 1fr!important}.inv20-blind-grid input,.inv20-blind-grid select{min-height:46px;font-size:13px!important}body.inv20-counting #blindDesc,body.inv20-counting #blindUm{cursor:pointer}body.inv20-counting #blindDesc:focus,body.inv20-counting #blindUm:focus{border-color:#2dd4bf;box-shadow:0 0 0 2px rgba(45,212,191,.12)}
-@media(max-width:600px){.inv20-exec{padding:0 2px}.inv20-exec-title{font-size:21px}.inv20-wave-card{padding:12px}.inv20-blind-grid{grid-template-columns:1fr!important}body.inv20-counting #mExecInv .md{width:100%;max-height:calc(100vh - 10px);margin:5px;padding:14px}body.inv20-counting #mExecInvHeader{position:relative}}
-</style>
-<script>
-(function(){
-  const _isInvExecutor=()=>{const p=String(usuarioAtual?.perfil||'').toLowerCase();return p==='operador'||p==='conferente';};
-  const _identityValues=()=>[usuarioAtual?.id,usuarioAtual?.login,usuarioAtual?.nome].map(v=>String(v??'').trim().toLowerCase()).filter(Boolean);
-  const _ondaIsMine=(o)=>{const ids=_identityValues();return ids.length>0&&[o?.contadorId,o?.contadorLogin,o?.contador].some(v=>ids.includes(String(v??'').trim().toLowerCase()));};
-  const _nextTask=(inv,o)=>_ondaTarefas(inv,o).find(t=>!inv2TaskDone(t));
-  window.inv20AbrirContagem=function(invId,ondaId,tarefaId){
-    if(!_isInvExecutor()){showT('A execução do Inventário 2.0 é destinada aos perfis Conferente e Operador.','err');return;}
-    const inv=DB.inventarios?.find(x=>x.id===invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===ondaId),t=inv&&inv.tarefas?.find(x=>x.id===tarefaId);
-    if(!inv||!o||!t||!_ondaIsMine(o)){showT('Esta onda não está atribuída ao seu usuário.','err');return;}
-    if(t.ondaId!==o.id){showT('O endereço não pertence à sua onda.','err');return;}
-    if(inv2TaskDone(t)){showT('Este endereço já foi concluído.','ok');return;}
-    t.status='ANDAMENTO';t.resp=usuarioAtual?.nome||usuarioAtual?.login||'—';t.pegoEm=t.pegoEm||now();o.status='EM_CONTAGEM';o.inicioEm=o.inicioEm||now();save();
-    window._inv20ExecContext={invId,ondaId,tarefaId};
-    document.body.classList.add('inv20-counting');
-    _renderContagemCegaInv(invId,tarefaId,1);
-  };
-  window.renderInv20Operador=function(){
-    const body=document.getElementById('inv20Body'),ctx=document.getElementById('inv20Context');if(!body||!ctx)return;
-    const nome=usuarioAtual?.nome||usuarioAtual?.login||'Usuário';
-    const cards=[]; (inv2Active()||[]).forEach(inv=>_normalizarOndasInv(inv).forEach(o=>{if(_ondaIsMine(o))cards.push({inv,o});}));
-    ctx.innerHTML='<div class="inv20-note">EXECUÇÃO · '+esc(nome)+' · PERFIL '+esc(String(usuarioAtual?.perfil||'').toUpperCase())+'</div>';
-    if(!cards.length){body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-kicker">MINHA OPERAÇÃO</div><div class="inv20-exec-title">Nenhuma <em>onda disponível</em></div><div class="inv20-note" style="margin-top:10px">Quando uma onda for liberada para este usuário, ela aparecerá automaticamente aqui.</div></div>';return;}
-    body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-head"><div><div class="inv20-exec-kicker">MINHAS ONDAS</div><div class="inv20-exec-title">Contagem <em>operacional</em></div></div><button class="inv20-btn ghost" onclick="renderInv2()">↻ Atualizar</button></div>'+cards.map(({inv,o})=>{const ts=_ondaTarefas(inv,o),next=_nextTask(inv,o),p=inv2WavePct(inv,o),done=ts.filter(inv2TaskDone).length;return '<div class="inv20-wave-card '+(next?'active':'')+'"><div class="inv20-wave-top"><div><div class="inv20-wave-name">ONDA '+String(o.numero).padStart(3,'0')+'</div><div class="inv20-wave-meta">'+esc(o.escopo||inv.id)+' · '+done+'/'+ts.length+' ENDEREÇOS CONCLUÍDOS</div></div><div style="font:800 10px var(--mono);color:#4ade80">'+p+'%</div></div><div class="inv20-next"><small>PRÓXIMO ENDEREÇO</small><strong>'+esc(next?.endereco||'ONDA CONCLUÍDA')+'</strong><div style="font:800 8px var(--mono);color:#7890aa;margin-top:5px">RUA '+esc(next?.rua||'—')+' · LADO '+esc(next?.lado||'—')+' · NÍVEL '+String(next?.nivel??'00').padStart(2,'0')+'</div></div>'+(next?'<button class="inv20-open" onclick="inv20AbrirContagem(\''+esc(inv.id)+'\',\''+esc(o.id)+'\',\''+esc(next.id)+'\')">ABRIR CONTAGEM</button>':'')+'</div>';}).join('')+'</div>';
-  };
-  const _renderInv2Base=window.renderInv2;
-  window.renderInv2=function(){if(_isInvExecutor()){renderInv20Operador();return;}return _renderInv2Base.apply(this,arguments);};
-  const _goBase=window.go;
-  window.go=function(id){if(_isInvExecutor()&&id==='inv2'){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('s-inv2')?.classList.add('active');const tt=document.getElementById('tbTitle');if(tt)tt.textContent='INV 2.0 · MINHAS ONDAS';renderInv20Operador();return;}return _goBase.apply(this,arguments);};
-  const _fecharCegoBase=window._fecharEnderecoCegoInv;
-  window._fecharEnderecoCegoInv=function(){
-    const c=window._inv20ExecContext;
-    _fecharCegoBase.apply(this,arguments);
-    document.body.classList.remove('inv20-counting');
-    if(!c)return;
-    const inv=DB.inventarios?.find(x=>x.id===c.invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===c.ondaId);if(!inv||!o)return;
-    const next=_nextTask(inv,o);window._inv20ExecContext=null;
-    if(next){setTimeout(()=>inv20AbrirContagem(inv.id,o.id,next.id),180);}
-    else{setTimeout(()=>{go('inv2');showT('Onda '+String(o.numero).padStart(3,'0')+' concluída.','ok');},180);}
-  };
-  // reabre a execução cega com o foco correto e abre a lista de seleção quando o navegador permitir
-  const _renderCegaBase=window._renderContagemCegaInv;
-  window._renderContagemCegaInv=function(invId,tarefaId,rodada){_renderCegaBase.apply(this,arguments);setTimeout(()=>{const d=document.getElementById('blindDesc'),u=document.getElementById('blindUm');if(d)d.classList.add('inv20-blind-grid');document.getElementById('blindSku')?.focus();},80);};
-  document.addEventListener('DOMContentLoaded',()=>{if(_isInvExecutor()&&document.getElementById('s-inv2')?.classList.contains('active'))renderInv20Operador();});
-})();
-</script>
 </body></html>`);w.document.close();showT('Romaneio enviado para impressão','ok');
 }
 function expConfItem(tid,cb){
@@ -10223,60 +10117,7 @@ function imprimirEtiqueta(){
     .barcode-bar{background:#000;display:inline-block;}
     .barcode-num{font-family:monospace;font-size:10px;color:#000;letter-spacing:.15em;}
     @media print{body{padding:0;}@page{margin:8mm;}}
-  </style></head><body>${area.innerHTML}<script>window.onload=()=>window.print();<\/script><style>
-/* INV 2.0 BUILD 003 — experiência operacional ContaLog para Conferente/Operador */
-.inv20-exec .inv20-shell{max-width:860px;margin:0 auto}.inv20-exec-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.inv20-exec-kicker{font:800 9px var(--mono);letter-spacing:.16em;color:#2dd4bf}.inv20-exec-title{font:800 24px var(--serif);font-style:italic}.inv20-exec-title em{color:#f97316;font-style:normal}.inv20-wave-card{background:#0a1424;border:1px solid rgba(45,212,191,.22);padding:14px;margin:10px 0;border-radius:14px}.inv20-wave-card.active{border-color:rgba(249,115,22,.55);box-shadow:0 0 0 1px rgba(249,115,22,.08)}.inv20-wave-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.inv20-wave-name{font:800 13px var(--mono);color:#fff}.inv20-wave-meta{font:800 8px var(--mono);color:#7890aa;margin-top:5px}.inv20-next{margin-top:12px;padding:13px;background:#07111f;border:1px solid rgba(255,255,255,.08);border-radius:10px}.inv20-next small{display:block;font:800 8px var(--mono);color:#7890aa;letter-spacing:.12em}.inv20-next strong{display:block;margin-top:5px;font:800 20px var(--mono);color:#2dd4bf}.inv20-open{width:100%;min-height:48px;margin-top:10px;background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;border:0;border-radius:9px;font:800 10px var(--sans);letter-spacing:.1em;cursor:pointer}.inv20-open:active{transform:translateY(1px)}
-/* contagem cega em modo foco */
-body.inv20-counting #mExecInv .md{width:min(96vw,860px);max-width:860px;max-height:calc(100vh - 18px);padding:18px;border-color:rgba(45,212,191,.28)}body.inv20-counting #mExecInv .mt{font-size:18px}body.inv20-counting #mExecInvHeader{position:sticky;top:0;z-index:2}.inv20-blind-grid{grid-template-columns:1fr 1fr!important}.inv20-blind-grid input,.inv20-blind-grid select{min-height:46px;font-size:13px!important}body.inv20-counting #blindDesc,body.inv20-counting #blindUm{cursor:pointer}body.inv20-counting #blindDesc:focus,body.inv20-counting #blindUm:focus{border-color:#2dd4bf;box-shadow:0 0 0 2px rgba(45,212,191,.12)}
-@media(max-width:600px){.inv20-exec{padding:0 2px}.inv20-exec-title{font-size:21px}.inv20-wave-card{padding:12px}.inv20-blind-grid{grid-template-columns:1fr!important}body.inv20-counting #mExecInv .md{width:100%;max-height:calc(100vh - 10px);margin:5px;padding:14px}body.inv20-counting #mExecInvHeader{position:relative}}
-</style>
-<script>
-(function(){
-  const _isInvExecutor=()=>{const p=String(usuarioAtual?.perfil||'').toLowerCase();return p==='operador'||p==='conferente';};
-  const _identityValues=()=>[usuarioAtual?.id,usuarioAtual?.login,usuarioAtual?.nome].map(v=>String(v??'').trim().toLowerCase()).filter(Boolean);
-  const _ondaIsMine=(o)=>{const ids=_identityValues();return ids.length>0&&[o?.contadorId,o?.contadorLogin,o?.contador].some(v=>ids.includes(String(v??'').trim().toLowerCase()));};
-  const _nextTask=(inv,o)=>_ondaTarefas(inv,o).find(t=>!inv2TaskDone(t));
-  window.inv20AbrirContagem=function(invId,ondaId,tarefaId){
-    if(!_isInvExecutor()){showT('A execução do Inventário 2.0 é destinada aos perfis Conferente e Operador.','err');return;}
-    const inv=DB.inventarios?.find(x=>x.id===invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===ondaId),t=inv&&inv.tarefas?.find(x=>x.id===tarefaId);
-    if(!inv||!o||!t||!_ondaIsMine(o)){showT('Esta onda não está atribuída ao seu usuário.','err');return;}
-    if(t.ondaId!==o.id){showT('O endereço não pertence à sua onda.','err');return;}
-    if(inv2TaskDone(t)){showT('Este endereço já foi concluído.','ok');return;}
-    t.status='ANDAMENTO';t.resp=usuarioAtual?.nome||usuarioAtual?.login||'—';t.pegoEm=t.pegoEm||now();o.status='EM_CONTAGEM';o.inicioEm=o.inicioEm||now();save();
-    window._inv20ExecContext={invId,ondaId,tarefaId};
-    document.body.classList.add('inv20-counting');
-    _renderContagemCegaInv(invId,tarefaId,1);
-  };
-  window.renderInv20Operador=function(){
-    const body=document.getElementById('inv20Body'),ctx=document.getElementById('inv20Context');if(!body||!ctx)return;
-    const nome=usuarioAtual?.nome||usuarioAtual?.login||'Usuário';
-    const cards=[]; (inv2Active()||[]).forEach(inv=>_normalizarOndasInv(inv).forEach(o=>{if(_ondaIsMine(o))cards.push({inv,o});}));
-    ctx.innerHTML='<div class="inv20-note">EXECUÇÃO · '+esc(nome)+' · PERFIL '+esc(String(usuarioAtual?.perfil||'').toUpperCase())+'</div>';
-    if(!cards.length){body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-kicker">MINHA OPERAÇÃO</div><div class="inv20-exec-title">Nenhuma <em>onda disponível</em></div><div class="inv20-note" style="margin-top:10px">Quando uma onda for liberada para este usuário, ela aparecerá automaticamente aqui.</div></div>';return;}
-    body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-head"><div><div class="inv20-exec-kicker">MINHAS ONDAS</div><div class="inv20-exec-title">Contagem <em>operacional</em></div></div><button class="inv20-btn ghost" onclick="renderInv2()">↻ Atualizar</button></div>'+cards.map(({inv,o})=>{const ts=_ondaTarefas(inv,o),next=_nextTask(inv,o),p=inv2WavePct(inv,o),done=ts.filter(inv2TaskDone).length;return '<div class="inv20-wave-card '+(next?'active':'')+'"><div class="inv20-wave-top"><div><div class="inv20-wave-name">ONDA '+String(o.numero).padStart(3,'0')+'</div><div class="inv20-wave-meta">'+esc(o.escopo||inv.id)+' · '+done+'/'+ts.length+' ENDEREÇOS CONCLUÍDOS</div></div><div style="font:800 10px var(--mono);color:#4ade80">'+p+'%</div></div><div class="inv20-next"><small>PRÓXIMO ENDEREÇO</small><strong>'+esc(next?.endereco||'ONDA CONCLUÍDA')+'</strong><div style="font:800 8px var(--mono);color:#7890aa;margin-top:5px">RUA '+esc(next?.rua||'—')+' · LADO '+esc(next?.lado||'—')+' · NÍVEL '+String(next?.nivel??'00').padStart(2,'0')+'</div></div>'+(next?'<button class="inv20-open" onclick="inv20AbrirContagem(\''+esc(inv.id)+'\',\''+esc(o.id)+'\',\''+esc(next.id)+'\')">ABRIR CONTAGEM</button>':'')+'</div>';}).join('')+'</div>';
-  };
-  const _renderInv2Base=window.renderInv2;
-  window.renderInv2=function(){if(_isInvExecutor()){renderInv20Operador();return;}return _renderInv2Base.apply(this,arguments);};
-  const _goBase=window.go;
-  window.go=function(id){if(_isInvExecutor()&&id==='inv2'){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('s-inv2')?.classList.add('active');const tt=document.getElementById('tbTitle');if(tt)tt.textContent='INV 2.0 · MINHAS ONDAS';renderInv20Operador();return;}return _goBase.apply(this,arguments);};
-  const _fecharCegoBase=window._fecharEnderecoCegoInv;
-  window._fecharEnderecoCegoInv=function(){
-    const c=window._inv20ExecContext;
-    _fecharCegoBase.apply(this,arguments);
-    document.body.classList.remove('inv20-counting');
-    if(!c)return;
-    const inv=DB.inventarios?.find(x=>x.id===c.invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===c.ondaId);if(!inv||!o)return;
-    const next=_nextTask(inv,o);window._inv20ExecContext=null;
-    if(next){setTimeout(()=>inv20AbrirContagem(inv.id,o.id,next.id),180);}
-    else{setTimeout(()=>{go('inv2');showT('Onda '+String(o.numero).padStart(3,'0')+' concluída.','ok');},180);}
-  };
-  // reabre a execução cega com o foco correto e abre a lista de seleção quando o navegador permitir
-  const _renderCegaBase=window._renderContagemCegaInv;
-  window._renderContagemCegaInv=function(invId,tarefaId,rodada){_renderCegaBase.apply(this,arguments);setTimeout(()=>{const d=document.getElementById('blindDesc'),u=document.getElementById('blindUm');if(d)d.classList.add('inv20-blind-grid');document.getElementById('blindSku')?.focus();},80);};
-  document.addEventListener('DOMContentLoaded',()=>{if(_isInvExecutor()&&document.getElementById('s-inv2')?.classList.contains('active'))renderInv20Operador();});
-})();
-</script>
-</body></html>`);
+  </style></head><body>${area.innerHTML}<script>window.onload=()=>window.print();<\/script></body></html>`);
   w.document.close();
 }
 async function expedicaoFinalizar(tid){
@@ -14287,59 +14128,6 @@ function imprimirEtiquetasEndereco(enderecos, larg, altu){
     setTimeout(function(){window.print();},400);
   });
 <\/script>
-<style>
-/* INV 2.0 BUILD 003 — experiência operacional ContaLog para Conferente/Operador */
-.inv20-exec .inv20-shell{max-width:860px;margin:0 auto}.inv20-exec-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.inv20-exec-kicker{font:800 9px var(--mono);letter-spacing:.16em;color:#2dd4bf}.inv20-exec-title{font:800 24px var(--serif);font-style:italic}.inv20-exec-title em{color:#f97316;font-style:normal}.inv20-wave-card{background:#0a1424;border:1px solid rgba(45,212,191,.22);padding:14px;margin:10px 0;border-radius:14px}.inv20-wave-card.active{border-color:rgba(249,115,22,.55);box-shadow:0 0 0 1px rgba(249,115,22,.08)}.inv20-wave-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.inv20-wave-name{font:800 13px var(--mono);color:#fff}.inv20-wave-meta{font:800 8px var(--mono);color:#7890aa;margin-top:5px}.inv20-next{margin-top:12px;padding:13px;background:#07111f;border:1px solid rgba(255,255,255,.08);border-radius:10px}.inv20-next small{display:block;font:800 8px var(--mono);color:#7890aa;letter-spacing:.12em}.inv20-next strong{display:block;margin-top:5px;font:800 20px var(--mono);color:#2dd4bf}.inv20-open{width:100%;min-height:48px;margin-top:10px;background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;border:0;border-radius:9px;font:800 10px var(--sans);letter-spacing:.1em;cursor:pointer}.inv20-open:active{transform:translateY(1px)}
-/* contagem cega em modo foco */
-body.inv20-counting #mExecInv .md{width:min(96vw,860px);max-width:860px;max-height:calc(100vh - 18px);padding:18px;border-color:rgba(45,212,191,.28)}body.inv20-counting #mExecInv .mt{font-size:18px}body.inv20-counting #mExecInvHeader{position:sticky;top:0;z-index:2}.inv20-blind-grid{grid-template-columns:1fr 1fr!important}.inv20-blind-grid input,.inv20-blind-grid select{min-height:46px;font-size:13px!important}body.inv20-counting #blindDesc,body.inv20-counting #blindUm{cursor:pointer}body.inv20-counting #blindDesc:focus,body.inv20-counting #blindUm:focus{border-color:#2dd4bf;box-shadow:0 0 0 2px rgba(45,212,191,.12)}
-@media(max-width:600px){.inv20-exec{padding:0 2px}.inv20-exec-title{font-size:21px}.inv20-wave-card{padding:12px}.inv20-blind-grid{grid-template-columns:1fr!important}body.inv20-counting #mExecInv .md{width:100%;max-height:calc(100vh - 10px);margin:5px;padding:14px}body.inv20-counting #mExecInvHeader{position:relative}}
-</style>
-<script>
-(function(){
-  const _isInvExecutor=()=>{const p=String(usuarioAtual?.perfil||'').toLowerCase();return p==='operador'||p==='conferente';};
-  const _identityValues=()=>[usuarioAtual?.id,usuarioAtual?.login,usuarioAtual?.nome].map(v=>String(v??'').trim().toLowerCase()).filter(Boolean);
-  const _ondaIsMine=(o)=>{const ids=_identityValues();return ids.length>0&&[o?.contadorId,o?.contadorLogin,o?.contador].some(v=>ids.includes(String(v??'').trim().toLowerCase()));};
-  const _nextTask=(inv,o)=>_ondaTarefas(inv,o).find(t=>!inv2TaskDone(t));
-  window.inv20AbrirContagem=function(invId,ondaId,tarefaId){
-    if(!_isInvExecutor()){showT('A execução do Inventário 2.0 é destinada aos perfis Conferente e Operador.','err');return;}
-    const inv=DB.inventarios?.find(x=>x.id===invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===ondaId),t=inv&&inv.tarefas?.find(x=>x.id===tarefaId);
-    if(!inv||!o||!t||!_ondaIsMine(o)){showT('Esta onda não está atribuída ao seu usuário.','err');return;}
-    if(t.ondaId!==o.id){showT('O endereço não pertence à sua onda.','err');return;}
-    if(inv2TaskDone(t)){showT('Este endereço já foi concluído.','ok');return;}
-    t.status='ANDAMENTO';t.resp=usuarioAtual?.nome||usuarioAtual?.login||'—';t.pegoEm=t.pegoEm||now();o.status='EM_CONTAGEM';o.inicioEm=o.inicioEm||now();save();
-    window._inv20ExecContext={invId,ondaId,tarefaId};
-    document.body.classList.add('inv20-counting');
-    _renderContagemCegaInv(invId,tarefaId,1);
-  };
-  window.renderInv20Operador=function(){
-    const body=document.getElementById('inv20Body'),ctx=document.getElementById('inv20Context');if(!body||!ctx)return;
-    const nome=usuarioAtual?.nome||usuarioAtual?.login||'Usuário';
-    const cards=[]; (inv2Active()||[]).forEach(inv=>_normalizarOndasInv(inv).forEach(o=>{if(_ondaIsMine(o))cards.push({inv,o});}));
-    ctx.innerHTML='<div class="inv20-note">EXECUÇÃO · '+esc(nome)+' · PERFIL '+esc(String(usuarioAtual?.perfil||'').toUpperCase())+'</div>';
-    if(!cards.length){body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-kicker">MINHA OPERAÇÃO</div><div class="inv20-exec-title">Nenhuma <em>onda disponível</em></div><div class="inv20-note" style="margin-top:10px">Quando uma onda for liberada para este usuário, ela aparecerá automaticamente aqui.</div></div>';return;}
-    body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-head"><div><div class="inv20-exec-kicker">MINHAS ONDAS</div><div class="inv20-exec-title">Contagem <em>operacional</em></div></div><button class="inv20-btn ghost" onclick="renderInv2()">↻ Atualizar</button></div>'+cards.map(({inv,o})=>{const ts=_ondaTarefas(inv,o),next=_nextTask(inv,o),p=inv2WavePct(inv,o),done=ts.filter(inv2TaskDone).length;return '<div class="inv20-wave-card '+(next?'active':'')+'"><div class="inv20-wave-top"><div><div class="inv20-wave-name">ONDA '+String(o.numero).padStart(3,'0')+'</div><div class="inv20-wave-meta">'+esc(o.escopo||inv.id)+' · '+done+'/'+ts.length+' ENDEREÇOS CONCLUÍDOS</div></div><div style="font:800 10px var(--mono);color:#4ade80">'+p+'%</div></div><div class="inv20-next"><small>PRÓXIMO ENDEREÇO</small><strong>'+esc(next?.endereco||'ONDA CONCLUÍDA')+'</strong><div style="font:800 8px var(--mono);color:#7890aa;margin-top:5px">RUA '+esc(next?.rua||'—')+' · LADO '+esc(next?.lado||'—')+' · NÍVEL '+String(next?.nivel??'00').padStart(2,'0')+'</div></div>'+(next?'<button class="inv20-open" onclick="inv20AbrirContagem(\''+esc(inv.id)+'\',\''+esc(o.id)+'\',\''+esc(next.id)+'\')">ABRIR CONTAGEM</button>':'')+'</div>';}).join('')+'</div>';
-  };
-  const _renderInv2Base=window.renderInv2;
-  window.renderInv2=function(){if(_isInvExecutor()){renderInv20Operador();return;}return _renderInv2Base.apply(this,arguments);};
-  const _goBase=window.go;
-  window.go=function(id){if(_isInvExecutor()&&id==='inv2'){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('s-inv2')?.classList.add('active');const tt=document.getElementById('tbTitle');if(tt)tt.textContent='INV 2.0 · MINHAS ONDAS';renderInv20Operador();return;}return _goBase.apply(this,arguments);};
-  const _fecharCegoBase=window._fecharEnderecoCegoInv;
-  window._fecharEnderecoCegoInv=function(){
-    const c=window._inv20ExecContext;
-    _fecharCegoBase.apply(this,arguments);
-    document.body.classList.remove('inv20-counting');
-    if(!c)return;
-    const inv=DB.inventarios?.find(x=>x.id===c.invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===c.ondaId);if(!inv||!o)return;
-    const next=_nextTask(inv,o);window._inv20ExecContext=null;
-    if(next){setTimeout(()=>inv20AbrirContagem(inv.id,o.id,next.id),180);}
-    else{setTimeout(()=>{go('inv2');showT('Onda '+String(o.numero).padStart(3,'0')+' concluída.','ok');},180);}
-  };
-  // reabre a execução cega com o foco correto e abre a lista de seleção quando o navegador permitir
-  const _renderCegaBase=window._renderContagemCegaInv;
-  window._renderContagemCegaInv=function(invId,tarefaId,rodada){_renderCegaBase.apply(this,arguments);setTimeout(()=>{const d=document.getElementById('blindDesc'),u=document.getElementById('blindUm');if(d)d.classList.add('inv20-blind-grid');document.getElementById('blindSku')?.focus();},80);};
-  document.addEventListener('DOMContentLoaded',()=>{if(_isInvExecutor()&&document.getElementById('s-inv2')?.classList.contains('active'))renderInv20Operador();});
-})();
-</script>
 </body></html>`);
   w.document.close();
 }
@@ -15659,59 +15447,6 @@ ${t.obs?`<div class="urgente">⚡ OBS / URGÊNCIA: ${t.obs}</div>`:''}
 </div>
 
 <script>window.addEventListener('load',function(){setTimeout(function(){window.print();},400);});<\/script>
-<style>
-/* INV 2.0 BUILD 003 — experiência operacional ContaLog para Conferente/Operador */
-.inv20-exec .inv20-shell{max-width:860px;margin:0 auto}.inv20-exec-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.inv20-exec-kicker{font:800 9px var(--mono);letter-spacing:.16em;color:#2dd4bf}.inv20-exec-title{font:800 24px var(--serif);font-style:italic}.inv20-exec-title em{color:#f97316;font-style:normal}.inv20-wave-card{background:#0a1424;border:1px solid rgba(45,212,191,.22);padding:14px;margin:10px 0;border-radius:14px}.inv20-wave-card.active{border-color:rgba(249,115,22,.55);box-shadow:0 0 0 1px rgba(249,115,22,.08)}.inv20-wave-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.inv20-wave-name{font:800 13px var(--mono);color:#fff}.inv20-wave-meta{font:800 8px var(--mono);color:#7890aa;margin-top:5px}.inv20-next{margin-top:12px;padding:13px;background:#07111f;border:1px solid rgba(255,255,255,.08);border-radius:10px}.inv20-next small{display:block;font:800 8px var(--mono);color:#7890aa;letter-spacing:.12em}.inv20-next strong{display:block;margin-top:5px;font:800 20px var(--mono);color:#2dd4bf}.inv20-open{width:100%;min-height:48px;margin-top:10px;background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;border:0;border-radius:9px;font:800 10px var(--sans);letter-spacing:.1em;cursor:pointer}.inv20-open:active{transform:translateY(1px)}
-/* contagem cega em modo foco */
-body.inv20-counting #mExecInv .md{width:min(96vw,860px);max-width:860px;max-height:calc(100vh - 18px);padding:18px;border-color:rgba(45,212,191,.28)}body.inv20-counting #mExecInv .mt{font-size:18px}body.inv20-counting #mExecInvHeader{position:sticky;top:0;z-index:2}.inv20-blind-grid{grid-template-columns:1fr 1fr!important}.inv20-blind-grid input,.inv20-blind-grid select{min-height:46px;font-size:13px!important}body.inv20-counting #blindDesc,body.inv20-counting #blindUm{cursor:pointer}body.inv20-counting #blindDesc:focus,body.inv20-counting #blindUm:focus{border-color:#2dd4bf;box-shadow:0 0 0 2px rgba(45,212,191,.12)}
-@media(max-width:600px){.inv20-exec{padding:0 2px}.inv20-exec-title{font-size:21px}.inv20-wave-card{padding:12px}.inv20-blind-grid{grid-template-columns:1fr!important}body.inv20-counting #mExecInv .md{width:100%;max-height:calc(100vh - 10px);margin:5px;padding:14px}body.inv20-counting #mExecInvHeader{position:relative}}
-</style>
-<script>
-(function(){
-  const _isInvExecutor=()=>{const p=String(usuarioAtual?.perfil||'').toLowerCase();return p==='operador'||p==='conferente';};
-  const _identityValues=()=>[usuarioAtual?.id,usuarioAtual?.login,usuarioAtual?.nome].map(v=>String(v??'').trim().toLowerCase()).filter(Boolean);
-  const _ondaIsMine=(o)=>{const ids=_identityValues();return ids.length>0&&[o?.contadorId,o?.contadorLogin,o?.contador].some(v=>ids.includes(String(v??'').trim().toLowerCase()));};
-  const _nextTask=(inv,o)=>_ondaTarefas(inv,o).find(t=>!inv2TaskDone(t));
-  window.inv20AbrirContagem=function(invId,ondaId,tarefaId){
-    if(!_isInvExecutor()){showT('A execução do Inventário 2.0 é destinada aos perfis Conferente e Operador.','err');return;}
-    const inv=DB.inventarios?.find(x=>x.id===invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===ondaId),t=inv&&inv.tarefas?.find(x=>x.id===tarefaId);
-    if(!inv||!o||!t||!_ondaIsMine(o)){showT('Esta onda não está atribuída ao seu usuário.','err');return;}
-    if(t.ondaId!==o.id){showT('O endereço não pertence à sua onda.','err');return;}
-    if(inv2TaskDone(t)){showT('Este endereço já foi concluído.','ok');return;}
-    t.status='ANDAMENTO';t.resp=usuarioAtual?.nome||usuarioAtual?.login||'—';t.pegoEm=t.pegoEm||now();o.status='EM_CONTAGEM';o.inicioEm=o.inicioEm||now();save();
-    window._inv20ExecContext={invId,ondaId,tarefaId};
-    document.body.classList.add('inv20-counting');
-    _renderContagemCegaInv(invId,tarefaId,1);
-  };
-  window.renderInv20Operador=function(){
-    const body=document.getElementById('inv20Body'),ctx=document.getElementById('inv20Context');if(!body||!ctx)return;
-    const nome=usuarioAtual?.nome||usuarioAtual?.login||'Usuário';
-    const cards=[]; (inv2Active()||[]).forEach(inv=>_normalizarOndasInv(inv).forEach(o=>{if(_ondaIsMine(o))cards.push({inv,o});}));
-    ctx.innerHTML='<div class="inv20-note">EXECUÇÃO · '+esc(nome)+' · PERFIL '+esc(String(usuarioAtual?.perfil||'').toUpperCase())+'</div>';
-    if(!cards.length){body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-kicker">MINHA OPERAÇÃO</div><div class="inv20-exec-title">Nenhuma <em>onda disponível</em></div><div class="inv20-note" style="margin-top:10px">Quando uma onda for liberada para este usuário, ela aparecerá automaticamente aqui.</div></div>';return;}
-    body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-head"><div><div class="inv20-exec-kicker">MINHAS ONDAS</div><div class="inv20-exec-title">Contagem <em>operacional</em></div></div><button class="inv20-btn ghost" onclick="renderInv2()">↻ Atualizar</button></div>'+cards.map(({inv,o})=>{const ts=_ondaTarefas(inv,o),next=_nextTask(inv,o),p=inv2WavePct(inv,o),done=ts.filter(inv2TaskDone).length;return '<div class="inv20-wave-card '+(next?'active':'')+'"><div class="inv20-wave-top"><div><div class="inv20-wave-name">ONDA '+String(o.numero).padStart(3,'0')+'</div><div class="inv20-wave-meta">'+esc(o.escopo||inv.id)+' · '+done+'/'+ts.length+' ENDEREÇOS CONCLUÍDOS</div></div><div style="font:800 10px var(--mono);color:#4ade80">'+p+'%</div></div><div class="inv20-next"><small>PRÓXIMO ENDEREÇO</small><strong>'+esc(next?.endereco||'ONDA CONCLUÍDA')+'</strong><div style="font:800 8px var(--mono);color:#7890aa;margin-top:5px">RUA '+esc(next?.rua||'—')+' · LADO '+esc(next?.lado||'—')+' · NÍVEL '+String(next?.nivel??'00').padStart(2,'0')+'</div></div>'+(next?'<button class="inv20-open" onclick="inv20AbrirContagem(\''+esc(inv.id)+'\',\''+esc(o.id)+'\',\''+esc(next.id)+'\')">ABRIR CONTAGEM</button>':'')+'</div>';}).join('')+'</div>';
-  };
-  const _renderInv2Base=window.renderInv2;
-  window.renderInv2=function(){if(_isInvExecutor()){renderInv20Operador();return;}return _renderInv2Base.apply(this,arguments);};
-  const _goBase=window.go;
-  window.go=function(id){if(_isInvExecutor()&&id==='inv2'){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('s-inv2')?.classList.add('active');const tt=document.getElementById('tbTitle');if(tt)tt.textContent='INV 2.0 · MINHAS ONDAS';renderInv20Operador();return;}return _goBase.apply(this,arguments);};
-  const _fecharCegoBase=window._fecharEnderecoCegoInv;
-  window._fecharEnderecoCegoInv=function(){
-    const c=window._inv20ExecContext;
-    _fecharCegoBase.apply(this,arguments);
-    document.body.classList.remove('inv20-counting');
-    if(!c)return;
-    const inv=DB.inventarios?.find(x=>x.id===c.invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===c.ondaId);if(!inv||!o)return;
-    const next=_nextTask(inv,o);window._inv20ExecContext=null;
-    if(next){setTimeout(()=>inv20AbrirContagem(inv.id,o.id,next.id),180);}
-    else{setTimeout(()=>{go('inv2');showT('Onda '+String(o.numero).padStart(3,'0')+' concluída.','ok');},180);}
-  };
-  // reabre a execução cega com o foco correto e abre a lista de seleção quando o navegador permitir
-  const _renderCegaBase=window._renderContagemCegaInv;
-  window._renderContagemCegaInv=function(invId,tarefaId,rodada){_renderCegaBase.apply(this,arguments);setTimeout(()=>{const d=document.getElementById('blindDesc'),u=document.getElementById('blindUm');if(d)d.classList.add('inv20-blind-grid');document.getElementById('blindSku')?.focus();},80);};
-  document.addEventListener('DOMContentLoaded',()=>{if(_isInvExecutor()&&document.getElementById('s-inv2')?.classList.contains('active'))renderInv20Operador();});
-})();
-</script>
 </body></html>`);
   w.document.close();
   showT('Minuta enviada para impressão','ok');
@@ -16027,60 +15762,7 @@ function abrirQRTarefa(id){
     `</div>`+
     `<table><thead><tr><th>#</th><th>Cód.</th><th>Descrição</th><th>UM</th><th>Qtd NF</th><th>Qtd Conf.</th></tr></thead><tbody>${itensRows}</tbody></table>`+
     `<div style="margin-top:16px;font-size:11px;color:#999;">Sincronização em tempo real disponível na versão web</div>`+
-    `<style>
-/* INV 2.0 BUILD 003 — experiência operacional ContaLog para Conferente/Operador */
-.inv20-exec .inv20-shell{max-width:860px;margin:0 auto}.inv20-exec-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.inv20-exec-kicker{font:800 9px var(--mono);letter-spacing:.16em;color:#2dd4bf}.inv20-exec-title{font:800 24px var(--serif);font-style:italic}.inv20-exec-title em{color:#f97316;font-style:normal}.inv20-wave-card{background:#0a1424;border:1px solid rgba(45,212,191,.22);padding:14px;margin:10px 0;border-radius:14px}.inv20-wave-card.active{border-color:rgba(249,115,22,.55);box-shadow:0 0 0 1px rgba(249,115,22,.08)}.inv20-wave-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.inv20-wave-name{font:800 13px var(--mono);color:#fff}.inv20-wave-meta{font:800 8px var(--mono);color:#7890aa;margin-top:5px}.inv20-next{margin-top:12px;padding:13px;background:#07111f;border:1px solid rgba(255,255,255,.08);border-radius:10px}.inv20-next small{display:block;font:800 8px var(--mono);color:#7890aa;letter-spacing:.12em}.inv20-next strong{display:block;margin-top:5px;font:800 20px var(--mono);color:#2dd4bf}.inv20-open{width:100%;min-height:48px;margin-top:10px;background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;border:0;border-radius:9px;font:800 10px var(--sans);letter-spacing:.1em;cursor:pointer}.inv20-open:active{transform:translateY(1px)}
-/* contagem cega em modo foco */
-body.inv20-counting #mExecInv .md{width:min(96vw,860px);max-width:860px;max-height:calc(100vh - 18px);padding:18px;border-color:rgba(45,212,191,.28)}body.inv20-counting #mExecInv .mt{font-size:18px}body.inv20-counting #mExecInvHeader{position:sticky;top:0;z-index:2}.inv20-blind-grid{grid-template-columns:1fr 1fr!important}.inv20-blind-grid input,.inv20-blind-grid select{min-height:46px;font-size:13px!important}body.inv20-counting #blindDesc,body.inv20-counting #blindUm{cursor:pointer}body.inv20-counting #blindDesc:focus,body.inv20-counting #blindUm:focus{border-color:#2dd4bf;box-shadow:0 0 0 2px rgba(45,212,191,.12)}
-@media(max-width:600px){.inv20-exec{padding:0 2px}.inv20-exec-title{font-size:21px}.inv20-wave-card{padding:12px}.inv20-blind-grid{grid-template-columns:1fr!important}body.inv20-counting #mExecInv .md{width:100%;max-height:calc(100vh - 10px);margin:5px;padding:14px}body.inv20-counting #mExecInvHeader{position:relative}}
-</style>
-<script>
-(function(){
-  const _isInvExecutor=()=>{const p=String(usuarioAtual?.perfil||'').toLowerCase();return p==='operador'||p==='conferente';};
-  const _identityValues=()=>[usuarioAtual?.id,usuarioAtual?.login,usuarioAtual?.nome].map(v=>String(v??'').trim().toLowerCase()).filter(Boolean);
-  const _ondaIsMine=(o)=>{const ids=_identityValues();return ids.length>0&&[o?.contadorId,o?.contadorLogin,o?.contador].some(v=>ids.includes(String(v??'').trim().toLowerCase()));};
-  const _nextTask=(inv,o)=>_ondaTarefas(inv,o).find(t=>!inv2TaskDone(t));
-  window.inv20AbrirContagem=function(invId,ondaId,tarefaId){
-    if(!_isInvExecutor()){showT('A execução do Inventário 2.0 é destinada aos perfis Conferente e Operador.','err');return;}
-    const inv=DB.inventarios?.find(x=>x.id===invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===ondaId),t=inv&&inv.tarefas?.find(x=>x.id===tarefaId);
-    if(!inv||!o||!t||!_ondaIsMine(o)){showT('Esta onda não está atribuída ao seu usuário.','err');return;}
-    if(t.ondaId!==o.id){showT('O endereço não pertence à sua onda.','err');return;}
-    if(inv2TaskDone(t)){showT('Este endereço já foi concluído.','ok');return;}
-    t.status='ANDAMENTO';t.resp=usuarioAtual?.nome||usuarioAtual?.login||'—';t.pegoEm=t.pegoEm||now();o.status='EM_CONTAGEM';o.inicioEm=o.inicioEm||now();save();
-    window._inv20ExecContext={invId,ondaId,tarefaId};
-    document.body.classList.add('inv20-counting');
-    _renderContagemCegaInv(invId,tarefaId,1);
-  };
-  window.renderInv20Operador=function(){
-    const body=document.getElementById('inv20Body'),ctx=document.getElementById('inv20Context');if(!body||!ctx)return;
-    const nome=usuarioAtual?.nome||usuarioAtual?.login||'Usuário';
-    const cards=[]; (inv2Active()||[]).forEach(inv=>_normalizarOndasInv(inv).forEach(o=>{if(_ondaIsMine(o))cards.push({inv,o});}));
-    ctx.innerHTML='<div class="inv20-note">EXECUÇÃO · '+esc(nome)+' · PERFIL '+esc(String(usuarioAtual?.perfil||'').toUpperCase())+'</div>';
-    if(!cards.length){body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-kicker">MINHA OPERAÇÃO</div><div class="inv20-exec-title">Nenhuma <em>onda disponível</em></div><div class="inv20-note" style="margin-top:10px">Quando uma onda for liberada para este usuário, ela aparecerá automaticamente aqui.</div></div>';return;}
-    body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-head"><div><div class="inv20-exec-kicker">MINHAS ONDAS</div><div class="inv20-exec-title">Contagem <em>operacional</em></div></div><button class="inv20-btn ghost" onclick="renderInv2()">↻ Atualizar</button></div>'+cards.map(({inv,o})=>{const ts=_ondaTarefas(inv,o),next=_nextTask(inv,o),p=inv2WavePct(inv,o),done=ts.filter(inv2TaskDone).length;return '<div class="inv20-wave-card '+(next?'active':'')+'"><div class="inv20-wave-top"><div><div class="inv20-wave-name">ONDA '+String(o.numero).padStart(3,'0')+'</div><div class="inv20-wave-meta">'+esc(o.escopo||inv.id)+' · '+done+'/'+ts.length+' ENDEREÇOS CONCLUÍDOS</div></div><div style="font:800 10px var(--mono);color:#4ade80">'+p+'%</div></div><div class="inv20-next"><small>PRÓXIMO ENDEREÇO</small><strong>'+esc(next?.endereco||'ONDA CONCLUÍDA')+'</strong><div style="font:800 8px var(--mono);color:#7890aa;margin-top:5px">RUA '+esc(next?.rua||'—')+' · LADO '+esc(next?.lado||'—')+' · NÍVEL '+String(next?.nivel??'00').padStart(2,'0')+'</div></div>'+(next?'<button class="inv20-open" onclick="inv20AbrirContagem(\''+esc(inv.id)+'\',\''+esc(o.id)+'\',\''+esc(next.id)+'\')">ABRIR CONTAGEM</button>':'')+'</div>';}).join('')+'</div>';
-  };
-  const _renderInv2Base=window.renderInv2;
-  window.renderInv2=function(){if(_isInvExecutor()){renderInv20Operador();return;}return _renderInv2Base.apply(this,arguments);};
-  const _goBase=window.go;
-  window.go=function(id){if(_isInvExecutor()&&id==='inv2'){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('s-inv2')?.classList.add('active');const tt=document.getElementById('tbTitle');if(tt)tt.textContent='INV 2.0 · MINHAS ONDAS';renderInv20Operador();return;}return _goBase.apply(this,arguments);};
-  const _fecharCegoBase=window._fecharEnderecoCegoInv;
-  window._fecharEnderecoCegoInv=function(){
-    const c=window._inv20ExecContext;
-    _fecharCegoBase.apply(this,arguments);
-    document.body.classList.remove('inv20-counting');
-    if(!c)return;
-    const inv=DB.inventarios?.find(x=>x.id===c.invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===c.ondaId);if(!inv||!o)return;
-    const next=_nextTask(inv,o);window._inv20ExecContext=null;
-    if(next){setTimeout(()=>inv20AbrirContagem(inv.id,o.id,next.id),180);}
-    else{setTimeout(()=>{go('inv2');showT('Onda '+String(o.numero).padStart(3,'0')+' concluída.','ok');},180);}
-  };
-  // reabre a execução cega com o foco correto e abre a lista de seleção quando o navegador permitir
-  const _renderCegaBase=window._renderContagemCegaInv;
-  window._renderContagemCegaInv=function(invId,tarefaId,rodada){_renderCegaBase.apply(this,arguments);setTimeout(()=>{const d=document.getElementById('blindDesc'),u=document.getElementById('blindUm');if(d)d.classList.add('inv20-blind-grid');document.getElementById('blindSku')?.focus();},80);};
-  document.addEventListener('DOMContentLoaded',()=>{if(_isInvExecutor()&&document.getElementById('s-inv2')?.classList.contains('active'))renderInv20Operador();});
-})();
-</script>
-</body></html>`;
+    `</body></html>`;
 
   const dataUrl='data:text/html;charset=utf-8,'+encodeURIComponent(html);
 
@@ -16321,60 +16003,7 @@ function _imprimirEtiquetasEndereco(enderecos,larg,altu){
     <style>@media print{body{margin:0;}button{display:none;}}</style></head>
     <body style="background:#f5f5f5;padding:16px;">
     <div style="margin-bottom:12px;"><button onclick="window.print()" style="padding:8px 18px;font-size:13px;cursor:pointer;">🖨 Imprimir</button></div>
-    ${rows}<style>
-/* INV 2.0 BUILD 003 — experiência operacional ContaLog para Conferente/Operador */
-.inv20-exec .inv20-shell{max-width:860px;margin:0 auto}.inv20-exec-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.inv20-exec-kicker{font:800 9px var(--mono);letter-spacing:.16em;color:#2dd4bf}.inv20-exec-title{font:800 24px var(--serif);font-style:italic}.inv20-exec-title em{color:#f97316;font-style:normal}.inv20-wave-card{background:#0a1424;border:1px solid rgba(45,212,191,.22);padding:14px;margin:10px 0;border-radius:14px}.inv20-wave-card.active{border-color:rgba(249,115,22,.55);box-shadow:0 0 0 1px rgba(249,115,22,.08)}.inv20-wave-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.inv20-wave-name{font:800 13px var(--mono);color:#fff}.inv20-wave-meta{font:800 8px var(--mono);color:#7890aa;margin-top:5px}.inv20-next{margin-top:12px;padding:13px;background:#07111f;border:1px solid rgba(255,255,255,.08);border-radius:10px}.inv20-next small{display:block;font:800 8px var(--mono);color:#7890aa;letter-spacing:.12em}.inv20-next strong{display:block;margin-top:5px;font:800 20px var(--mono);color:#2dd4bf}.inv20-open{width:100%;min-height:48px;margin-top:10px;background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;border:0;border-radius:9px;font:800 10px var(--sans);letter-spacing:.1em;cursor:pointer}.inv20-open:active{transform:translateY(1px)}
-/* contagem cega em modo foco */
-body.inv20-counting #mExecInv .md{width:min(96vw,860px);max-width:860px;max-height:calc(100vh - 18px);padding:18px;border-color:rgba(45,212,191,.28)}body.inv20-counting #mExecInv .mt{font-size:18px}body.inv20-counting #mExecInvHeader{position:sticky;top:0;z-index:2}.inv20-blind-grid{grid-template-columns:1fr 1fr!important}.inv20-blind-grid input,.inv20-blind-grid select{min-height:46px;font-size:13px!important}body.inv20-counting #blindDesc,body.inv20-counting #blindUm{cursor:pointer}body.inv20-counting #blindDesc:focus,body.inv20-counting #blindUm:focus{border-color:#2dd4bf;box-shadow:0 0 0 2px rgba(45,212,191,.12)}
-@media(max-width:600px){.inv20-exec{padding:0 2px}.inv20-exec-title{font-size:21px}.inv20-wave-card{padding:12px}.inv20-blind-grid{grid-template-columns:1fr!important}body.inv20-counting #mExecInv .md{width:100%;max-height:calc(100vh - 10px);margin:5px;padding:14px}body.inv20-counting #mExecInvHeader{position:relative}}
-</style>
-<script>
-(function(){
-  const _isInvExecutor=()=>{const p=String(usuarioAtual?.perfil||'').toLowerCase();return p==='operador'||p==='conferente';};
-  const _identityValues=()=>[usuarioAtual?.id,usuarioAtual?.login,usuarioAtual?.nome].map(v=>String(v??'').trim().toLowerCase()).filter(Boolean);
-  const _ondaIsMine=(o)=>{const ids=_identityValues();return ids.length>0&&[o?.contadorId,o?.contadorLogin,o?.contador].some(v=>ids.includes(String(v??'').trim().toLowerCase()));};
-  const _nextTask=(inv,o)=>_ondaTarefas(inv,o).find(t=>!inv2TaskDone(t));
-  window.inv20AbrirContagem=function(invId,ondaId,tarefaId){
-    if(!_isInvExecutor()){showT('A execução do Inventário 2.0 é destinada aos perfis Conferente e Operador.','err');return;}
-    const inv=DB.inventarios?.find(x=>x.id===invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===ondaId),t=inv&&inv.tarefas?.find(x=>x.id===tarefaId);
-    if(!inv||!o||!t||!_ondaIsMine(o)){showT('Esta onda não está atribuída ao seu usuário.','err');return;}
-    if(t.ondaId!==o.id){showT('O endereço não pertence à sua onda.','err');return;}
-    if(inv2TaskDone(t)){showT('Este endereço já foi concluído.','ok');return;}
-    t.status='ANDAMENTO';t.resp=usuarioAtual?.nome||usuarioAtual?.login||'—';t.pegoEm=t.pegoEm||now();o.status='EM_CONTAGEM';o.inicioEm=o.inicioEm||now();save();
-    window._inv20ExecContext={invId,ondaId,tarefaId};
-    document.body.classList.add('inv20-counting');
-    _renderContagemCegaInv(invId,tarefaId,1);
-  };
-  window.renderInv20Operador=function(){
-    const body=document.getElementById('inv20Body'),ctx=document.getElementById('inv20Context');if(!body||!ctx)return;
-    const nome=usuarioAtual?.nome||usuarioAtual?.login||'Usuário';
-    const cards=[]; (inv2Active()||[]).forEach(inv=>_normalizarOndasInv(inv).forEach(o=>{if(_ondaIsMine(o))cards.push({inv,o});}));
-    ctx.innerHTML='<div class="inv20-note">EXECUÇÃO · '+esc(nome)+' · PERFIL '+esc(String(usuarioAtual?.perfil||'').toUpperCase())+'</div>';
-    if(!cards.length){body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-kicker">MINHA OPERAÇÃO</div><div class="inv20-exec-title">Nenhuma <em>onda disponível</em></div><div class="inv20-note" style="margin-top:10px">Quando uma onda for liberada para este usuário, ela aparecerá automaticamente aqui.</div></div>';return;}
-    body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-head"><div><div class="inv20-exec-kicker">MINHAS ONDAS</div><div class="inv20-exec-title">Contagem <em>operacional</em></div></div><button class="inv20-btn ghost" onclick="renderInv2()">↻ Atualizar</button></div>'+cards.map(({inv,o})=>{const ts=_ondaTarefas(inv,o),next=_nextTask(inv,o),p=inv2WavePct(inv,o),done=ts.filter(inv2TaskDone).length;return '<div class="inv20-wave-card '+(next?'active':'')+'"><div class="inv20-wave-top"><div><div class="inv20-wave-name">ONDA '+String(o.numero).padStart(3,'0')+'</div><div class="inv20-wave-meta">'+esc(o.escopo||inv.id)+' · '+done+'/'+ts.length+' ENDEREÇOS CONCLUÍDOS</div></div><div style="font:800 10px var(--mono);color:#4ade80">'+p+'%</div></div><div class="inv20-next"><small>PRÓXIMO ENDEREÇO</small><strong>'+esc(next?.endereco||'ONDA CONCLUÍDA')+'</strong><div style="font:800 8px var(--mono);color:#7890aa;margin-top:5px">RUA '+esc(next?.rua||'—')+' · LADO '+esc(next?.lado||'—')+' · NÍVEL '+String(next?.nivel??'00').padStart(2,'0')+'</div></div>'+(next?'<button class="inv20-open" onclick="inv20AbrirContagem(\''+esc(inv.id)+'\',\''+esc(o.id)+'\',\''+esc(next.id)+'\')">ABRIR CONTAGEM</button>':'')+'</div>';}).join('')+'</div>';
-  };
-  const _renderInv2Base=window.renderInv2;
-  window.renderInv2=function(){if(_isInvExecutor()){renderInv20Operador();return;}return _renderInv2Base.apply(this,arguments);};
-  const _goBase=window.go;
-  window.go=function(id){if(_isInvExecutor()&&id==='inv2'){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('s-inv2')?.classList.add('active');const tt=document.getElementById('tbTitle');if(tt)tt.textContent='INV 2.0 · MINHAS ONDAS';renderInv20Operador();return;}return _goBase.apply(this,arguments);};
-  const _fecharCegoBase=window._fecharEnderecoCegoInv;
-  window._fecharEnderecoCegoInv=function(){
-    const c=window._inv20ExecContext;
-    _fecharCegoBase.apply(this,arguments);
-    document.body.classList.remove('inv20-counting');
-    if(!c)return;
-    const inv=DB.inventarios?.find(x=>x.id===c.invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===c.ondaId);if(!inv||!o)return;
-    const next=_nextTask(inv,o);window._inv20ExecContext=null;
-    if(next){setTimeout(()=>inv20AbrirContagem(inv.id,o.id,next.id),180);}
-    else{setTimeout(()=>{go('inv2');showT('Onda '+String(o.numero).padStart(3,'0')+' concluída.','ok');},180);}
-  };
-  // reabre a execução cega com o foco correto e abre a lista de seleção quando o navegador permitir
-  const _renderCegaBase=window._renderContagemCegaInv;
-  window._renderContagemCegaInv=function(invId,tarefaId,rodada){_renderCegaBase.apply(this,arguments);setTimeout(()=>{const d=document.getElementById('blindDesc'),u=document.getElementById('blindUm');if(d)d.classList.add('inv20-blind-grid');document.getElementById('blindSku')?.focus();},80);};
-  document.addEventListener('DOMContentLoaded',()=>{if(_isInvExecutor()&&document.getElementById('s-inv2')?.classList.contains('active'))renderInv20Operador();});
-})();
-</script>
-</body></html>`);
+    ${rows}</body></html>`);
   w.document.close();
 }
 
@@ -16396,60 +16025,7 @@ function _imprimirEtiquetasPalete(itemsPal,larg,altu){
     <style>@media print{body{margin:0;}button{display:none;}}</style></head>
     <body style="background:#f5f5f5;padding:16px;">
     <div style="margin-bottom:12px;"><button onclick="window.print()" style="padding:8px 18px;font-size:13px;cursor:pointer;">🖨 Imprimir</button></div>
-    ${rows}<style>
-/* INV 2.0 BUILD 003 — experiência operacional ContaLog para Conferente/Operador */
-.inv20-exec .inv20-shell{max-width:860px;margin:0 auto}.inv20-exec-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.inv20-exec-kicker{font:800 9px var(--mono);letter-spacing:.16em;color:#2dd4bf}.inv20-exec-title{font:800 24px var(--serif);font-style:italic}.inv20-exec-title em{color:#f97316;font-style:normal}.inv20-wave-card{background:#0a1424;border:1px solid rgba(45,212,191,.22);padding:14px;margin:10px 0;border-radius:14px}.inv20-wave-card.active{border-color:rgba(249,115,22,.55);box-shadow:0 0 0 1px rgba(249,115,22,.08)}.inv20-wave-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.inv20-wave-name{font:800 13px var(--mono);color:#fff}.inv20-wave-meta{font:800 8px var(--mono);color:#7890aa;margin-top:5px}.inv20-next{margin-top:12px;padding:13px;background:#07111f;border:1px solid rgba(255,255,255,.08);border-radius:10px}.inv20-next small{display:block;font:800 8px var(--mono);color:#7890aa;letter-spacing:.12em}.inv20-next strong{display:block;margin-top:5px;font:800 20px var(--mono);color:#2dd4bf}.inv20-open{width:100%;min-height:48px;margin-top:10px;background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;border:0;border-radius:9px;font:800 10px var(--sans);letter-spacing:.1em;cursor:pointer}.inv20-open:active{transform:translateY(1px)}
-/* contagem cega em modo foco */
-body.inv20-counting #mExecInv .md{width:min(96vw,860px);max-width:860px;max-height:calc(100vh - 18px);padding:18px;border-color:rgba(45,212,191,.28)}body.inv20-counting #mExecInv .mt{font-size:18px}body.inv20-counting #mExecInvHeader{position:sticky;top:0;z-index:2}.inv20-blind-grid{grid-template-columns:1fr 1fr!important}.inv20-blind-grid input,.inv20-blind-grid select{min-height:46px;font-size:13px!important}body.inv20-counting #blindDesc,body.inv20-counting #blindUm{cursor:pointer}body.inv20-counting #blindDesc:focus,body.inv20-counting #blindUm:focus{border-color:#2dd4bf;box-shadow:0 0 0 2px rgba(45,212,191,.12)}
-@media(max-width:600px){.inv20-exec{padding:0 2px}.inv20-exec-title{font-size:21px}.inv20-wave-card{padding:12px}.inv20-blind-grid{grid-template-columns:1fr!important}body.inv20-counting #mExecInv .md{width:100%;max-height:calc(100vh - 10px);margin:5px;padding:14px}body.inv20-counting #mExecInvHeader{position:relative}}
-</style>
-<script>
-(function(){
-  const _isInvExecutor=()=>{const p=String(usuarioAtual?.perfil||'').toLowerCase();return p==='operador'||p==='conferente';};
-  const _identityValues=()=>[usuarioAtual?.id,usuarioAtual?.login,usuarioAtual?.nome].map(v=>String(v??'').trim().toLowerCase()).filter(Boolean);
-  const _ondaIsMine=(o)=>{const ids=_identityValues();return ids.length>0&&[o?.contadorId,o?.contadorLogin,o?.contador].some(v=>ids.includes(String(v??'').trim().toLowerCase()));};
-  const _nextTask=(inv,o)=>_ondaTarefas(inv,o).find(t=>!inv2TaskDone(t));
-  window.inv20AbrirContagem=function(invId,ondaId,tarefaId){
-    if(!_isInvExecutor()){showT('A execução do Inventário 2.0 é destinada aos perfis Conferente e Operador.','err');return;}
-    const inv=DB.inventarios?.find(x=>x.id===invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===ondaId),t=inv&&inv.tarefas?.find(x=>x.id===tarefaId);
-    if(!inv||!o||!t||!_ondaIsMine(o)){showT('Esta onda não está atribuída ao seu usuário.','err');return;}
-    if(t.ondaId!==o.id){showT('O endereço não pertence à sua onda.','err');return;}
-    if(inv2TaskDone(t)){showT('Este endereço já foi concluído.','ok');return;}
-    t.status='ANDAMENTO';t.resp=usuarioAtual?.nome||usuarioAtual?.login||'—';t.pegoEm=t.pegoEm||now();o.status='EM_CONTAGEM';o.inicioEm=o.inicioEm||now();save();
-    window._inv20ExecContext={invId,ondaId,tarefaId};
-    document.body.classList.add('inv20-counting');
-    _renderContagemCegaInv(invId,tarefaId,1);
-  };
-  window.renderInv20Operador=function(){
-    const body=document.getElementById('inv20Body'),ctx=document.getElementById('inv20Context');if(!body||!ctx)return;
-    const nome=usuarioAtual?.nome||usuarioAtual?.login||'Usuário';
-    const cards=[]; (inv2Active()||[]).forEach(inv=>_normalizarOndasInv(inv).forEach(o=>{if(_ondaIsMine(o))cards.push({inv,o});}));
-    ctx.innerHTML='<div class="inv20-note">EXECUÇÃO · '+esc(nome)+' · PERFIL '+esc(String(usuarioAtual?.perfil||'').toUpperCase())+'</div>';
-    if(!cards.length){body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-kicker">MINHA OPERAÇÃO</div><div class="inv20-exec-title">Nenhuma <em>onda disponível</em></div><div class="inv20-note" style="margin-top:10px">Quando uma onda for liberada para este usuário, ela aparecerá automaticamente aqui.</div></div>';return;}
-    body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-head"><div><div class="inv20-exec-kicker">MINHAS ONDAS</div><div class="inv20-exec-title">Contagem <em>operacional</em></div></div><button class="inv20-btn ghost" onclick="renderInv2()">↻ Atualizar</button></div>'+cards.map(({inv,o})=>{const ts=_ondaTarefas(inv,o),next=_nextTask(inv,o),p=inv2WavePct(inv,o),done=ts.filter(inv2TaskDone).length;return '<div class="inv20-wave-card '+(next?'active':'')+'"><div class="inv20-wave-top"><div><div class="inv20-wave-name">ONDA '+String(o.numero).padStart(3,'0')+'</div><div class="inv20-wave-meta">'+esc(o.escopo||inv.id)+' · '+done+'/'+ts.length+' ENDEREÇOS CONCLUÍDOS</div></div><div style="font:800 10px var(--mono);color:#4ade80">'+p+'%</div></div><div class="inv20-next"><small>PRÓXIMO ENDEREÇO</small><strong>'+esc(next?.endereco||'ONDA CONCLUÍDA')+'</strong><div style="font:800 8px var(--mono);color:#7890aa;margin-top:5px">RUA '+esc(next?.rua||'—')+' · LADO '+esc(next?.lado||'—')+' · NÍVEL '+String(next?.nivel??'00').padStart(2,'0')+'</div></div>'+(next?'<button class="inv20-open" onclick="inv20AbrirContagem(\''+esc(inv.id)+'\',\''+esc(o.id)+'\',\''+esc(next.id)+'\')">ABRIR CONTAGEM</button>':'')+'</div>';}).join('')+'</div>';
-  };
-  const _renderInv2Base=window.renderInv2;
-  window.renderInv2=function(){if(_isInvExecutor()){renderInv20Operador();return;}return _renderInv2Base.apply(this,arguments);};
-  const _goBase=window.go;
-  window.go=function(id){if(_isInvExecutor()&&id==='inv2'){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('s-inv2')?.classList.add('active');const tt=document.getElementById('tbTitle');if(tt)tt.textContent='INV 2.0 · MINHAS ONDAS';renderInv20Operador();return;}return _goBase.apply(this,arguments);};
-  const _fecharCegoBase=window._fecharEnderecoCegoInv;
-  window._fecharEnderecoCegoInv=function(){
-    const c=window._inv20ExecContext;
-    _fecharCegoBase.apply(this,arguments);
-    document.body.classList.remove('inv20-counting');
-    if(!c)return;
-    const inv=DB.inventarios?.find(x=>x.id===c.invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===c.ondaId);if(!inv||!o)return;
-    const next=_nextTask(inv,o);window._inv20ExecContext=null;
-    if(next){setTimeout(()=>inv20AbrirContagem(inv.id,o.id,next.id),180);}
-    else{setTimeout(()=>{go('inv2');showT('Onda '+String(o.numero).padStart(3,'0')+' concluída.','ok');},180);}
-  };
-  // reabre a execução cega com o foco correto e abre a lista de seleção quando o navegador permitir
-  const _renderCegaBase=window._renderContagemCegaInv;
-  window._renderContagemCegaInv=function(invId,tarefaId,rodada){_renderCegaBase.apply(this,arguments);setTimeout(()=>{const d=document.getElementById('blindDesc'),u=document.getElementById('blindUm');if(d)d.classList.add('inv20-blind-grid');document.getElementById('blindSku')?.focus();},80);};
-  document.addEventListener('DOMContentLoaded',()=>{if(_isInvExecutor()&&document.getElementById('s-inv2')?.classList.contains('active'))renderInv20Operador();});
-})();
-</script>
-</body></html>`);
+    ${rows}</body></html>`);
   w.document.close();
 }
 
@@ -16698,60 +16274,7 @@ async function finalizar(){
   mailEl.click();
   wmsAlert('Arquivo JSON baixado com sucesso!\n\nEnvie por e-mail ou WhatsApp para o estoque importar no WMS.','Backup Exportado','✅');
 }
-<\/script><style>
-/* INV 2.0 BUILD 003 — experiência operacional ContaLog para Conferente/Operador */
-.inv20-exec .inv20-shell{max-width:860px;margin:0 auto}.inv20-exec-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.inv20-exec-kicker{font:800 9px var(--mono);letter-spacing:.16em;color:#2dd4bf}.inv20-exec-title{font:800 24px var(--serif);font-style:italic}.inv20-exec-title em{color:#f97316;font-style:normal}.inv20-wave-card{background:#0a1424;border:1px solid rgba(45,212,191,.22);padding:14px;margin:10px 0;border-radius:14px}.inv20-wave-card.active{border-color:rgba(249,115,22,.55);box-shadow:0 0 0 1px rgba(249,115,22,.08)}.inv20-wave-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.inv20-wave-name{font:800 13px var(--mono);color:#fff}.inv20-wave-meta{font:800 8px var(--mono);color:#7890aa;margin-top:5px}.inv20-next{margin-top:12px;padding:13px;background:#07111f;border:1px solid rgba(255,255,255,.08);border-radius:10px}.inv20-next small{display:block;font:800 8px var(--mono);color:#7890aa;letter-spacing:.12em}.inv20-next strong{display:block;margin-top:5px;font:800 20px var(--mono);color:#2dd4bf}.inv20-open{width:100%;min-height:48px;margin-top:10px;background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;border:0;border-radius:9px;font:800 10px var(--sans);letter-spacing:.1em;cursor:pointer}.inv20-open:active{transform:translateY(1px)}
-/* contagem cega em modo foco */
-body.inv20-counting #mExecInv .md{width:min(96vw,860px);max-width:860px;max-height:calc(100vh - 18px);padding:18px;border-color:rgba(45,212,191,.28)}body.inv20-counting #mExecInv .mt{font-size:18px}body.inv20-counting #mExecInvHeader{position:sticky;top:0;z-index:2}.inv20-blind-grid{grid-template-columns:1fr 1fr!important}.inv20-blind-grid input,.inv20-blind-grid select{min-height:46px;font-size:13px!important}body.inv20-counting #blindDesc,body.inv20-counting #blindUm{cursor:pointer}body.inv20-counting #blindDesc:focus,body.inv20-counting #blindUm:focus{border-color:#2dd4bf;box-shadow:0 0 0 2px rgba(45,212,191,.12)}
-@media(max-width:600px){.inv20-exec{padding:0 2px}.inv20-exec-title{font-size:21px}.inv20-wave-card{padding:12px}.inv20-blind-grid{grid-template-columns:1fr!important}body.inv20-counting #mExecInv .md{width:100%;max-height:calc(100vh - 10px);margin:5px;padding:14px}body.inv20-counting #mExecInvHeader{position:relative}}
-</style>
-<script>
-(function(){
-  const _isInvExecutor=()=>{const p=String(usuarioAtual?.perfil||'').toLowerCase();return p==='operador'||p==='conferente';};
-  const _identityValues=()=>[usuarioAtual?.id,usuarioAtual?.login,usuarioAtual?.nome].map(v=>String(v??'').trim().toLowerCase()).filter(Boolean);
-  const _ondaIsMine=(o)=>{const ids=_identityValues();return ids.length>0&&[o?.contadorId,o?.contadorLogin,o?.contador].some(v=>ids.includes(String(v??'').trim().toLowerCase()));};
-  const _nextTask=(inv,o)=>_ondaTarefas(inv,o).find(t=>!inv2TaskDone(t));
-  window.inv20AbrirContagem=function(invId,ondaId,tarefaId){
-    if(!_isInvExecutor()){showT('A execução do Inventário 2.0 é destinada aos perfis Conferente e Operador.','err');return;}
-    const inv=DB.inventarios?.find(x=>x.id===invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===ondaId),t=inv&&inv.tarefas?.find(x=>x.id===tarefaId);
-    if(!inv||!o||!t||!_ondaIsMine(o)){showT('Esta onda não está atribuída ao seu usuário.','err');return;}
-    if(t.ondaId!==o.id){showT('O endereço não pertence à sua onda.','err');return;}
-    if(inv2TaskDone(t)){showT('Este endereço já foi concluído.','ok');return;}
-    t.status='ANDAMENTO';t.resp=usuarioAtual?.nome||usuarioAtual?.login||'—';t.pegoEm=t.pegoEm||now();o.status='EM_CONTAGEM';o.inicioEm=o.inicioEm||now();save();
-    window._inv20ExecContext={invId,ondaId,tarefaId};
-    document.body.classList.add('inv20-counting');
-    _renderContagemCegaInv(invId,tarefaId,1);
-  };
-  window.renderInv20Operador=function(){
-    const body=document.getElementById('inv20Body'),ctx=document.getElementById('inv20Context');if(!body||!ctx)return;
-    const nome=usuarioAtual?.nome||usuarioAtual?.login||'Usuário';
-    const cards=[]; (inv2Active()||[]).forEach(inv=>_normalizarOndasInv(inv).forEach(o=>{if(_ondaIsMine(o))cards.push({inv,o});}));
-    ctx.innerHTML='<div class="inv20-note">EXECUÇÃO · '+esc(nome)+' · PERFIL '+esc(String(usuarioAtual?.perfil||'').toUpperCase())+'</div>';
-    if(!cards.length){body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-kicker">MINHA OPERAÇÃO</div><div class="inv20-exec-title">Nenhuma <em>onda disponível</em></div><div class="inv20-note" style="margin-top:10px">Quando uma onda for liberada para este usuário, ela aparecerá automaticamente aqui.</div></div>';return;}
-    body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-head"><div><div class="inv20-exec-kicker">MINHAS ONDAS</div><div class="inv20-exec-title">Contagem <em>operacional</em></div></div><button class="inv20-btn ghost" onclick="renderInv2()">↻ Atualizar</button></div>'+cards.map(({inv,o})=>{const ts=_ondaTarefas(inv,o),next=_nextTask(inv,o),p=inv2WavePct(inv,o),done=ts.filter(inv2TaskDone).length;return '<div class="inv20-wave-card '+(next?'active':'')+'"><div class="inv20-wave-top"><div><div class="inv20-wave-name">ONDA '+String(o.numero).padStart(3,'0')+'</div><div class="inv20-wave-meta">'+esc(o.escopo||inv.id)+' · '+done+'/'+ts.length+' ENDEREÇOS CONCLUÍDOS</div></div><div style="font:800 10px var(--mono);color:#4ade80">'+p+'%</div></div><div class="inv20-next"><small>PRÓXIMO ENDEREÇO</small><strong>'+esc(next?.endereco||'ONDA CONCLUÍDA')+'</strong><div style="font:800 8px var(--mono);color:#7890aa;margin-top:5px">RUA '+esc(next?.rua||'—')+' · LADO '+esc(next?.lado||'—')+' · NÍVEL '+String(next?.nivel??'00').padStart(2,'0')+'</div></div>'+(next?'<button class="inv20-open" onclick="inv20AbrirContagem(\''+esc(inv.id)+'\',\''+esc(o.id)+'\',\''+esc(next.id)+'\')">ABRIR CONTAGEM</button>':'')+'</div>';}).join('')+'</div>';
-  };
-  const _renderInv2Base=window.renderInv2;
-  window.renderInv2=function(){if(_isInvExecutor()){renderInv20Operador();return;}return _renderInv2Base.apply(this,arguments);};
-  const _goBase=window.go;
-  window.go=function(id){if(_isInvExecutor()&&id==='inv2'){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('s-inv2')?.classList.add('active');const tt=document.getElementById('tbTitle');if(tt)tt.textContent='INV 2.0 · MINHAS ONDAS';renderInv20Operador();return;}return _goBase.apply(this,arguments);};
-  const _fecharCegoBase=window._fecharEnderecoCegoInv;
-  window._fecharEnderecoCegoInv=function(){
-    const c=window._inv20ExecContext;
-    _fecharCegoBase.apply(this,arguments);
-    document.body.classList.remove('inv20-counting');
-    if(!c)return;
-    const inv=DB.inventarios?.find(x=>x.id===c.invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===c.ondaId);if(!inv||!o)return;
-    const next=_nextTask(inv,o);window._inv20ExecContext=null;
-    if(next){setTimeout(()=>inv20AbrirContagem(inv.id,o.id,next.id),180);}
-    else{setTimeout(()=>{go('inv2');showT('Onda '+String(o.numero).padStart(3,'0')+' concluída.','ok');},180);}
-  };
-  // reabre a execução cega com o foco correto e abre a lista de seleção quando o navegador permitir
-  const _renderCegaBase=window._renderContagemCegaInv;
-  window._renderContagemCegaInv=function(invId,tarefaId,rodada){_renderCegaBase.apply(this,arguments);setTimeout(()=>{const d=document.getElementById('blindDesc'),u=document.getElementById('blindUm');if(d)d.classList.add('inv20-blind-grid');document.getElementById('blindSku')?.focus();},80);};
-  document.addEventListener('DOMContentLoaded',()=>{if(_isInvExecutor()&&document.getElementById('s-inv2')?.classList.contains('active'))renderInv20Operador();});
-})();
-</script>
-</body></html>`;
+<\/script></body></html>`;
 
   // Exibe QR + link para download da página mobile
   const qrEl=document.getElementById('qrContainer');
@@ -17633,59 +17156,6 @@ td{padding:6px 8px;border-bottom:1px solid #eee;font-size:10px;}.ct{text-align:c
   <div class="ass-box">Supervisor / Conferente<br><br>Nome: ____________________<br><br>Data/Hora: _______________</div>
 </div>
 <script>window.addEventListener('load',()=>setTimeout(()=>window.print(),400));<\/script>
-<style>
-/* INV 2.0 BUILD 003 — experiência operacional ContaLog para Conferente/Operador */
-.inv20-exec .inv20-shell{max-width:860px;margin:0 auto}.inv20-exec-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.inv20-exec-kicker{font:800 9px var(--mono);letter-spacing:.16em;color:#2dd4bf}.inv20-exec-title{font:800 24px var(--serif);font-style:italic}.inv20-exec-title em{color:#f97316;font-style:normal}.inv20-wave-card{background:#0a1424;border:1px solid rgba(45,212,191,.22);padding:14px;margin:10px 0;border-radius:14px}.inv20-wave-card.active{border-color:rgba(249,115,22,.55);box-shadow:0 0 0 1px rgba(249,115,22,.08)}.inv20-wave-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.inv20-wave-name{font:800 13px var(--mono);color:#fff}.inv20-wave-meta{font:800 8px var(--mono);color:#7890aa;margin-top:5px}.inv20-next{margin-top:12px;padding:13px;background:#07111f;border:1px solid rgba(255,255,255,.08);border-radius:10px}.inv20-next small{display:block;font:800 8px var(--mono);color:#7890aa;letter-spacing:.12em}.inv20-next strong{display:block;margin-top:5px;font:800 20px var(--mono);color:#2dd4bf}.inv20-open{width:100%;min-height:48px;margin-top:10px;background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;border:0;border-radius:9px;font:800 10px var(--sans);letter-spacing:.1em;cursor:pointer}.inv20-open:active{transform:translateY(1px)}
-/* contagem cega em modo foco */
-body.inv20-counting #mExecInv .md{width:min(96vw,860px);max-width:860px;max-height:calc(100vh - 18px);padding:18px;border-color:rgba(45,212,191,.28)}body.inv20-counting #mExecInv .mt{font-size:18px}body.inv20-counting #mExecInvHeader{position:sticky;top:0;z-index:2}.inv20-blind-grid{grid-template-columns:1fr 1fr!important}.inv20-blind-grid input,.inv20-blind-grid select{min-height:46px;font-size:13px!important}body.inv20-counting #blindDesc,body.inv20-counting #blindUm{cursor:pointer}body.inv20-counting #blindDesc:focus,body.inv20-counting #blindUm:focus{border-color:#2dd4bf;box-shadow:0 0 0 2px rgba(45,212,191,.12)}
-@media(max-width:600px){.inv20-exec{padding:0 2px}.inv20-exec-title{font-size:21px}.inv20-wave-card{padding:12px}.inv20-blind-grid{grid-template-columns:1fr!important}body.inv20-counting #mExecInv .md{width:100%;max-height:calc(100vh - 10px);margin:5px;padding:14px}body.inv20-counting #mExecInvHeader{position:relative}}
-</style>
-<script>
-(function(){
-  const _isInvExecutor=()=>{const p=String(usuarioAtual?.perfil||'').toLowerCase();return p==='operador'||p==='conferente';};
-  const _identityValues=()=>[usuarioAtual?.id,usuarioAtual?.login,usuarioAtual?.nome].map(v=>String(v??'').trim().toLowerCase()).filter(Boolean);
-  const _ondaIsMine=(o)=>{const ids=_identityValues();return ids.length>0&&[o?.contadorId,o?.contadorLogin,o?.contador].some(v=>ids.includes(String(v??'').trim().toLowerCase()));};
-  const _nextTask=(inv,o)=>_ondaTarefas(inv,o).find(t=>!inv2TaskDone(t));
-  window.inv20AbrirContagem=function(invId,ondaId,tarefaId){
-    if(!_isInvExecutor()){showT('A execução do Inventário 2.0 é destinada aos perfis Conferente e Operador.','err');return;}
-    const inv=DB.inventarios?.find(x=>x.id===invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===ondaId),t=inv&&inv.tarefas?.find(x=>x.id===tarefaId);
-    if(!inv||!o||!t||!_ondaIsMine(o)){showT('Esta onda não está atribuída ao seu usuário.','err');return;}
-    if(t.ondaId!==o.id){showT('O endereço não pertence à sua onda.','err');return;}
-    if(inv2TaskDone(t)){showT('Este endereço já foi concluído.','ok');return;}
-    t.status='ANDAMENTO';t.resp=usuarioAtual?.nome||usuarioAtual?.login||'—';t.pegoEm=t.pegoEm||now();o.status='EM_CONTAGEM';o.inicioEm=o.inicioEm||now();save();
-    window._inv20ExecContext={invId,ondaId,tarefaId};
-    document.body.classList.add('inv20-counting');
-    _renderContagemCegaInv(invId,tarefaId,1);
-  };
-  window.renderInv20Operador=function(){
-    const body=document.getElementById('inv20Body'),ctx=document.getElementById('inv20Context');if(!body||!ctx)return;
-    const nome=usuarioAtual?.nome||usuarioAtual?.login||'Usuário';
-    const cards=[]; (inv2Active()||[]).forEach(inv=>_normalizarOndasInv(inv).forEach(o=>{if(_ondaIsMine(o))cards.push({inv,o});}));
-    ctx.innerHTML='<div class="inv20-note">EXECUÇÃO · '+esc(nome)+' · PERFIL '+esc(String(usuarioAtual?.perfil||'').toUpperCase())+'</div>';
-    if(!cards.length){body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-kicker">MINHA OPERAÇÃO</div><div class="inv20-exec-title">Nenhuma <em>onda disponível</em></div><div class="inv20-note" style="margin-top:10px">Quando uma onda for liberada para este usuário, ela aparecerá automaticamente aqui.</div></div>';return;}
-    body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-head"><div><div class="inv20-exec-kicker">MINHAS ONDAS</div><div class="inv20-exec-title">Contagem <em>operacional</em></div></div><button class="inv20-btn ghost" onclick="renderInv2()">↻ Atualizar</button></div>'+cards.map(({inv,o})=>{const ts=_ondaTarefas(inv,o),next=_nextTask(inv,o),p=inv2WavePct(inv,o),done=ts.filter(inv2TaskDone).length;return '<div class="inv20-wave-card '+(next?'active':'')+'"><div class="inv20-wave-top"><div><div class="inv20-wave-name">ONDA '+String(o.numero).padStart(3,'0')+'</div><div class="inv20-wave-meta">'+esc(o.escopo||inv.id)+' · '+done+'/'+ts.length+' ENDEREÇOS CONCLUÍDOS</div></div><div style="font:800 10px var(--mono);color:#4ade80">'+p+'%</div></div><div class="inv20-next"><small>PRÓXIMO ENDEREÇO</small><strong>'+esc(next?.endereco||'ONDA CONCLUÍDA')+'</strong><div style="font:800 8px var(--mono);color:#7890aa;margin-top:5px">RUA '+esc(next?.rua||'—')+' · LADO '+esc(next?.lado||'—')+' · NÍVEL '+String(next?.nivel??'00').padStart(2,'0')+'</div></div>'+(next?'<button class="inv20-open" onclick="inv20AbrirContagem(\''+esc(inv.id)+'\',\''+esc(o.id)+'\',\''+esc(next.id)+'\')">ABRIR CONTAGEM</button>':'')+'</div>';}).join('')+'</div>';
-  };
-  const _renderInv2Base=window.renderInv2;
-  window.renderInv2=function(){if(_isInvExecutor()){renderInv20Operador();return;}return _renderInv2Base.apply(this,arguments);};
-  const _goBase=window.go;
-  window.go=function(id){if(_isInvExecutor()&&id==='inv2'){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('s-inv2')?.classList.add('active');const tt=document.getElementById('tbTitle');if(tt)tt.textContent='INV 2.0 · MINHAS ONDAS';renderInv20Operador();return;}return _goBase.apply(this,arguments);};
-  const _fecharCegoBase=window._fecharEnderecoCegoInv;
-  window._fecharEnderecoCegoInv=function(){
-    const c=window._inv20ExecContext;
-    _fecharCegoBase.apply(this,arguments);
-    document.body.classList.remove('inv20-counting');
-    if(!c)return;
-    const inv=DB.inventarios?.find(x=>x.id===c.invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===c.ondaId);if(!inv||!o)return;
-    const next=_nextTask(inv,o);window._inv20ExecContext=null;
-    if(next){setTimeout(()=>inv20AbrirContagem(inv.id,o.id,next.id),180);}
-    else{setTimeout(()=>{go('inv2');showT('Onda '+String(o.numero).padStart(3,'0')+' concluída.','ok');},180);}
-  };
-  // reabre a execução cega com o foco correto e abre a lista de seleção quando o navegador permitir
-  const _renderCegaBase=window._renderContagemCegaInv;
-  window._renderContagemCegaInv=function(invId,tarefaId,rodada){_renderCegaBase.apply(this,arguments);setTimeout(()=>{const d=document.getElementById('blindDesc'),u=document.getElementById('blindUm');if(d)d.classList.add('inv20-blind-grid');document.getElementById('blindSku')?.focus();},80);};
-  document.addEventListener('DOMContentLoaded',()=>{if(_isInvExecutor()&&document.getElementById('s-inv2')?.classList.contains('active'))renderInv20Operador();});
-})();
-</script>
 </body></html>`);
   w.document.close();showT('Minuta enviada para impressão','ok');
 }
@@ -19700,59 +19170,6 @@ function _gerarMinutaContagem(inv, t, rodada){
 </div>
 
 <script>window.addEventListener('load',()=>setTimeout(()=>window.print(),500));<\/script>
-<style>
-/* INV 2.0 BUILD 003 — experiência operacional ContaLog para Conferente/Operador */
-.inv20-exec .inv20-shell{max-width:860px;margin:0 auto}.inv20-exec-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.inv20-exec-kicker{font:800 9px var(--mono);letter-spacing:.16em;color:#2dd4bf}.inv20-exec-title{font:800 24px var(--serif);font-style:italic}.inv20-exec-title em{color:#f97316;font-style:normal}.inv20-wave-card{background:#0a1424;border:1px solid rgba(45,212,191,.22);padding:14px;margin:10px 0;border-radius:14px}.inv20-wave-card.active{border-color:rgba(249,115,22,.55);box-shadow:0 0 0 1px rgba(249,115,22,.08)}.inv20-wave-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.inv20-wave-name{font:800 13px var(--mono);color:#fff}.inv20-wave-meta{font:800 8px var(--mono);color:#7890aa;margin-top:5px}.inv20-next{margin-top:12px;padding:13px;background:#07111f;border:1px solid rgba(255,255,255,.08);border-radius:10px}.inv20-next small{display:block;font:800 8px var(--mono);color:#7890aa;letter-spacing:.12em}.inv20-next strong{display:block;margin-top:5px;font:800 20px var(--mono);color:#2dd4bf}.inv20-open{width:100%;min-height:48px;margin-top:10px;background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;border:0;border-radius:9px;font:800 10px var(--sans);letter-spacing:.1em;cursor:pointer}.inv20-open:active{transform:translateY(1px)}
-/* contagem cega em modo foco */
-body.inv20-counting #mExecInv .md{width:min(96vw,860px);max-width:860px;max-height:calc(100vh - 18px);padding:18px;border-color:rgba(45,212,191,.28)}body.inv20-counting #mExecInv .mt{font-size:18px}body.inv20-counting #mExecInvHeader{position:sticky;top:0;z-index:2}.inv20-blind-grid{grid-template-columns:1fr 1fr!important}.inv20-blind-grid input,.inv20-blind-grid select{min-height:46px;font-size:13px!important}body.inv20-counting #blindDesc,body.inv20-counting #blindUm{cursor:pointer}body.inv20-counting #blindDesc:focus,body.inv20-counting #blindUm:focus{border-color:#2dd4bf;box-shadow:0 0 0 2px rgba(45,212,191,.12)}
-@media(max-width:600px){.inv20-exec{padding:0 2px}.inv20-exec-title{font-size:21px}.inv20-wave-card{padding:12px}.inv20-blind-grid{grid-template-columns:1fr!important}body.inv20-counting #mExecInv .md{width:100%;max-height:calc(100vh - 10px);margin:5px;padding:14px}body.inv20-counting #mExecInvHeader{position:relative}}
-</style>
-<script>
-(function(){
-  const _isInvExecutor=()=>{const p=String(usuarioAtual?.perfil||'').toLowerCase();return p==='operador'||p==='conferente';};
-  const _identityValues=()=>[usuarioAtual?.id,usuarioAtual?.login,usuarioAtual?.nome].map(v=>String(v??'').trim().toLowerCase()).filter(Boolean);
-  const _ondaIsMine=(o)=>{const ids=_identityValues();return ids.length>0&&[o?.contadorId,o?.contadorLogin,o?.contador].some(v=>ids.includes(String(v??'').trim().toLowerCase()));};
-  const _nextTask=(inv,o)=>_ondaTarefas(inv,o).find(t=>!inv2TaskDone(t));
-  window.inv20AbrirContagem=function(invId,ondaId,tarefaId){
-    if(!_isInvExecutor()){showT('A execução do Inventário 2.0 é destinada aos perfis Conferente e Operador.','err');return;}
-    const inv=DB.inventarios?.find(x=>x.id===invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===ondaId),t=inv&&inv.tarefas?.find(x=>x.id===tarefaId);
-    if(!inv||!o||!t||!_ondaIsMine(o)){showT('Esta onda não está atribuída ao seu usuário.','err');return;}
-    if(t.ondaId!==o.id){showT('O endereço não pertence à sua onda.','err');return;}
-    if(inv2TaskDone(t)){showT('Este endereço já foi concluído.','ok');return;}
-    t.status='ANDAMENTO';t.resp=usuarioAtual?.nome||usuarioAtual?.login||'—';t.pegoEm=t.pegoEm||now();o.status='EM_CONTAGEM';o.inicioEm=o.inicioEm||now();save();
-    window._inv20ExecContext={invId,ondaId,tarefaId};
-    document.body.classList.add('inv20-counting');
-    _renderContagemCegaInv(invId,tarefaId,1);
-  };
-  window.renderInv20Operador=function(){
-    const body=document.getElementById('inv20Body'),ctx=document.getElementById('inv20Context');if(!body||!ctx)return;
-    const nome=usuarioAtual?.nome||usuarioAtual?.login||'Usuário';
-    const cards=[]; (inv2Active()||[]).forEach(inv=>_normalizarOndasInv(inv).forEach(o=>{if(_ondaIsMine(o))cards.push({inv,o});}));
-    ctx.innerHTML='<div class="inv20-note">EXECUÇÃO · '+esc(nome)+' · PERFIL '+esc(String(usuarioAtual?.perfil||'').toUpperCase())+'</div>';
-    if(!cards.length){body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-kicker">MINHA OPERAÇÃO</div><div class="inv20-exec-title">Nenhuma <em>onda disponível</em></div><div class="inv20-note" style="margin-top:10px">Quando uma onda for liberada para este usuário, ela aparecerá automaticamente aqui.</div></div>';return;}
-    body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-head"><div><div class="inv20-exec-kicker">MINHAS ONDAS</div><div class="inv20-exec-title">Contagem <em>operacional</em></div></div><button class="inv20-btn ghost" onclick="renderInv2()">↻ Atualizar</button></div>'+cards.map(({inv,o})=>{const ts=_ondaTarefas(inv,o),next=_nextTask(inv,o),p=inv2WavePct(inv,o),done=ts.filter(inv2TaskDone).length;return '<div class="inv20-wave-card '+(next?'active':'')+'"><div class="inv20-wave-top"><div><div class="inv20-wave-name">ONDA '+String(o.numero).padStart(3,'0')+'</div><div class="inv20-wave-meta">'+esc(o.escopo||inv.id)+' · '+done+'/'+ts.length+' ENDEREÇOS CONCLUÍDOS</div></div><div style="font:800 10px var(--mono);color:#4ade80">'+p+'%</div></div><div class="inv20-next"><small>PRÓXIMO ENDEREÇO</small><strong>'+esc(next?.endereco||'ONDA CONCLUÍDA')+'</strong><div style="font:800 8px var(--mono);color:#7890aa;margin-top:5px">RUA '+esc(next?.rua||'—')+' · LADO '+esc(next?.lado||'—')+' · NÍVEL '+String(next?.nivel??'00').padStart(2,'0')+'</div></div>'+(next?'<button class="inv20-open" onclick="inv20AbrirContagem(\''+esc(inv.id)+'\',\''+esc(o.id)+'\',\''+esc(next.id)+'\')">ABRIR CONTAGEM</button>':'')+'</div>';}).join('')+'</div>';
-  };
-  const _renderInv2Base=window.renderInv2;
-  window.renderInv2=function(){if(_isInvExecutor()){renderInv20Operador();return;}return _renderInv2Base.apply(this,arguments);};
-  const _goBase=window.go;
-  window.go=function(id){if(_isInvExecutor()&&id==='inv2'){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('s-inv2')?.classList.add('active');const tt=document.getElementById('tbTitle');if(tt)tt.textContent='INV 2.0 · MINHAS ONDAS';renderInv20Operador();return;}return _goBase.apply(this,arguments);};
-  const _fecharCegoBase=window._fecharEnderecoCegoInv;
-  window._fecharEnderecoCegoInv=function(){
-    const c=window._inv20ExecContext;
-    _fecharCegoBase.apply(this,arguments);
-    document.body.classList.remove('inv20-counting');
-    if(!c)return;
-    const inv=DB.inventarios?.find(x=>x.id===c.invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===c.ondaId);if(!inv||!o)return;
-    const next=_nextTask(inv,o);window._inv20ExecContext=null;
-    if(next){setTimeout(()=>inv20AbrirContagem(inv.id,o.id,next.id),180);}
-    else{setTimeout(()=>{go('inv2');showT('Onda '+String(o.numero).padStart(3,'0')+' concluída.','ok');},180);}
-  };
-  // reabre a execução cega com o foco correto e abre a lista de seleção quando o navegador permitir
-  const _renderCegaBase=window._renderContagemCegaInv;
-  window._renderContagemCegaInv=function(invId,tarefaId,rodada){_renderCegaBase.apply(this,arguments);setTimeout(()=>{const d=document.getElementById('blindDesc'),u=document.getElementById('blindUm');if(d)d.classList.add('inv20-blind-grid');document.getElementById('blindSku')?.focus();},80);};
-  document.addEventListener('DOMContentLoaded',()=>{if(_isInvExecutor()&&document.getElementById('s-inv2')?.classList.contains('active'))renderInv20Operador();});
-})();
-</script>
 </body></html>`);
   w.document.close();
 }
@@ -20252,60 +19669,7 @@ function abrirRelatorioInv(invId){
 +'function _dlXlsx(){'
 +'if(typeof XLSX==="undefined"){alert("Use o CSV.");return;}'
 +'var ws=XLSX.utils.json_to_sheet(_data);var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,"Apuracao",ws);XLSX.writeFile(wb,"apuracao-'+inv.id+'.xlsx");}'
-+'<\/script><style>
-/* INV 2.0 BUILD 003 — experiência operacional ContaLog para Conferente/Operador */
-.inv20-exec .inv20-shell{max-width:860px;margin:0 auto}.inv20-exec-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.inv20-exec-kicker{font:800 9px var(--mono);letter-spacing:.16em;color:#2dd4bf}.inv20-exec-title{font:800 24px var(--serif);font-style:italic}.inv20-exec-title em{color:#f97316;font-style:normal}.inv20-wave-card{background:#0a1424;border:1px solid rgba(45,212,191,.22);padding:14px;margin:10px 0;border-radius:14px}.inv20-wave-card.active{border-color:rgba(249,115,22,.55);box-shadow:0 0 0 1px rgba(249,115,22,.08)}.inv20-wave-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.inv20-wave-name{font:800 13px var(--mono);color:#fff}.inv20-wave-meta{font:800 8px var(--mono);color:#7890aa;margin-top:5px}.inv20-next{margin-top:12px;padding:13px;background:#07111f;border:1px solid rgba(255,255,255,.08);border-radius:10px}.inv20-next small{display:block;font:800 8px var(--mono);color:#7890aa;letter-spacing:.12em}.inv20-next strong{display:block;margin-top:5px;font:800 20px var(--mono);color:#2dd4bf}.inv20-open{width:100%;min-height:48px;margin-top:10px;background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;border:0;border-radius:9px;font:800 10px var(--sans);letter-spacing:.1em;cursor:pointer}.inv20-open:active{transform:translateY(1px)}
-/* contagem cega em modo foco */
-body.inv20-counting #mExecInv .md{width:min(96vw,860px);max-width:860px;max-height:calc(100vh - 18px);padding:18px;border-color:rgba(45,212,191,.28)}body.inv20-counting #mExecInv .mt{font-size:18px}body.inv20-counting #mExecInvHeader{position:sticky;top:0;z-index:2}.inv20-blind-grid{grid-template-columns:1fr 1fr!important}.inv20-blind-grid input,.inv20-blind-grid select{min-height:46px;font-size:13px!important}body.inv20-counting #blindDesc,body.inv20-counting #blindUm{cursor:pointer}body.inv20-counting #blindDesc:focus,body.inv20-counting #blindUm:focus{border-color:#2dd4bf;box-shadow:0 0 0 2px rgba(45,212,191,.12)}
-@media(max-width:600px){.inv20-exec{padding:0 2px}.inv20-exec-title{font-size:21px}.inv20-wave-card{padding:12px}.inv20-blind-grid{grid-template-columns:1fr!important}body.inv20-counting #mExecInv .md{width:100%;max-height:calc(100vh - 10px);margin:5px;padding:14px}body.inv20-counting #mExecInvHeader{position:relative}}
-</style>
-<script>
-(function(){
-  const _isInvExecutor=()=>{const p=String(usuarioAtual?.perfil||'').toLowerCase();return p==='operador'||p==='conferente';};
-  const _identityValues=()=>[usuarioAtual?.id,usuarioAtual?.login,usuarioAtual?.nome].map(v=>String(v??'').trim().toLowerCase()).filter(Boolean);
-  const _ondaIsMine=(o)=>{const ids=_identityValues();return ids.length>0&&[o?.contadorId,o?.contadorLogin,o?.contador].some(v=>ids.includes(String(v??'').trim().toLowerCase()));};
-  const _nextTask=(inv,o)=>_ondaTarefas(inv,o).find(t=>!inv2TaskDone(t));
-  window.inv20AbrirContagem=function(invId,ondaId,tarefaId){
-    if(!_isInvExecutor()){showT('A execução do Inventário 2.0 é destinada aos perfis Conferente e Operador.','err');return;}
-    const inv=DB.inventarios?.find(x=>x.id===invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===ondaId),t=inv&&inv.tarefas?.find(x=>x.id===tarefaId);
-    if(!inv||!o||!t||!_ondaIsMine(o)){showT('Esta onda não está atribuída ao seu usuário.','err');return;}
-    if(t.ondaId!==o.id){showT('O endereço não pertence à sua onda.','err');return;}
-    if(inv2TaskDone(t)){showT('Este endereço já foi concluído.','ok');return;}
-    t.status='ANDAMENTO';t.resp=usuarioAtual?.nome||usuarioAtual?.login||'—';t.pegoEm=t.pegoEm||now();o.status='EM_CONTAGEM';o.inicioEm=o.inicioEm||now();save();
-    window._inv20ExecContext={invId,ondaId,tarefaId};
-    document.body.classList.add('inv20-counting');
-    _renderContagemCegaInv(invId,tarefaId,1);
-  };
-  window.renderInv20Operador=function(){
-    const body=document.getElementById('inv20Body'),ctx=document.getElementById('inv20Context');if(!body||!ctx)return;
-    const nome=usuarioAtual?.nome||usuarioAtual?.login||'Usuário';
-    const cards=[]; (inv2Active()||[]).forEach(inv=>_normalizarOndasInv(inv).forEach(o=>{if(_ondaIsMine(o))cards.push({inv,o});}));
-    ctx.innerHTML='<div class="inv20-note">EXECUÇÃO · '+esc(nome)+' · PERFIL '+esc(String(usuarioAtual?.perfil||'').toUpperCase())+'</div>';
-    if(!cards.length){body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-kicker">MINHA OPERAÇÃO</div><div class="inv20-exec-title">Nenhuma <em>onda disponível</em></div><div class="inv20-note" style="margin-top:10px">Quando uma onda for liberada para este usuário, ela aparecerá automaticamente aqui.</div></div>';return;}
-    body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-head"><div><div class="inv20-exec-kicker">MINHAS ONDAS</div><div class="inv20-exec-title">Contagem <em>operacional</em></div></div><button class="inv20-btn ghost" onclick="renderInv2()">↻ Atualizar</button></div>'+cards.map(({inv,o})=>{const ts=_ondaTarefas(inv,o),next=_nextTask(inv,o),p=inv2WavePct(inv,o),done=ts.filter(inv2TaskDone).length;return '<div class="inv20-wave-card '+(next?'active':'')+'"><div class="inv20-wave-top"><div><div class="inv20-wave-name">ONDA '+String(o.numero).padStart(3,'0')+'</div><div class="inv20-wave-meta">'+esc(o.escopo||inv.id)+' · '+done+'/'+ts.length+' ENDEREÇOS CONCLUÍDOS</div></div><div style="font:800 10px var(--mono);color:#4ade80">'+p+'%</div></div><div class="inv20-next"><small>PRÓXIMO ENDEREÇO</small><strong>'+esc(next?.endereco||'ONDA CONCLUÍDA')+'</strong><div style="font:800 8px var(--mono);color:#7890aa;margin-top:5px">RUA '+esc(next?.rua||'—')+' · LADO '+esc(next?.lado||'—')+' · NÍVEL '+String(next?.nivel??'00').padStart(2,'0')+'</div></div>'+(next?'<button class="inv20-open" onclick="inv20AbrirContagem(\''+esc(inv.id)+'\',\''+esc(o.id)+'\',\''+esc(next.id)+'\')">ABRIR CONTAGEM</button>':'')+'</div>';}).join('')+'</div>';
-  };
-  const _renderInv2Base=window.renderInv2;
-  window.renderInv2=function(){if(_isInvExecutor()){renderInv20Operador();return;}return _renderInv2Base.apply(this,arguments);};
-  const _goBase=window.go;
-  window.go=function(id){if(_isInvExecutor()&&id==='inv2'){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('s-inv2')?.classList.add('active');const tt=document.getElementById('tbTitle');if(tt)tt.textContent='INV 2.0 · MINHAS ONDAS';renderInv20Operador();return;}return _goBase.apply(this,arguments);};
-  const _fecharCegoBase=window._fecharEnderecoCegoInv;
-  window._fecharEnderecoCegoInv=function(){
-    const c=window._inv20ExecContext;
-    _fecharCegoBase.apply(this,arguments);
-    document.body.classList.remove('inv20-counting');
-    if(!c)return;
-    const inv=DB.inventarios?.find(x=>x.id===c.invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===c.ondaId);if(!inv||!o)return;
-    const next=_nextTask(inv,o);window._inv20ExecContext=null;
-    if(next){setTimeout(()=>inv20AbrirContagem(inv.id,o.id,next.id),180);}
-    else{setTimeout(()=>{go('inv2');showT('Onda '+String(o.numero).padStart(3,'0')+' concluída.','ok');},180);}
-  };
-  // reabre a execução cega com o foco correto e abre a lista de seleção quando o navegador permitir
-  const _renderCegaBase=window._renderContagemCegaInv;
-  window._renderContagemCegaInv=function(invId,tarefaId,rodada){_renderCegaBase.apply(this,arguments);setTimeout(()=>{const d=document.getElementById('blindDesc'),u=document.getElementById('blindUm');if(d)d.classList.add('inv20-blind-grid');document.getElementById('blindSku')?.focus();},80);};
-  document.addEventListener('DOMContentLoaded',()=>{if(_isInvExecutor()&&document.getElementById('s-inv2')?.classList.contains('active'))renderInv20Operador();});
-})();
-</script>
-</body></html>');
++'<\/script></body></html>');
   w.document.close();
 }
 
@@ -20453,60 +19817,7 @@ function abrirDashboardInv(){
 +'<th style="text-align:right;">Valor Falta</th><th style="text-align:right;">Valor Sobra</th>'
 +'<th style="text-align:center;">Acur.Qtd</th><th style="text-align:center;">Acur.R$</th>'
 +'</tr></thead><tbody>'+detalhe+'</tbody></table></div>'
-+'</div><style>
-/* INV 2.0 BUILD 003 — experiência operacional ContaLog para Conferente/Operador */
-.inv20-exec .inv20-shell{max-width:860px;margin:0 auto}.inv20-exec-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.inv20-exec-kicker{font:800 9px var(--mono);letter-spacing:.16em;color:#2dd4bf}.inv20-exec-title{font:800 24px var(--serif);font-style:italic}.inv20-exec-title em{color:#f97316;font-style:normal}.inv20-wave-card{background:#0a1424;border:1px solid rgba(45,212,191,.22);padding:14px;margin:10px 0;border-radius:14px}.inv20-wave-card.active{border-color:rgba(249,115,22,.55);box-shadow:0 0 0 1px rgba(249,115,22,.08)}.inv20-wave-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.inv20-wave-name{font:800 13px var(--mono);color:#fff}.inv20-wave-meta{font:800 8px var(--mono);color:#7890aa;margin-top:5px}.inv20-next{margin-top:12px;padding:13px;background:#07111f;border:1px solid rgba(255,255,255,.08);border-radius:10px}.inv20-next small{display:block;font:800 8px var(--mono);color:#7890aa;letter-spacing:.12em}.inv20-next strong{display:block;margin-top:5px;font:800 20px var(--mono);color:#2dd4bf}.inv20-open{width:100%;min-height:48px;margin-top:10px;background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;border:0;border-radius:9px;font:800 10px var(--sans);letter-spacing:.1em;cursor:pointer}.inv20-open:active{transform:translateY(1px)}
-/* contagem cega em modo foco */
-body.inv20-counting #mExecInv .md{width:min(96vw,860px);max-width:860px;max-height:calc(100vh - 18px);padding:18px;border-color:rgba(45,212,191,.28)}body.inv20-counting #mExecInv .mt{font-size:18px}body.inv20-counting #mExecInvHeader{position:sticky;top:0;z-index:2}.inv20-blind-grid{grid-template-columns:1fr 1fr!important}.inv20-blind-grid input,.inv20-blind-grid select{min-height:46px;font-size:13px!important}body.inv20-counting #blindDesc,body.inv20-counting #blindUm{cursor:pointer}body.inv20-counting #blindDesc:focus,body.inv20-counting #blindUm:focus{border-color:#2dd4bf;box-shadow:0 0 0 2px rgba(45,212,191,.12)}
-@media(max-width:600px){.inv20-exec{padding:0 2px}.inv20-exec-title{font-size:21px}.inv20-wave-card{padding:12px}.inv20-blind-grid{grid-template-columns:1fr!important}body.inv20-counting #mExecInv .md{width:100%;max-height:calc(100vh - 10px);margin:5px;padding:14px}body.inv20-counting #mExecInvHeader{position:relative}}
-</style>
-<script>
-(function(){
-  const _isInvExecutor=()=>{const p=String(usuarioAtual?.perfil||'').toLowerCase();return p==='operador'||p==='conferente';};
-  const _identityValues=()=>[usuarioAtual?.id,usuarioAtual?.login,usuarioAtual?.nome].map(v=>String(v??'').trim().toLowerCase()).filter(Boolean);
-  const _ondaIsMine=(o)=>{const ids=_identityValues();return ids.length>0&&[o?.contadorId,o?.contadorLogin,o?.contador].some(v=>ids.includes(String(v??'').trim().toLowerCase()));};
-  const _nextTask=(inv,o)=>_ondaTarefas(inv,o).find(t=>!inv2TaskDone(t));
-  window.inv20AbrirContagem=function(invId,ondaId,tarefaId){
-    if(!_isInvExecutor()){showT('A execução do Inventário 2.0 é destinada aos perfis Conferente e Operador.','err');return;}
-    const inv=DB.inventarios?.find(x=>x.id===invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===ondaId),t=inv&&inv.tarefas?.find(x=>x.id===tarefaId);
-    if(!inv||!o||!t||!_ondaIsMine(o)){showT('Esta onda não está atribuída ao seu usuário.','err');return;}
-    if(t.ondaId!==o.id){showT('O endereço não pertence à sua onda.','err');return;}
-    if(inv2TaskDone(t)){showT('Este endereço já foi concluído.','ok');return;}
-    t.status='ANDAMENTO';t.resp=usuarioAtual?.nome||usuarioAtual?.login||'—';t.pegoEm=t.pegoEm||now();o.status='EM_CONTAGEM';o.inicioEm=o.inicioEm||now();save();
-    window._inv20ExecContext={invId,ondaId,tarefaId};
-    document.body.classList.add('inv20-counting');
-    _renderContagemCegaInv(invId,tarefaId,1);
-  };
-  window.renderInv20Operador=function(){
-    const body=document.getElementById('inv20Body'),ctx=document.getElementById('inv20Context');if(!body||!ctx)return;
-    const nome=usuarioAtual?.nome||usuarioAtual?.login||'Usuário';
-    const cards=[]; (inv2Active()||[]).forEach(inv=>_normalizarOndasInv(inv).forEach(o=>{if(_ondaIsMine(o))cards.push({inv,o});}));
-    ctx.innerHTML='<div class="inv20-note">EXECUÇÃO · '+esc(nome)+' · PERFIL '+esc(String(usuarioAtual?.perfil||'').toUpperCase())+'</div>';
-    if(!cards.length){body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-kicker">MINHA OPERAÇÃO</div><div class="inv20-exec-title">Nenhuma <em>onda disponível</em></div><div class="inv20-note" style="margin-top:10px">Quando uma onda for liberada para este usuário, ela aparecerá automaticamente aqui.</div></div>';return;}
-    body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-head"><div><div class="inv20-exec-kicker">MINHAS ONDAS</div><div class="inv20-exec-title">Contagem <em>operacional</em></div></div><button class="inv20-btn ghost" onclick="renderInv2()">↻ Atualizar</button></div>'+cards.map(({inv,o})=>{const ts=_ondaTarefas(inv,o),next=_nextTask(inv,o),p=inv2WavePct(inv,o),done=ts.filter(inv2TaskDone).length;return '<div class="inv20-wave-card '+(next?'active':'')+'"><div class="inv20-wave-top"><div><div class="inv20-wave-name">ONDA '+String(o.numero).padStart(3,'0')+'</div><div class="inv20-wave-meta">'+esc(o.escopo||inv.id)+' · '+done+'/'+ts.length+' ENDEREÇOS CONCLUÍDOS</div></div><div style="font:800 10px var(--mono);color:#4ade80">'+p+'%</div></div><div class="inv20-next"><small>PRÓXIMO ENDEREÇO</small><strong>'+esc(next?.endereco||'ONDA CONCLUÍDA')+'</strong><div style="font:800 8px var(--mono);color:#7890aa;margin-top:5px">RUA '+esc(next?.rua||'—')+' · LADO '+esc(next?.lado||'—')+' · NÍVEL '+String(next?.nivel??'00').padStart(2,'0')+'</div></div>'+(next?'<button class="inv20-open" onclick="inv20AbrirContagem(\''+esc(inv.id)+'\',\''+esc(o.id)+'\',\''+esc(next.id)+'\')">ABRIR CONTAGEM</button>':'')+'</div>';}).join('')+'</div>';
-  };
-  const _renderInv2Base=window.renderInv2;
-  window.renderInv2=function(){if(_isInvExecutor()){renderInv20Operador();return;}return _renderInv2Base.apply(this,arguments);};
-  const _goBase=window.go;
-  window.go=function(id){if(_isInvExecutor()&&id==='inv2'){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('s-inv2')?.classList.add('active');const tt=document.getElementById('tbTitle');if(tt)tt.textContent='INV 2.0 · MINHAS ONDAS';renderInv20Operador();return;}return _goBase.apply(this,arguments);};
-  const _fecharCegoBase=window._fecharEnderecoCegoInv;
-  window._fecharEnderecoCegoInv=function(){
-    const c=window._inv20ExecContext;
-    _fecharCegoBase.apply(this,arguments);
-    document.body.classList.remove('inv20-counting');
-    if(!c)return;
-    const inv=DB.inventarios?.find(x=>x.id===c.invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===c.ondaId);if(!inv||!o)return;
-    const next=_nextTask(inv,o);window._inv20ExecContext=null;
-    if(next){setTimeout(()=>inv20AbrirContagem(inv.id,o.id,next.id),180);}
-    else{setTimeout(()=>{go('inv2');showT('Onda '+String(o.numero).padStart(3,'0')+' concluída.','ok');},180);}
-  };
-  // reabre a execução cega com o foco correto e abre a lista de seleção quando o navegador permitir
-  const _renderCegaBase=window._renderContagemCegaInv;
-  window._renderContagemCegaInv=function(invId,tarefaId,rodada){_renderCegaBase.apply(this,arguments);setTimeout(()=>{const d=document.getElementById('blindDesc'),u=document.getElementById('blindUm');if(d)d.classList.add('inv20-blind-grid');document.getElementById('blindSku')?.focus();},80);};
-  document.addEventListener('DOMContentLoaded',()=>{if(_isInvExecutor()&&document.getElementById('s-inv2')?.classList.contains('active'))renderInv20Operador();});
-})();
-</script>
-</body></html>');
++'</div></body></html>');
   w.document.close();
 }
 
@@ -23020,58 +22331,172 @@ function baixarTemplateEnderecos(fmt='xlsx'){
   document.addEventListener('DOMContentLoaded',()=>{if(document.getElementById('s-inv2')?.classList.contains('active'))renderInv2();});
 })();
 </script>
-<style>
-/* INV 2.0 BUILD 003 — experiência operacional ContaLog para Conferente/Operador */
-.inv20-exec .inv20-shell{max-width:860px;margin:0 auto}.inv20-exec-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.inv20-exec-kicker{font:800 9px var(--mono);letter-spacing:.16em;color:#2dd4bf}.inv20-exec-title{font:800 24px var(--serif);font-style:italic}.inv20-exec-title em{color:#f97316;font-style:normal}.inv20-wave-card{background:#0a1424;border:1px solid rgba(45,212,191,.22);padding:14px;margin:10px 0;border-radius:14px}.inv20-wave-card.active{border-color:rgba(249,115,22,.55);box-shadow:0 0 0 1px rgba(249,115,22,.08)}.inv20-wave-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.inv20-wave-name{font:800 13px var(--mono);color:#fff}.inv20-wave-meta{font:800 8px var(--mono);color:#7890aa;margin-top:5px}.inv20-next{margin-top:12px;padding:13px;background:#07111f;border:1px solid rgba(255,255,255,.08);border-radius:10px}.inv20-next small{display:block;font:800 8px var(--mono);color:#7890aa;letter-spacing:.12em}.inv20-next strong{display:block;margin-top:5px;font:800 20px var(--mono);color:#2dd4bf}.inv20-open{width:100%;min-height:48px;margin-top:10px;background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;border:0;border-radius:9px;font:800 10px var(--sans);letter-spacing:.1em;cursor:pointer}.inv20-open:active{transform:translateY(1px)}
-/* contagem cega em modo foco */
-body.inv20-counting #mExecInv .md{width:min(96vw,860px);max-width:860px;max-height:calc(100vh - 18px);padding:18px;border-color:rgba(45,212,191,.28)}body.inv20-counting #mExecInv .mt{font-size:18px}body.inv20-counting #mExecInvHeader{position:sticky;top:0;z-index:2}.inv20-blind-grid{grid-template-columns:1fr 1fr!important}.inv20-blind-grid input,.inv20-blind-grid select{min-height:46px;font-size:13px!important}body.inv20-counting #blindDesc,body.inv20-counting #blindUm{cursor:pointer}body.inv20-counting #blindDesc:focus,body.inv20-counting #blindUm:focus{border-color:#2dd4bf;box-shadow:0 0 0 2px rgba(45,212,191,.12)}
-@media(max-width:600px){.inv20-exec{padding:0 2px}.inv20-exec-title{font-size:21px}.inv20-wave-card{padding:12px}.inv20-blind-grid{grid-template-columns:1fr!important}body.inv20-counting #mExecInv .md{width:100%;max-height:calc(100vh - 10px);margin:5px;padding:14px}body.inv20-counting #mExecInvHeader{position:relative}}
-</style>
 <script>
 (function(){
-  const _isInvExecutor=()=>{const p=String(usuarioAtual?.perfil||'').toLowerCase();return p==='operador'||p==='conferente';};
-  const _identityValues=()=>[usuarioAtual?.id,usuarioAtual?.login,usuarioAtual?.nome].map(v=>String(v??'').trim().toLowerCase()).filter(Boolean);
-  const _ondaIsMine=(o)=>{const ids=_identityValues();return ids.length>0&&[o?.contadorId,o?.contadorLogin,o?.contador].some(v=>ids.includes(String(v??'').trim().toLowerCase()));};
-  const _nextTask=(inv,o)=>_ondaTarefas(inv,o).find(t=>!inv2TaskDone(t));
+  'use strict';
+
+  // INV 2.0 — camada operacional isolada.
+  // Não altera o motor de estoque, permissões ou telas administrativas do WMS.
+  const norm=v=>String(v??'').trim().toLowerCase();
+  const esc2=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+  window._isInvExecutor=function(){
+    const p=norm(usuarioAtual?.perfil);
+    return p==='operador'||p==='conferente';
+  };
+
+  // No WMS, Conferente e Operador são os executores físicos do inventário.
+  window._usuariosContadoresInv=function(){
+    return (DB.usuarios||[]).filter(u=>u&&['operador','conferente'].includes(norm(u.perfil))&&u.ativo!==false);
+  };
+
+  function userKeys(u){
+    return [u?.id,u?.login,u?.nome].map(norm).filter(Boolean);
+  }
+  function ondaMinha(o){
+    const keys=new Set(userKeys(usuarioAtual));
+    if(!keys.size)return false;
+    return [o?.contadorId,o?.contadorLogin,o?.contador].map(norm).filter(Boolean).some(v=>keys.has(v));
+  }
+  function taskDone(t){ return norm(t?.status)==='concluido'; }
+  function waveTasks(inv,o){ return _ondaTarefas(inv,o); }
+  function nextTask(inv,o){
+    const ts=waveTasks(inv,o);
+    // Retoma primeiro um endereço que este operador já tenha iniciado.
+    const mine=norm(usuarioAtual?.nome||usuarioAtual?.login);
+    const andamento=ts.find(t=>norm(t.status)==='andamento' && (!t.resp || norm(t.resp)===mine));
+    if(andamento)return andamento;
+    // Depois segue para o próximo endereço ainda não iniciado.
+    return ts.find(t=>norm(t.status)==='aguardando') || null;
+  }
+
+  function renderExecutor(){
+    const body=document.getElementById('inv20Body'),ctx=document.getElementById('inv20Context');
+    if(!body||!ctx)return;
+    const nome=usuarioAtual?.nome||usuarioAtual?.login||'Usuário';
+    const perfil=String(usuarioAtual?.perfil||'').toUpperCase();
+    const cards=[];
+    (DB.inventarios||[]).filter(i=>i&&i.status!=='CANCELADO').forEach(inv=>{
+      _normalizarOndasInv(inv).forEach(o=>{
+        if(!ondaMinha(o))return;
+        if(['CONCLUIDA','CANCELADA'].includes(norm(o.status)))return;
+        cards.push({inv,o});
+      });
+    });
+
+    ctx.innerHTML=`<div class="inv20-exec-user"><div><span>EXECUÇÃO · ${esc2(nome)}</span><b>${esc2(perfil)}</b></div><button class="inv20-btn ghost" onclick="renderInv2()">↻ Atualizar</button></div>`;
+
+    if(!cards.length){
+      body.innerHTML=`<div class="inv20-exec-empty"><div class="inv20-kicker">MINHA OPERAÇÃO</div><div class="inv20-exec-title">Nenhuma <em>onda disponível</em></div><p>Quando uma onda for liberada para você, ela aparecerá aqui. Você não precisa procurar a tarefa: o WMS mostrará automaticamente o que deve ser executado.</p><button class="inv20-btn primary" onclick="renderInv2()">ATUALIZAR</button></div>`;
+      return;
+    }
+
+    body.innerHTML=`<div class="inv20-exec-wrap"><div class="inv20-exec-head"><div><div class="inv20-kicker">INVENTÁRIO 2.0</div><div class="inv20-exec-title">Minhas <em>Ondas</em></div><div class="inv20-exec-sub">Selecione a onda e continue exatamente de onde parou.</div></div></div><div class="inv20-wave-list">${cards.map(({inv,o})=>{
+      const ts=waveTasks(inv,o),done=ts.filter(taskDone).length,next=nextTask(inv,o),pct=ts.length?Math.round(done/ts.length*100):0;
+      const status=norm(o.status)==='em_contagem'?'EM CONTAGEM':'LIBERADA';
+      return `<article class="inv20-wave-card ${next?'ready':''}">
+        <div class="inv20-wave-top"><div><div class="inv20-wave-name">ONDA ${String(o.numero||0).padStart(3,'0')}</div><div class="inv20-wave-meta">${esc2(o.escopo||inv.id)} · ${done}/${ts.length} ENDEREÇOS</div></div><span class="inv20-wave-status">${status}</span></div>
+        <div class="inv20-wave-progress"><i style="width:${pct}%"></i></div>
+        <div class="inv20-wave-next"><small>PRÓXIMO ENDEREÇO</small><strong>${esc2(next?.endereco||'AGUARDANDO RECONTAGEM / CONCLUSÃO')}</strong>${next?`<span>RUA ${esc2(next.rua||'—')} · LADO ${esc2(next.lado||'—')} · NÍVEL ${String(next.nivel??'00').padStart(2,'0')}</span>`:''}</div>
+        ${next?`<button class="inv20-open" onclick="inv20AbrirContagem('${esc2(inv.id)}','${esc2(o.id)}','${esc2(next.id)}')">CONTINUAR CONTAGEM <b>→</b></button>`:`<div class="inv20-await">Esta onda não possui endereço de 1ª contagem pendente.</div>`}
+      </article>`;
+    }).join('')}</div></div>`;
+  }
+
   window.inv20AbrirContagem=function(invId,ondaId,tarefaId){
     if(!_isInvExecutor()){showT('A execução do Inventário 2.0 é destinada aos perfis Conferente e Operador.','err');return;}
-    const inv=DB.inventarios?.find(x=>x.id===invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===ondaId),t=inv&&inv.tarefas?.find(x=>x.id===tarefaId);
-    if(!inv||!o||!t||!_ondaIsMine(o)){showT('Esta onda não está atribuída ao seu usuário.','err');return;}
-    if(t.ondaId!==o.id){showT('O endereço não pertence à sua onda.','err');return;}
-    if(inv2TaskDone(t)){showT('Este endereço já foi concluído.','ok');return;}
-    t.status='ANDAMENTO';t.resp=usuarioAtual?.nome||usuarioAtual?.login||'—';t.pegoEm=t.pegoEm||now();o.status='EM_CONTAGEM';o.inicioEm=o.inicioEm||now();save();
-    window._inv20ExecContext={invId,ondaId,tarefaId};
+    const inv=(DB.inventarios||[]).find(x=>x.id===invId);
+    const o=inv&&_normalizarOndasInv(inv).find(x=>x.id===ondaId);
+    const t=inv&&inv.tarefas?.find(x=>x.id===tarefaId);
+    if(!inv||!o||!t){showT('Onda ou endereço não encontrado.','err');return;}
+    if(!ondaMinha(o)){showT('Esta onda não está atribuída ao seu usuário.','err');return;}
+    if(!(o.tarefaIds||[]).includes(t.id)){showT('Este endereço não pertence à sua onda.','err');return;}
+    if(taskDone(t)){showT('Este endereço já foi concluído.','ok');return;}
+    const rodada=(t.status==='AGUARDANDO_2C')?2:(t.status==='AGUARDANDO_3C'?3:1);
+    if(rodada===3&&!_invCanAprovar()){showT('3ª contagem requer perfil autorizado para validação final.','err');return;}
+    t.status=t.status==='AGUARDANDO'?'ANDAMENTO':t.status;
+    t.resp=t.resp||usuarioAtual?.nome||usuarioAtual?.login||'—';
+    t.pegoEm=t.pegoEm||now();
+    o.status='EM_CONTAGEM';o.inicioEm=o.inicioEm||now();
+    inv.status='CONTANDO';
+    save();
+    window._inv20ExecContext={invId,ondaId,tarefaId,rodada};
     document.body.classList.add('inv20-counting');
-    _renderContagemCegaInv(invId,tarefaId,1);
+    _renderContagemCegaInv(invId,tarefaId,rodada);
+    setTimeout(()=>{
+      const d=document.getElementById('blindDesc'),u=document.getElementById('blindUm');
+      [d,u].forEach(sel=>{if(!sel)return; const open=()=>{try{sel.showPicker?.()}catch(e){}}; sel.addEventListener('focus',open,{once:true});sel.addEventListener('click',open,{once:true});});
+      document.getElementById('blindSku')?.focus();
+    },100);
   };
-  window.renderInv20Operador=function(){
-    const body=document.getElementById('inv20Body'),ctx=document.getElementById('inv20Context');if(!body||!ctx)return;
-    const nome=usuarioAtual?.nome||usuarioAtual?.login||'Usuário';
-    const cards=[]; (inv2Active()||[]).forEach(inv=>_normalizarOndasInv(inv).forEach(o=>{if(_ondaIsMine(o))cards.push({inv,o});}));
-    ctx.innerHTML='<div class="inv20-note">EXECUÇÃO · '+esc(nome)+' · PERFIL '+esc(String(usuarioAtual?.perfil||'').toUpperCase())+'</div>';
-    if(!cards.length){body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-kicker">MINHA OPERAÇÃO</div><div class="inv20-exec-title">Nenhuma <em>onda disponível</em></div><div class="inv20-note" style="margin-top:10px">Quando uma onda for liberada para este usuário, ela aparecerá automaticamente aqui.</div></div>';return;}
-    body.innerHTML='<div class="inv20-exec"><div class="inv20-exec-head"><div><div class="inv20-exec-kicker">MINHAS ONDAS</div><div class="inv20-exec-title">Contagem <em>operacional</em></div></div><button class="inv20-btn ghost" onclick="renderInv2()">↻ Atualizar</button></div>'+cards.map(({inv,o})=>{const ts=_ondaTarefas(inv,o),next=_nextTask(inv,o),p=inv2WavePct(inv,o),done=ts.filter(inv2TaskDone).length;return '<div class="inv20-wave-card '+(next?'active':'')+'"><div class="inv20-wave-top"><div><div class="inv20-wave-name">ONDA '+String(o.numero).padStart(3,'0')+'</div><div class="inv20-wave-meta">'+esc(o.escopo||inv.id)+' · '+done+'/'+ts.length+' ENDEREÇOS CONCLUÍDOS</div></div><div style="font:800 10px var(--mono);color:#4ade80">'+p+'%</div></div><div class="inv20-next"><small>PRÓXIMO ENDEREÇO</small><strong>'+esc(next?.endereco||'ONDA CONCLUÍDA')+'</strong><div style="font:800 8px var(--mono);color:#7890aa;margin-top:5px">RUA '+esc(next?.rua||'—')+' · LADO '+esc(next?.lado||'—')+' · NÍVEL '+String(next?.nivel??'00').padStart(2,'0')+'</div></div>'+(next?'<button class="inv20-open" onclick="inv20AbrirContagem(\''+esc(inv.id)+'\',\''+esc(o.id)+'\',\''+esc(next.id)+'\')">ABRIR CONTAGEM</button>':'')+'</div>';}).join('')+'</div>';
+
+  // A tela de contagem é a experiência operacional do INV 2.0.
+  const oldRender=window.renderInv2;
+  window.renderInv2=function(){
+    if(_isInvExecutor()){renderExecutor();return;}
+    return oldRender.apply(this,arguments);
   };
-  const _renderInv2Base=window.renderInv2;
-  window.renderInv2=function(){if(_isInvExecutor()){renderInv20Operador();return;}return _renderInv2Base.apply(this,arguments);};
-  const _goBase=window.go;
-  window.go=function(id){if(_isInvExecutor()&&id==='inv2'){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('s-inv2')?.classList.add('active');const tt=document.getElementById('tbTitle');if(tt)tt.textContent='INV 2.0 · MINHAS ONDAS';renderInv20Operador();return;}return _goBase.apply(this,arguments);};
-  const _fecharCegoBase=window._fecharEnderecoCegoInv;
+
+  // Entrada única: Conferente/Operador nunca caem na central administrativa do inventário.
+  const oldGo=window.go;
+  window.go=function(id){
+    if(_isInvExecutor()&&(id==='inv2'||id==='invList')){
+      document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+      document.getElementById('s-inv2')?.classList.add('active');
+      const title=document.getElementById('tbTitle');if(title)title.textContent='INV 2.0 · MINHAS ONDAS';
+      closeTopMenus?.();
+      renderExecutor();
+      return;
+    }
+    return oldGo.apply(this,arguments);
+  };
+
+  // Fechamento de endereço: encerra o endereço atual e entrega o próximo sem voltar à central.
+  const oldClose=window._fecharEnderecoCegoInv;
   window._fecharEnderecoCegoInv=function(){
     const c=window._inv20ExecContext;
-    _fecharCegoBase.apply(this,arguments);
+    if(!_isInvExecutor()||!c){return oldClose.apply(this,arguments);}
+    oldClose.apply(this,arguments);
     document.body.classList.remove('inv20-counting');
-    if(!c)return;
-    const inv=DB.inventarios?.find(x=>x.id===c.invId),o=inv&&_normalizarOndasInv(inv).find(x=>x.id===c.ondaId);if(!inv||!o)return;
-    const next=_nextTask(inv,o);window._inv20ExecContext=null;
-    if(next){setTimeout(()=>inv20AbrirContagem(inv.id,o.id,next.id),180);}
-    else{setTimeout(()=>{go('inv2');showT('Onda '+String(o.numero).padStart(3,'0')+' concluída.','ok');},180);}
+    const inv=(DB.inventarios||[]).find(x=>x.id===c.invId);
+    const o=inv&&_normalizarOndasInv(inv).find(x=>x.id===c.ondaId);
+    window._inv20ExecContext=null;
+    if(!inv||!o){setTimeout(()=>go('inv2'),120);return;}
+    const next=nextTask(inv,o);
+    if(next){setTimeout(()=>inv20AbrirContagem(inv.id,o.id,next.id),160);}
+    else{setTimeout(()=>{go('inv2');showT('Endereço encerrado. A onda continua com os próximos passos de recontagem/apuração.','ok');},160);}
   };
-  // reabre a execução cega com o foco correto e abre a lista de seleção quando o navegador permitir
-  const _renderCegaBase=window._renderContagemCegaInv;
-  window._renderContagemCegaInv=function(invId,tarefaId,rodada){_renderCegaBase.apply(this,arguments);setTimeout(()=>{const d=document.getElementById('blindDesc'),u=document.getElementById('blindUm');if(d)d.classList.add('inv20-blind-grid');document.getElementById('blindSku')?.focus();},80);};
-  document.addEventListener('DOMContentLoaded',()=>{if(_isInvExecutor()&&document.getElementById('s-inv2')?.classList.contains('active'))renderInv20Operador();});
+
+  // O modal legado vira uma tela operacional quando usado pelo INV 2.0.
+  const style=document.createElement('style');
+  style.id='inv20-build004-style';
+  style.textContent=`
+    .inv20-shell{min-height:calc(100vh - 76px)}
+    .inv20-exec-user{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;margin-bottom:14px;border:1px solid rgba(45,212,191,.16);background:#0a1525;border-radius:10px}
+    .inv20-exec-user span{display:block;font:800 8px var(--mono);color:#6ee7d8;letter-spacing:.12em}.inv20-exec-user b{display:block;margin-top:3px;font:900 11px var(--mono);color:#fff}
+    .inv20-exec-wrap{max-width:760px;margin:0 auto}.inv20-exec-head{margin-bottom:12px}.inv20-exec-title{font:900 27px var(--serif);letter-spacing:-.04em}.inv20-exec-title em{font-style:normal;color:#f97316}.inv20-exec-sub{margin-top:5px;color:#7890aa;font-size:11px}
+    .inv20-wave-card{background:#0a1525;border:1px solid rgba(45,212,191,.16);border-radius:14px;padding:15px;margin-bottom:10px}.inv20-wave-card.ready{border-color:rgba(249,115,22,.34)}
+    .inv20-wave-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.inv20-wave-name{font:900 13px var(--mono);color:#fff}.inv20-wave-meta{margin-top:4px;font:700 8px var(--mono);color:#7890aa}.inv20-wave-status{font:800 8px var(--mono);color:#6ee7d8;border:1px solid rgba(45,212,191,.2);padding:5px 7px;border-radius:6px}
+    .inv20-wave-progress{height:5px;background:#07111f;border-radius:10px;overflow:hidden;margin:12px 0}.inv20-wave-progress i{display:block;height:100%;background:linear-gradient(90deg,#2dd4bf,#f97316);border-radius:10px}
+    .inv20-wave-next{background:#07111f;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:13px;text-align:center}.inv20-wave-next small{display:block;font:800 8px var(--mono);color:#7890aa}.inv20-wave-next strong{display:block;margin-top:5px;font:900 22px var(--mono);color:#fff}.inv20-wave-next span{display:block;margin-top:5px;font:700 8px var(--mono);color:#7890aa}
+    .inv20-open{width:100%;min-height:48px;margin-top:10px;border:0;border-radius:9px;background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;font:900 10px var(--mono);letter-spacing:.06em;cursor:pointer}.inv20-open b{float:right;font-size:15px}.inv20-await{text-align:center;color:#7890aa;font:700 9px var(--mono);padding:11px}
+    .inv20-exec-empty{max-width:560px;margin:45px auto;padding:28px;text-align:center;background:#0d192b;border:1px solid rgba(45,212,191,.16);border-radius:16px}.inv20-exec-empty p{margin:10px auto 18px;color:#7890aa;font-size:11px;line-height:1.55;max-width:430px}
+    body.inv20-counting #mExecInv{display:flex!important;position:fixed!important;inset:0!important;z-index:1000!important;padding:0!important;background:#07111f!important;align-items:stretch!important;justify-content:stretch!important}
+    body.inv20-counting #mExecInv>.md{width:100%!important;max-width:none!important;height:100%!important;max-height:none!important;margin:0!important;border:0!important;border-radius:0!important;background:#07111f!important;padding:0!important;overflow:auto!important}
+    body.inv20-counting #mExecInv .mc{top:10px;right:10px;z-index:3;background:#101d31!important}
+    body.inv20-counting #mExecInv .mt{padding:16px 52px 10px 16px;margin:0;color:#fff;font-size:17px}
+    body.inv20-counting #mExecInv #mExecInvHeader{padding:0 16px 8px;margin:0!important}
+    body.inv20-counting #mExecInv #execInvBlindBody{padding:0 16px 18px;margin-top:0!important}
+    body.inv20-counting #mExecInv #execInvBlindBody>div:first-child{background:#0d192b!important;border:1px solid rgba(45,212,191,.18)!important;border-radius:12px!important;padding:14px!important}
+    body.inv20-counting #mExecInv #execInvBlindBody>div:first-child>div:nth-child(2){grid-template-columns:1fr!important;gap:8px!important}
+    body.inv20-counting #mExecInv #blindSku,body.inv20-counting #mExecInv #blindLote,body.inv20-counting #mExecInv #blindDesc,body.inv20-counting #mExecInv #blindUm,body.inv20-counting #mExecInv #blindQtd{min-height:50px!important;font-size:14px!important}
+    body.inv20-counting #mExecInv #blindDesc,body.inv20-counting #mExecInv #blindUm{cursor:pointer}
+    body.inv20-counting #mExecInv #blindRows{margin-top:10px!important}
+    @media(max-width:600px){.inv20-shell{padding:10px}.inv20-title{font-size:24px}.inv20-exec-title{font-size:23px}.inv20-wave-next strong{font-size:20px}}
+  `;
+  document.head.appendChild(style);
 })();
+
 </script>
 </body>
 </html>
