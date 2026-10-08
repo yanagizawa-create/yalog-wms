@@ -18008,7 +18008,7 @@ function planejAtualizarPreview(){
     p.endereco!=='AGUARDANDO'&&p.endereco!=='EXPEDIDO'&&p.endereco!=='SEM-END');
   prods=_prodsBySite(prods,siteId);
   if(cliId) prods=prods.filter(p=>p.clienteId===cliId);
-  const prodsNasRuas=prods.filter(p=>ruas.some(r=>p.endereco===r||p.endereco.startsWith(r+'-')));
+  const prodsNasRuas=prods.filter(p=>ruas.some(r=>_enderecoPertenceRuaInv(p.endereco,r)));
 
   // A prévia precisa usar a mesma unidade operacional da confirmação:
   // 1 tarefa por endereço físico. Mantemos o cálculo local para não
@@ -18016,7 +18016,7 @@ function planejAtualizarPreview(){
   const endMapPreview=new Map();
   (DB.enderecos||[]).forEach(e=>{
     const addr=String(e.addr||'').trim();
-    if(!addr||!ruas.some(r=>addr===r||addr.startsWith(r+'-')))return;
+    if(!addr||!ruas.some(r=>_enderecoPertenceRuaInv(addr,r)))return;
     if(siteId && e.siteId && String(e.siteId)!==String(siteId))return;
     endMapPreview.set(addr,e);
   });
@@ -18096,7 +18096,7 @@ function confirmarPlanejamento(){
     (DB.enderecos||[]).forEach(e=>{
       const addr=String(e.addr||'').trim();
       const area=String(e.area||'').trim();
-      if(!addr||!ruas.some(r=>addr===r||addr.startsWith(r+'-')))return;
+      if(!addr||!ruas.some(r=>_enderecoPertenceRuaInv(addr,r)))return;
       if(siteId && e.siteId && String(e.siteId)!==String(siteId))return;
       endMap.set(addr,e);
     });
@@ -18104,7 +18104,7 @@ function confirmarPlanejamento(){
     // cria a referência operacional a partir dos produtos.
     prods.forEach(p=>{
       const addr=String(p.endereco||'').trim();
-      if(!addr||!ruas.some(r=>addr===r||addr.startsWith(r+'-'))||endMap.has(addr))return;
+      if(!addr||!ruas.some(r=>_enderecoPertenceRuaInv(addr,r))||endMap.has(addr))return;
       const pts=addr.split('-');
       endMap.set(addr,{addr,area:pts.length>=2?pts.slice(0,2).join('-'):pts[0]||addr,modulo:pts.length>=3?parseInt(pts[2])||0:0,nivel:pts.length>=4?parseInt(pts[3])||0:0});
     });
@@ -18289,6 +18289,18 @@ function _distribuirAutomaticamenteInv(invId){ const inv=DB.inventarios.find(x=>
 function _liberarOndasAtribuidasInv(invId){ const inv=DB.inventarios.find(x=>x.id===invId);if(!inv)return;let n=0;_normalizarOndasInv(inv).forEach(o=>{if(o.status==='AGUARDANDO'&&o.contadorId){o.status='LIBERADA';o.liberadaEm=now();o.tarefaIds.forEach(id=>{const t=inv.tarefas.find(x=>x.id===id);if(t&&t.status==='AGUARDANDO'){t.contadorDesignadoId=o.contadorId;t.contadorDesignado=o.contador;t.contadorDesignadoLogin=o.contadorLogin;t.ondaId=o.id;t.ondaNumero=o.numero;}});n++;}});if(n){save();abrirCentralContagem(invId);showT(n+' onda(s) liberada(s).','ok');}else showT('Nenhuma onda atribuída e aguardando liberação.','err'); }
 function _atualizarStatusOndasInv(inv){ if(!inv)return;_normalizarOndasInv(inv).forEach(o=>{const ts=_ondaTarefas(inv,o);if(!ts.length)return;if(ts.every(t=>t.status==='CONCLUIDO')){o.status='CONCLUIDA';o.concluidaEm=o.concluidaEm||now();return;}if(ts.some(t=>['ANDAMENTO','AGUARDANDO_2C','AGUARDANDO_3C','AGUARDANDO_APROV'].includes(t.status)))o.status='EM_CONTAGEM';}); }
 function _pctOndaInv(inv,o){const ts=_ondaTarefas(inv,o);if(!ts.length)return 0;return Math.round(ts.filter(t=>t.status==='CONCLUIDO').length/ts.length*100);}
+function _ruaNormalizadaInv(v){
+  const raw=String(v||'').trim();
+  if(!raw)return '';
+  const m=raw.match(/(?:RUA\s*)?0*(\d+)/i);
+  return m?String(Number(m[1])).padStart(2,'0'):raw;
+}
+function _enderecoPertenceRuaInv(endereco, rua){
+  const alvo=_ruaNormalizadaInv(rua);
+  if(!alvo)return false;
+  return _estruturaEnderecoInv(endereco,{rua:rua}).rua===alvo;
+}
+
 function _estruturaEnderecoInv(endereco, fallback={}){
   const raw=String(endereco||'').trim().replace(/\s+/g,' ');
   let s=raw.replace(/\s*[-–—]\s*/g,'.').replace(/\s*\.\s*/g,'.');
