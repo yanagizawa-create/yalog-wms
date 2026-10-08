@@ -3245,7 +3245,7 @@ canvas{max-width:100%;}
     </table>
   </div>
   <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center;">
-    <button class="btn btn-p" onclick="concluirContagem()">✓ Finalizar Contagem</button>
+    <button class="btn btn-p" onclick="_fecharEnderecoCegoInv()">✓ Finalizar Endereço</button>
     <button class="btn btn-b btn-sm" onclick="imprimirMinutaContagem()">🖨 Imprimir Minuta</button>
     <div style="position:relative;">
       <button class="btn btn-o btn-sm" onclick="document.getElementById('uploadContagem').click()">📥 Upload Excel/CSV</button>
@@ -13960,7 +13960,7 @@ function abrirModoOperador(){if(!isOperador())return go('home');go('operadorHome
 function renderModoOperador(){if(!isOperador())return;const nomeEl=document.getElementById('operadorNomeSub');if(nomeEl)nomeEl.textContent='Olá, '+(usuarioAtual.nome||'Operador')+' · execução operacional';const menu=document.getElementById('operadorMenu');if(!menu)return;const itens=[];if(temPermissao('inventario_abrir'))itens.push({ic:'▣',t:'Inventário',d:'Contagem física e execução de tarefas.',f:abrirInventarioOperador});if(temPermissao('recebimento'))itens.push({ic:'↓',t:'Recebimento',d:'Conferências e tarefas de recebimento.',f:()=>go('recTarefas')});if(temPermissao('armazenagem'))itens.push({ic:'⇧',t:'Armazenagem',d:'Tarefas de armazenagem.',f:()=>go('armazenagem')});if(temPermissao('separacao'))itens.push({ic:'☷',t:'Separação',d:'Execução das tarefas de separação.',f:()=>go('sepTarefas')});if(temPermissao('movimentacoes'))itens.push({ic:'⇄',t:'Movimentação',d:'Movimentações entre endereços.',f:()=>go('movimentar')});if(temPermissao('expedicao_execucao'))itens.push({ic:'↗',t:'Expedição',d:'Execução operacional de expedição.',f:()=>go('expedicao')});menu.innerHTML=itens.map((x,i)=>`<button class="operador-card" onclick="operadorAcao(${i})"><div><div class="op-ic">${x.ic}</div><strong>${x.t}</strong><span>${x.d}</span></div><div style="font-family:var(--mono);font-size:10px;color:var(--orange2);text-align:right;">ABRIR →</div></button>`).join('');window._operadorAcoes=itens.map(x=>x.f);}
 function operadorAcao(i){const f=window._operadorAcoes?.[i];if(typeof f==='function')f();}
 function abrirInventarioOperador(){if(!isOperador())return go('invList');go('operadorInv');renderInventarioOperador();}
-function renderInventarioOperador(){if(!isOperador())return;const body=document.getElementById('operadorInvBody');if(!body)return;const x=_primeiraTarefaInventarioOperador();if(!x){body.innerHTML='<div class="operador-empty"><div style="font-size:30px;margin-bottom:8px;">✓</div><strong style="color:var(--w);font-size:14px;">Nenhuma tarefa de inventário disponível</strong><div style="margin-top:6px;">Quando uma tarefa for liberada para execução, ela aparecerá aqui automaticamente.</div></div>';return;}const t=x.t,inv=x.inv,endereco=t.endereco||((t.itens||[])[0]?.endereco)||'—';document.getElementById('operadorInvWave').textContent=(x.onda?('ONDA '+String(x.onda.numero||'').padStart(3,'0')+' · '+(x.onda.escopo||'')):(inv.id||'INVENTÁRIO'))+' · '+(t.status==='ANDAMENTO'?'EM ANDAMENTO':t.status==='AGUARDANDO'?'AGUARDANDO':'RECONTAGEM');body.innerHTML=`<div style="text-align:center;margin-bottom:12px;"><div class="operador-kicker">Contagem de Inventário</div><div style="font-size:18px;font-weight:800;margin-top:5px;">${inv.tipo==='geral'?'Inventário Geral':'Inventário Rotativo'}</div></div><div class="operador-address"><small>Endereço da vez</small><b>${endereco}</b></div><div class="operador-step"><div class="operador-step-title">1 · Endereço</div><input id="operadorEnderecoInput" class="operador-address-input" value="" placeholder="INFORME O ENDEREÇO" autocomplete="off" inputmode="text" onkeydown="if(event.key==='Enter')continuarEnderecoOperador()"><div class="operador-actions"><button class="btn btn-o" onclick="biparEnderecoOperador()">▣ BIPAR</button><button class="btn btn-b" onclick="document.getElementById('operadorEnderecoInput')?.focus()">⌨ DIGITAR</button></div><button class="btn btn-p operador-primary" onclick="continuarEnderecoOperador()">CONTINUAR</button></div><button class="btn btn-b" style="width:100%;margin-top:12px;min-height:52px;" onclick="registrarEnderecoVazioOperador()">REGISTRAR ENDEREÇO VAZIO · 0</button><div style="margin-top:12px;font-family:var(--mono);font-size:9px;color:var(--w40);text-align:center;">Tarefa: ${t.id} · Rua: ${t.rua||'—'} · Operador: ${usuarioAtual.nome||'—'}</div>`;setTimeout(()=>document.getElementById('operadorEnderecoInput')?.focus(),120);}
+function renderInventarioOperador(){if(!isOperador())return;const body=document.getElementById('operadorInvBody');if(!body)return;const x=_primeiraTarefaInventarioOperador();if(!x){body.innerHTML='<div class="operador-empty"><div style="font-size:30px;margin-bottom:8px;">✓</div><strong style="color:var(--w);font-size:14px;">Nenhuma tarefa de inventário disponível</strong><div style="margin-top:6px;">Quando uma tarefa for liberada para execução, ela aparecerá aqui automaticamente.</div></div>';return;}const t=x.t,inv=x.inv,endereco=t.endereco||((t.itens||[])[0]?.endereco)||'—';document.getElementById('operadorInvWave').textContent=(x.onda?('ONDA '+String(x.onda.numero||'').padStart(3,'0')+' · '+(x.onda.escopo||'')):(inv.id||'INVENTÁRIO'))+' · '+(t.segmento||t.rua||'')+' · '+(t.status==='ANDAMENTO'?'EM ANDAMENTO':t.status==='AGUARDANDO'?'AGUARDANDO':'RECONTAGEM');body.innerHTML=`<div style="text-align:center;margin-bottom:12px;"><div class="operador-kicker">Contagem de Inventário</div><div style="font-size:18px;font-weight:800;margin-top:5px;">${inv.tipo==='geral'?'Inventário Geral':'Inventário Rotativo'}</div></div><div class="operador-address"><small>Endereço da vez</small><b>${endereco}</b></div><div class="operador-step"><div class="operador-step-title">1 · Endereço</div><input id="operadorEnderecoInput" class="operador-address-input" value="" placeholder="INFORME O ENDEREÇO" autocomplete="off" inputmode="text" onkeydown="if(event.key==='Enter')continuarEnderecoOperador()"><div class="operador-actions"><button class="btn btn-o" onclick="biparEnderecoOperador()">▣ BIPAR</button><button class="btn btn-b" onclick="document.getElementById('operadorEnderecoInput')?.focus()">⌨ DIGITAR</button></div><button class="btn btn-p operador-primary" onclick="continuarEnderecoOperador()">CONTINUAR</button></div><button class="btn btn-b" style="width:100%;margin-top:12px;min-height:52px;" onclick="registrarEnderecoVazioOperador()">REGISTRAR ENDEREÇO VAZIO · 0</button><div style="margin-top:12px;font-family:var(--mono);font-size:9px;color:var(--w40);text-align:center;">Tarefa: ${t.id} · Rua: ${t.rua||'—'} · Operador: ${usuarioAtual.nome||'—'}</div>`;setTimeout(()=>document.getElementById('operadorEnderecoInput')?.focus(),120);}
 function _validarEnderecoOperador(){const x=_primeiraTarefaInventarioOperador();if(!x)return null;const val=String(document.getElementById('operadorEnderecoInput')?.value||'').trim();if(!val){showT('Informe o endereço para continuar.','err');return null;}const t=x.t,ok=(t.itens||[]).some(i=>String(i.endereco||'').trim()===val)||String(t.endereco||'').trim()===val;if(!ok){showT('Este endereço não pertence à tarefa atual.','err');return null;}return x;}
 function continuarEnderecoOperador(){const x=_validarEnderecoOperador();if(!x)return;if(x.t.status==='AGUARDANDO')pegarTarefaInv(x.inv.id,x.t.id);executarTarefaInv(x.inv.id,x.t.id,1);}
 function biparEnderecoOperador(){showT('Leitura de endereço preparada. Use o campo para entrada do código.','ok');document.getElementById('operadorEnderecoInput')?.focus();}
@@ -18029,7 +18029,7 @@ function planejAtualizarPreview(){
       <div><div style="font-size:8px;color:var(--w40);text-transform:uppercase;">Produtos</div>
         <div style="font-weight:700;">${prodsNasRuas.length}</div></div>
       <div><div style="font-size:8px;color:var(--w40);text-transform:uppercase;">Tarefas</div>
-        <div style="font-weight:700;">${ruas.length} (1 por rua)</div></div>
+        <div style="font-weight:700;">${enderecosOrd.length} (1 por endereço)</div></div>
     </div>`;
   const info=document.getElementById('planejRuasInfo');
   if(info)info.textContent=ruas.length+' rua(s) selecionada(s) · '+prodsNasRuas.length+' produto(s)';
@@ -18070,21 +18070,46 @@ function confirmarPlanejamento(){
     const invId=genInvId();
     const emUso=_ruasEmUso();
 
-    const tarefas=ruas.map((rua,i)=>{
+    // A unidade operacional da contagem é o ENDEREÇO físico.
+    // A tarefa continua pertencendo à rua selecionada, mas deixa de agrupar toda a rua.
+    const endMap=new Map();
+    (DB.enderecos||[]).forEach(e=>{
+      const addr=String(e.addr||'').trim();
+      const area=String(e.area||'').trim();
+      if(!addr||!ruas.some(r=>addr===r||addr.startsWith(r+'-')))return;
+      if(siteId && e.siteId && String(e.siteId)!==String(siteId))return;
+      endMap.set(addr,e);
+    });
+    // Compatibilidade: se algum endereço de estoque ainda não estiver cadastrado em DB.enderecos,
+    // cria a referência operacional a partir dos produtos.
+    prods.forEach(p=>{
+      const addr=String(p.endereco||'').trim();
+      if(!addr||!ruas.some(r=>addr===r||addr.startsWith(r+'-'))||endMap.has(addr))return;
+      const pts=addr.split('-');
+      endMap.set(addr,{addr,area:pts.length>=2?pts.slice(0,2).join('-'):pts[0]||addr,modulo:pts.length>=3?parseInt(pts[2])||0:0,nivel:pts.length>=4?parseInt(pts[3])||0:0});
+    });
+    const enderecosOrd=[...endMap.values()].sort((a,b)=>String(a.addr||'').localeCompare(String(b.addr||'')));
+    const tarefas=[];
+    let seqT=0;
+    enderecosOrd.forEach(e=>{
+      const endereco=String(e.addr||'').trim();
+      const rua=String(e.area||'').trim()||endereco.split('-').slice(0,2).join('-');
+      if(!rua)return;
       if(emUso.has(rua)){
         showT('Rua '+rua+' já está em uso em outro inventário ativo','err');
-        return null;
+        return;
       }
-      // Match: exato OU começa com rua+'-'
-      const prodsRua=prods.filter(p=>p.endereco===rua||p.endereco.startsWith(rua+'-'));
-      if(!prodsRua.length) return null;
-      return{
-        id:invId+'-T'+String(i+1).padStart(2,'0'),
-        invId,tipo,rua,
-        status:'AGUARDANDO',
-        resp:null,pegoEm:null,concluidoEm:null,
+      const prodsEndereco=prods.filter(p=>String(p.endereco||'').trim()===endereco);
+      const modulo=Number(e.modulo)||0;
+      const nivel=Number(e.nivel)||0;
+      tarefas.push({
+        id:invId+'-T'+String(++seqT).padStart(3,'0'),
+        invId,tipo,rua,modulo,nivel,endereco,
+        segmento:rua+' · M'+String(modulo).padStart(2,'0')+' · N'+String(nivel).padStart(2,'0'),
+        status:'AGUARDANDO',resp:null,pegoEm:null,concluidoEm:null,
         cancelSolicitadoPor:null,cancelMotivo:null,cancelStatus:null,
-        itens:prodsRua.map(p=>({
+        contagensFisicas:{},
+        itens:prodsEndereco.map(p=>({
           wmsId:p.wmsId,endereco:p.endereco,descricao:p.descricao,
           clienteId:p.clienteId,lote:p.lote||'',validade:p.validade||'',
           um:p.um||'UN',qtdSistema:p.qtd||0,
@@ -18094,8 +18119,8 @@ function confirmarPlanejamento(){
           qtdAprovada:null,aprovadoPor:null,aprovadoEm:null,
           ajuste:0,rodada:1,status:'PENDENTE'
         }))
-      };
-    }).filter(Boolean);
+      });
+    });
 
     if(!tarefas.length){
       showT('Não foi possível gerar tarefas — verifique se os produtos estão endereçados nas ruas selecionadas','err');
@@ -18225,8 +18250,8 @@ function _ondaTarefas(inv,o){ const ids=new Set(o?.tarefaIds||[]); return (inv?.
 function _contadoresOcupadosInv(inv){ const s=new Set(); _normalizarOndasInv(inv).forEach(o=>{if(o.contadorId&&['AGUARDANDO','LIBERADA','EM_CONTAGEM'].includes(o.status))s.add(String(o.contadorId));}); return s; }
 function _tarefasSemOndaInv(inv){ const assigned=new Set(_normalizarOndasInv(inv).flatMap(o=>o.tarefaIds||[])); return (inv?.tarefas||[]).filter(t=>t.status!=='CANCELADO'&&!assigned.has(t.id)); }
 function _proximoNumeroOndaInv(inv){ return (_normalizarOndasInv(inv).reduce((m,o)=>Math.max(m,Number(o.numero)||0),0)||0)+1; }
-function _criarOndaRegistroInv(inv,tarefaIds,contador){ const n=_proximoNumeroOndaInv(inv); const tarefas=(inv.tarefas||[]).filter(t=>tarefaIds.includes(t.id)); const onda={id:inv.id+'-O'+String(n).padStart(3,'0'),numero:n,invId:inv.id,tarefaIds:[...tarefaIds],escopo:[...new Set(tarefas.map(t=>t.rua||'—'))].join(' · '),status:contador?'LIBERADA':'AGUARDANDO',contadorId:contador?(contador.id||contador.login||contador.nome):null,contador:contador?(contador.nome||contador.login):null,contadorLogin:contador?.login||null,liberadaEm:contador?now():null,inicioEm:null,concluidaEm:null};_garantirOndasInv(inv).push(onda);tarefas.forEach(t=>{t.ondaId=onda.id;t.ondaNumero=onda.numero;if(contador){t.contadorDesignadoId=onda.contadorId;t.contadorDesignado=onda.contador;t.contadorDesignadoLogin=onda.contadorLogin;}});return onda; }
-function _criarOndaInv(invId){ const inv=DB.inventarios.find(x=>x.id===invId);if(!inv)return;const ondas=_normalizarOndasInv(inv);const disponiveis=_tarefasSemOndaInv(inv);if(!disponiveis.length){showT('Não há tarefas disponíveis para formar uma nova onda.','err');return;}openM('mOndaInv');document.getElementById('ondaInvId').value=invId;document.getElementById('ondaInvBody').innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><label style="font-size:10px;color:var(--w70);"><input type="checkbox" id="ondaTaskAll" onchange="document.querySelectorAll(\'.ondaTaskChk\').forEach(x=>x.checked=this.checked)"> Selecionar todas</label><span style="font-family:var(--mono);font-size:9px;color:var(--w40);">'+disponiveis.length+' tarefa(s) disponíveis</span></div>'+disponiveis.map(t=>`<label style="display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid var(--border);margin-bottom:5px;background:var(--bg);cursor:pointer;"><input type="checkbox" class="ondaTaskChk" value="${t.id}"><span style="font-family:var(--mono);font-weight:700;color:var(--orange2);">${t.id}</span><span style="color:var(--w40);font-size:10px;">${t.rua||'—'} · ${(t.itens||[]).length} itens · ${t.status}</span></label>`).join(''); }
+function _criarOndaRegistroInv(inv,tarefaIds,contador){ const n=_proximoNumeroOndaInv(inv); const tarefas=(inv.tarefas||[]).filter(t=>tarefaIds.includes(t.id)); const onda={id:inv.id+'-O'+String(n).padStart(3,'0'),numero:n,invId:inv.id,tarefaIds:[...tarefaIds],escopo:[...new Set(tarefas.map(t=>t.segmento||((t.rua||'—')+' · M'+String(t.modulo??'—').padStart(2,'0')+' · N'+String(t.nivel??'—').padStart(2,'0'))))].join(' · '),status:contador?'LIBERADA':'AGUARDANDO',contadorId:contador?(contador.id||contador.login||contador.nome):null,contador:contador?(contador.nome||contador.login):null,contadorLogin:contador?.login||null,liberadaEm:contador?now():null,inicioEm:null,concluidaEm:null};_garantirOndasInv(inv).push(onda);tarefas.forEach(t=>{t.ondaId=onda.id;t.ondaNumero=onda.numero;if(contador){t.contadorDesignadoId=onda.contadorId;t.contadorDesignado=onda.contador;t.contadorDesignadoLogin=onda.contadorLogin;}});return onda; }
+function _criarOndaInv(invId){ const inv=DB.inventarios.find(x=>x.id===invId);if(!inv)return;const ondas=_normalizarOndasInv(inv);const disponiveis=_tarefasSemOndaInv(inv);if(!disponiveis.length){showT('Não há tarefas disponíveis para formar uma nova onda.','err');return;}openM('mOndaInv');document.getElementById('ondaInvId').value=invId;document.getElementById('ondaInvBody').innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><label style="font-size:10px;color:var(--w70);"><input type="checkbox" id="ondaTaskAll" onchange="document.querySelectorAll(\'.ondaTaskChk\').forEach(x=>x.checked=this.checked)"> Selecionar todas</label><span style="font-family:var(--mono);font-size:9px;color:var(--w40);">'+disponiveis.length+' tarefa(s) disponíveis</span></div>'+disponiveis.map(t=>`<label style="display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid var(--border);margin-bottom:5px;background:var(--bg);cursor:pointer;"><input type="checkbox" class="ondaTaskChk" value="${t.id}"><span style="font-family:var(--mono);font-weight:700;color:var(--orange2);">${t.id}</span><span style="color:var(--w40);font-size:10px;">${t.endereco||'—'} · ${t.segmento||t.rua||'—'} · ${(t.itens||[]).length} itens · ${t.status}</span></label>`).join(''); }
 function confirmarCriacaoOnda(){ const invId=document.getElementById('ondaInvId')?.value||'';const inv=DB.inventarios.find(x=>x.id===invId);if(!inv)return;const tarefaIds=[...document.querySelectorAll('.ondaTaskChk:checked')].map(x=>x.value);if(!tarefaIds.length){showT('Selecione ao menos uma tarefa para formar a onda.','err');return;}const onda=_criarOndaRegistroInv(inv,tarefaIds,null);save();closeM('mOndaInv');abrirCentralContagem(invId);showT('Onda '+String(onda.numero).padStart(3,'0')+' criada com '+tarefaIds.length+' tarefa(s).','ok'); }
 function _atribuirContadorOnda(invId,ondaId){ const inv=DB.inventarios.find(x=>x.id===invId);if(!inv)return;const onda=_normalizarOndasInv(inv).find(x=>x.id===ondaId);if(!onda)return;const conts=_usuariosContadoresInv();if(!conts.length){showT('Nenhum usuário com perfil Operador disponível.','err');return;}openM('mAtribuirOnda');document.getElementById('atribOndaInvId').value=invId;document.getElementById('atribOndaId').value=ondaId;document.getElementById('ondaContadorSel').innerHTML='<option value="">Selecione o contador...</option>'+conts.map(u=>{const id=u.id||u.login||u.nome;const busy=_contadoresOcupadosInv(inv).has(String(id))&&String(onda.contadorId)!==String(id);return `<option value="${id}" ${String(onda.contadorId)===String(id)?'selected':''} ${busy?'disabled':''}>${u.nome||u.login} · ${u.login||''}${busy?' · EM ATIVIDADE':''}</option>`}).join(''); }
 function confirmarAtribuicaoOnda(){ const invId=document.getElementById('atribOndaInvId')?.value||'',ondaId=document.getElementById('atribOndaId')?.value||'',sel=document.getElementById('ondaContadorSel');const inv=DB.inventarios.find(x=>x.id===invId);if(!inv||!sel?.value){showT('Selecione um contador.','err');return;}const onda=_normalizarOndasInv(inv).find(x=>x.id===ondaId);if(!onda)return;const u=_usuariosContadoresInv().find(x=>String(x.id||x.login||x.nome)===String(sel.value));if(!u)return;const busy=_contadoresOcupadosInv(inv);if(busy.has(String(sel.value))&&String(onda.contadorId)!==String(sel.value)){showT('Este contador já possui uma onda ativa.','err');return;}onda.contadorId=u.id||u.login||u.nome;onda.contador=u.nome||u.login;onda.contadorLogin=u.login||null;onda.tarefaIds.forEach(id=>{const t=inv.tarefas.find(x=>x.id===id);if(t){t.contadorDesignadoId=onda.contadorId;t.contadorDesignado=onda.contador;t.contadorDesignadoLogin=onda.contadorLogin;t.ondaId=onda.id;t.ondaNumero=onda.numero;}});save();closeM('mAtribuirOnda');abrirCentralContagem(invId);showT('Onda atribuída a '+onda.contador+'.','ok'); }
@@ -18324,9 +18349,39 @@ function pegarTarefaInv(invId,tarefaId){
   save();abrirTarefasInv(invId);showT('Tarefa '+tarefaId+' assumida! Clique em Contar para registrar.','ok');
 }
 
+// ── EXECUÇÃO CEGA POR ENDEREÇO ─────────────────────────────────────
+function _catalogoDescricoesInv(){return [...new Set((DB.produtos||[]).map(p=>String(p.descricao||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));}
+function _catalogoUMInv(){return [...new Set((DB.produtos||[]).map(p=>String(p.um||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));}
+function _skuItemInv(i){return String(i?.skuContagem||i?.wmsId||i?.codCliente||'').trim();}
+function _normalizarFisicosInv(t,rodada){if(!t.contagensFisicas||typeof t.contagensFisicas!=='object')t.contagensFisicas={};if(!Array.isArray(t.contagensFisicas[rodada]))t.contagensFisicas[rodada]=[];return t.contagensFisicas[rodada];}
+function _renderContagemCegaInv(invId,tarefaId,rodada){
+  const inv=DB.inventarios.find(x=>x.id===invId),t=inv?.tarefas.find(x=>x.id===tarefaId);if(!t)return;
+  const rows=_normalizarFisicosInv(t,rodada),descs=_catalogoDescricoesInv(),ums=_catalogoUMInv();
+  document.getElementById('execInvId').value=invId;document.getElementById('execTarefaId').value=tarefaId;document.getElementById('execRodada').value=rodada;
+  document.getElementById('mExecInvTitulo').textContent=['','1ª Contagem Cega','2ª Contagem Cega','3ª Contagem — Validação Final'][rodada]+' · '+(t.endereco||t.rua||tarefaId);
+  document.getElementById('mExecInvHeader').innerHTML=`<div style="background:var(--bg3);border:1px solid var(--border);padding:12px;font-family:var(--mono);font-size:10px;display:flex;gap:14px;flex-wrap:wrap"><span>ENDEREÇO: <strong style="color:var(--orange2);font-size:12px">${t.endereco||'—'}</strong></span><span>RUA: <strong>${t.rua||'—'}</strong></span><span>MÓDULO: <strong>${String(t.modulo??'—').padStart(2,'0')}</strong></span><span>NÍVEL: <strong>${String(t.nivel??'—').padStart(2,'0')}</strong></span><span>RODADA: <strong>${rodada}ª</strong></span></div><div style="margin-top:10px;color:var(--w40);font-size:10px">Contagem cega: o contador informa somente o que encontrou fisicamente. Saldo sistema, itens esperados e contagens anteriores permanecem ocultos.</div>`;
+  const tbl=document.getElementById('tblExecInv');if(tbl)tbl.style.display='none';
+  const tb=document.getElementById('tbExecInv');if(tb){tb.innerHTML='';}
+  let host=document.getElementById('execInvBlindBody');if(!host){host=document.createElement('div');host.id='execInvBlindBody';host.style.cssText='margin-top:12px;';tbl?.parentElement?.appendChild(host);}
+  host.innerHTML=`<div style="background:var(--panel);border:1px solid var(--border);padding:14px"><div style="font-size:10px;color:var(--orange2);font-family:var(--mono);letter-spacing:.08em;margin-bottom:10px">PRODUTO ENCONTRADO NO ENDEREÇO</div><div style="display:grid;grid-template-columns:1.2fr 1fr;gap:8px"><input id="blindSku" class="form-input" placeholder="SKU / CÓDIGO" autocomplete="off"><input id="blindLote" class="form-input" placeholder="LOTE" autocomplete="off"><select id="blindDesc" class="form-input"><option value="">DESCRIÇÃO — SELECIONE</option>${descs.map(x=>`<option>${x.replace(/"/g,'&quot;')}</option>`).join('')}</select><select id="blindUm" class="form-input"><option value="">UNIDADE — SELECIONE</option>${ums.map(x=>`<option>${x}</option>`).join('')}</select><input id="blindQtd" class="form-input" type="number" min="0" step="any" placeholder="QUANTIDADE" autocomplete="off"></div><button class="btn btn-p" style="width:100%;margin-top:10px;min-height:46px" onclick="_adicionarProdutoCegoInv()">＋ REGISTRAR PRODUTO NESTE ENDEREÇO</button></div><div id="blindRows" style="margin-top:10px"></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn btn-o" style="flex:1;min-height:48px" onclick="_fecharEnderecoCegoInv()">→ PRÓXIMO ENDEREÇO</button><button class="btn btn-b" style="min-height:48px" onclick="_registrarEnderecoVazioCegoInv()">ENDEREÇO VAZIO · 0</button></div>`;
+  _renderLinhasCegasInv(t,rodada);openM('mExecInv');setTimeout(()=>document.getElementById('blindSku')?.focus(),120);
+}
+function _renderLinhasCegasInv(t,rodada){const rows=_normalizarFisicosInv(t,rodada),el=document.getElementById('blindRows');if(!el)return;el.innerHTML=rows.length?'<div style="font-size:9px;color:var(--w40);font-family:var(--mono);margin-bottom:6px">REGISTRADOS NESTE ENDEREÇO</div>'+rows.map((r,i)=>`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;border:1px solid var(--border);padding:9px;margin-bottom:5px;background:var(--bg)"><div><b style="font-family:var(--mono);color:var(--orange2)">${r.sku}</b><span style="color:var(--w40);margin-left:8px">Lote ${r.lote||'—'} · ${r.descricao||'—'} · ${r.um||'—'}</span></div><b>${fN(r.qtd)}</b></div>`).join(''):'<div style="padding:14px;text-align:center;color:var(--w40);border:1px dashed var(--border)">Nenhum produto registrado ainda.</div>';}
+function _adicionarProdutoCegoInv(){const invId=document.getElementById('execInvId')?.value,tarefaId=document.getElementById('execTarefaId')?.value,rodada=parseInt(document.getElementById('execRodada')?.value)||1;const inv=DB.inventarios.find(x=>x.id===invId),t=inv?.tarefas.find(x=>x.id===tarefaId);if(!t)return;const sku=String(document.getElementById('blindSku')?.value||'').trim(),lote=String(document.getElementById('blindLote')?.value||'').trim(),descricao=String(document.getElementById('blindDesc')?.value||'').trim(),um=String(document.getElementById('blindUm')?.value||'').trim(),q=parseFloat(document.getElementById('blindQtd')?.value);if(!sku||!lote||!descricao||!um||isNaN(q)||q<0){showT('Informe SKU, lote, descrição, unidade e quantidade.','err');return;}const rows=_normalizarFisicosInv(t,rodada);rows.push({sku,lote,descricao,um,qtd:q,resp:usuarioAtual?.nome||'—',data:now()});save();_renderLinhasCegasInv(t,rodada);['blindSku','blindLote','blindDesc','blindUm','blindQtd'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});document.getElementById('blindSku')?.focus();}
+function _registrarEnderecoVazioCegoInv(){const invId=document.getElementById('execInvId')?.value,tarefaId=document.getElementById('execTarefaId')?.value,rodada=parseInt(document.getElementById('execRodada')?.value)||1;const inv=DB.inventarios.find(x=>x.id===invId),t=inv?.tarefas.find(x=>x.id===tarefaId);if(!t)return;_normalizarFisicosInv(t,rodada);_fecharEnderecoCegoInv();}
+function _fecharEnderecoCegoInv(){const invId=document.getElementById('execInvId')?.value,tarefaId=document.getElementById('execTarefaId')?.value,rodada=parseInt(document.getElementById('execRodada')?.value)||1;const inv=DB.inventarios.find(x=>x.id===invId),t=inv?.tarefas.find(x=>x.id===tarefaId);if(!inv||!t)return;const rows=_normalizarFisicosInv(t,rodada);const key=(r)=>String(r.sku||'').trim()+'|'+String(r.lote||'').trim();const agg=new Map();rows.forEach(r=>{const k=key(r);const old=agg.get(k)||{...r,qtd:0};old.qtd+=Number(r.qtd)||0;agg.set(k,old);});
+  const expected=t.itens||[], byKey=new Map(expected.map(i=>[key({sku:i.wmsId||i.codCliente||'',lote:i.lote||''}),i]));
+  if(rodada===1){expected.forEach(i=>{const r=[...agg.values()].find(x=>String(x.sku).trim()===_skuItemInv(i)&&String(x.lote||'').trim()===String(i.lote||'').trim());const q=r?Number(r.qtd)||0:0;i.qtd1C=q;i.resp1C=usuarioAtual?.nome||'—';i.data1C=now();i.div1C=Math.abs(q-(i.qtdSistema||0))>0;i.rodada=i.div1C?2:1;if(!i.div1C){i.qtdAprovada=q;i.ajuste=q-(i.qtdSistema||0);i.status='APROVADO';}});rows.forEach(r=>{const match=expected.some(i=>_skuItemInv(i)===String(r.sku).trim()&&String(i.lote||'').trim()===String(r.lote||'').trim());if(!match){t.itens.push({wmsId:null,skuContagem:r.sku,endereco:t.endereco,descricao:r.descricao,clienteId:t.clienteId||null,lote:r.lote||'',validade:'',um:r.um||'UN',qtdSistema:0,qtd1C:r.qtd,resp1C:usuarioAtual?.nome||'—',data1C:now(),div1C:true,qtd2C:null,resp2C:null,data2C:null,div2C:false,qtd3C:null,resp3C:null,data3C:null,qtdAprovada:null,aprovadoPor:null,aprovadoEm:null,ajuste:0,rodada:2,status:'PENDENTE',contagemFisicaExtra:true});}});
+    const tem=t.itens.some(i=>i.div1C);t.status=tem?'AGUARDANDO_2C':'CONCLUIDO';if(!tem)t.concluidoEm=now();
+  } else if(rodada===2){t.itens.filter(i=>i.div1C).forEach(i=>{const r=[...agg.values()].find(x=>String(x.sku).trim()===_skuItemInv(i)&&String(x.lote||'').trim()===String(i.lote||'').trim());const q=r?Number(r.qtd)||0:i.qtd1C||0;i.qtd2C=q;i.resp2C=usuarioAtual?.nome||'—';i.data2C=now();i.div2C=Math.abs(q-(i.qtd1C||0))>0&&Math.abs(q-(i.qtdSistema||0))>0;i.rodada=i.div2C?3:2;if(!i.div2C){i.qtdAprovada=q;i.ajuste=q-(i.qtdSistema||0);i.status='APROVADO';}});const tem=t.itens.some(i=>i.div2C);t.status=tem?'AGUARDANDO_3C':'CONCLUIDO';if(!tem)t.concluidoEm=now();
+  } else {t.itens.filter(i=>i.div2C).forEach(i=>{const r=[...agg.values()].find(x=>String(x.sku).trim()===String(i.wmsId||i.codCliente||'').trim()&&String(x.lote||'').trim()===String(i.lote||'').trim());i.qtd3C=r?Number(r.qtd)||0:i.qtd2C||0;i.resp3C=usuarioAtual?.nome||'—';i.data3C=now();});t.status='AGUARDANDO_APROV';}
+  _atualizarProgressoInv(inv);_atualizarStatusOndasInv(inv);save();closeM('mExecInv');renderInventarioOperador();renderInvList();showT('Endereço '+(t.endereco||t.id)+' fechado. '+(t.status==='CONCLUIDO'?'✓ sem divergências.':'Divergência encaminhada para a próxima rodada.'),'ok');}
+
 // ── EXECUÇÃO DE CONTAGEM ──────────────────────────────────────────
 function executarTarefaInv(invId,tarefaId,rodada){
   const inv=DB.inventarios.find(x=>x.id===invId);
+  const _tBlind=inv?.tarefas.find(x=>x.id===tarefaId);
+  if(_tBlind){ if(rodada===3&&!_invCanAprovar()){showT('3ª contagem: requer Encarregado, Supervisor ou Master','err');return;} _renderContagemCegaInv(invId,tarefaId,rodada); return; }
   const t=inv?.tarefas.find(x=>x.id===tarefaId);
   if(!t)return;
   if(rodada===3&&!_invCanAprovar()){showT('3ª contagem: requer Encarregado, Supervisor ou Master','err');return;}
