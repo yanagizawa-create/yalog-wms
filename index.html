@@ -3218,38 +3218,44 @@ canvas{max-width:100%;}
 </div></div>
 
 <!-- ════ MODAL EXECUÇÃO DE TAREFA DE INVENTÁRIO ════ -->
-<div class="mo" id="mExecInv"><div class="md md-wide" style="max-width:760px;">
+<div class="mo" id="mExecInv"><div class="md md-wide" style="max-width:680px;">
   <button class="mc" onclick="closeM('mExecInv')">✕</button>
-  <div class="mt" id="mExecInvTitulo">Contagem de Inventário</div>
+  <div class="mt" id="mExecInvTitulo">Contagem Cega de Inventário</div>
   <div id="mExecInvHeader" style="margin-bottom:12px;"></div>
   <input type="hidden" id="execInvId">
   <input type="hidden" id="execTarefaId">
   <input type="hidden" id="execRodada">
-  <div style="overflow-x:auto;">
-    <table class="dt" style="font-size:11px;" id="tblExecInv">
-      <thead><tr>
-        <th>Endereço</th><th>Cód.WMS</th><th>Descrição</th><th>Lote</th>
-        <th class="ct">Qtd Sistema</th><th class="ct" id="thQtdAnterior" style="display:none;">Qtd Anterior</th>
-        <th class="ct">Qtd Contada <span class="req">*</span></th>
-      </tr></thead>
-      <tbody id="tbExecInv"></tbody>
-    </table>
+  <input type="hidden" id="execEndereco">
+  <div id="invExecEnderecoBox" style="background:linear-gradient(135deg,rgba(251,146,60,.12),rgba(45,212,191,.06));border:1px solid rgba(251,146,60,.28);padding:14px;margin-bottom:14px;text-align:center;">
+    <div style="font:9px var(--mono);color:var(--w40);letter-spacing:.16em;text-transform:uppercase;">ENDEREÇO ATUAL · CONTAGEM CEGA</div>
+    <div id="invExecEndereco" style="font:800 24px var(--mono);color:var(--orange2);margin-top:6px;">—</div>
+    <div id="invExecEnderecoMeta" style="font:9px var(--mono);color:var(--w40);margin-top:5px;"></div>
   </div>
-  <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center;">
-    <button class="btn btn-p" onclick="concluirContagem()">✓ Finalizar Contagem</button>
-    <button class="btn btn-b btn-sm" onclick="imprimirMinutaContagem()">🖨 Imprimir Minuta</button>
-    <div style="position:relative;">
-      <button class="btn btn-o btn-sm" onclick="document.getElementById('uploadContagem').click()">📥 Upload Excel/CSV</button>
-      <input type="file" id="uploadContagem" accept=".xlsx,.xls,.csv" style="display:none;" onchange="processarUploadContagem(event)">
+  <div id="invExecProdutoForm" style="background:var(--bg3);border:1px solid var(--border);padding:14px;">
+    <div style="font:9px var(--mono);color:var(--b2);letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px;">REGISTRO FÍSICO · O QUE FOI ENCONTRADO?</div>
+    <div class="frow">
+      <div class="fg"><label>SKU <span class="req">*</span></label><input id="invExecSku" autocomplete="off" placeholder="Digite ou bipar o SKU"></div>
+      <div class="fg"><label>LOTE <span class="req">*</span></label><input id="invExecLote" autocomplete="off" placeholder="Informe o lote"></div>
     </div>
-    <button class="btn btn-o btn-xs" onclick="downloadTemplateContagem()" title="Baixar planilha em branco para preencher">⬇ Template CSV
+    <div class="frow">
+      <div class="fg"><label>DESCRIÇÃO <span class="req">*</span></label><select id="invExecDesc" onclick="try{this.showPicker()}catch(e){}"><option value="">SELECIONE A DESCRIÇÃO</option></select></div>
+      <div class="fg"><label>UNIDADE <span class="req">*</span></label><select id="invExecUm" onclick="try{this.showPicker()}catch(e){}"><option value="">SELECIONE A UNIDADE</option></select></div>
     </div>
+    <div class="fg"><label>QUANTIDADE <span class="req">*</span></label><input id="invExecQtd" type="number" min="0" step="0.001" inputmode="decimal" autocomplete="off" placeholder="Informe a quantidade"></div>
+    <button class="btn btn-p" style="width:100%;margin-top:10px;" onclick="registrarProdutoInvCego()">✓ REGISTRAR PRODUTO</button>
+  </div>
+  <div id="invExecRegistrados" style="margin-top:12px;"></div>
+  <div id="invExecAcoesEndereco" style="display:none;gap:8px;flex-wrap:wrap;margin-top:12px;">
+    <button class="btn btn-g" style="flex:1;min-width:240px;" onclick="continuarMesmoEnderecoInv()">＋ OUTRO PRODUTO NESTE ENDEREÇO</button>
+    <button class="btn btn-b" style="flex:1;min-width:220px;" onclick="proximoEnderecoInv()">→ PRÓXIMO ENDEREÇO</button>
+  </div>
+  <div id="invExecEmptyAction" style="margin-top:8px;">
+    <button class="btn btn-b" style="width:100%;" onclick="registrarEnderecoVazioInv()">ENDEREÇO VAZIO · 0</button>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:14px;align-items:center;">
     <button class="btn btn-r btn-xs" onclick="closeM('mExecInv')" style="margin-left:auto;">Cancelar</button>
   </div>
-  <div id="uploadContagemInfo" style="display:none;margin-top:8px;font-size:10px;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);padding:8px 12px;font-family:var(--mono);"></div>
-  <div style="background:rgba(251,146,60,.06);border:1px solid rgba(251,146,60,.15);padding:10px 12px;margin-top:10px;font-size:10px;color:var(--w40);">
-    💡 <strong style="color:var(--w70);">Upload Excel/CSV:</strong> use a minuta impressa como base, preencha no Excel ou Google Forms e faça o upload. Colunas obrigatórias: <code>WMS_ID</code> e <code>QTD_CONTADA</code>. Opcional: <code>OBS</code>.
-  </div>
+  <div id="uploadContagemInfo" style="display:none"></div>
 </div></div>
 
 <!-- ════ MODAL APROVAÇÃO DE DIVERGÊNCIAS ════ -->
@@ -4344,14 +4350,11 @@ const LocalStorageProvider = {
   // Sem empresa autenticada ainda (_companyIdLocalAtual null), o
   // comportamento é IDÊNTICO ao anterior a esta sprint.
   _chaveFisica(key) {
-    // BUILD 023 — persistência operacional tenant-aware.
-    // Antes do login, preserva a chave legada/global para compatibilidade.
-    // Depois do login, o DB operacional passa a ter uma chave física própria
-    // da empresa. A chave global NUNCA é apagada e continua sendo fonte de
-    // migração/recuperação legada.
-    if(key===DBKEY && _companyIdLocalAtual){
-      return 'wms:' + _companyIdLocalAtual + ':' + DBKEY;
-    }
+    // BUILD 018 — A base operacional local possui UMA chave canônica por
+    // instalação. O tenant é responsabilidade do Supabase quando o modo
+    // online for ativado; ele NÃO pode mudar a chave local durante o MVP.
+    // Isso evita que uma nova sessão/login encontre uma chave tenant vazia
+    // e faça o estoque parecer perdido.
     return key;
   },
   // Migração automática e não-destrutiva: se o dispositivo já tem dado
@@ -5184,7 +5187,6 @@ const WMS_IDB_NAME='YALOG_WMS_LOCAL_DB';
 const WMS_IDB_VERSION=1;
 const WMS_IDB_STORE='estado';
 const WMS_IDB_KEY='db-canonico';
-function _idbKeyEmpresa(companyId){ return 'db-canonico:' + (companyId || 'global'); }
 function _idbDisponivel(){return typeof indexedDB!=='undefined';}
 function _idbAbrir(){
   return new Promise((resolve,reject)=>{
@@ -5197,55 +5199,35 @@ function _idbAbrir(){
     }catch(e){resolve(null);}
   });
 }
-async function _idbLerDB(companyId=_companyIdLocalAtual){
+async function _idbLerDB(){
   const db=await _idbAbrir(); if(!db)return null;
   return new Promise(resolve=>{
-    try{
-      const tx=db.transaction(WMS_IDB_STORE,'readonly');
-      const store=tx.objectStore(WMS_IDB_STORE);
-      const primaryKey=_idbKeyEmpresa(companyId);
-      const req=store.get(primaryKey);
-      req.onsuccess=()=>{
-        let v=req.result;
-        // Migração de continuidade: se a chave tenant ainda não existe,
-        // tenta a chave global antiga. Nunca apaga a chave global aqui.
-        if(!v && companyId) {
-          try {
-            const reqLegacy=store.get(WMS_IDB_KEY);
-            reqLegacy.onsuccess=()=>resolve(reqLegacy.result&&reqLegacy.result.db?_cloneSeguro(reqLegacy.result.db):null);
-            reqLegacy.onerror=()=>resolve(null);
-            return;
-          } catch(e){}
-        }
-        resolve(v&&v.db?_cloneSeguro(v.db):null);
-      };
-      req.onerror=()=>resolve(null);
-      tx.oncomplete=()=>{try{db.close();}catch(e){}};
-    }catch(e){try{db.close();}catch(_e){}resolve(null);}
+    try{const tx=db.transaction(WMS_IDB_STORE,'readonly');const req=tx.objectStore(WMS_IDB_STORE).get(WMS_IDB_KEY);req.onsuccess=()=>{const v=req.result;resolve(v&&v.db?_cloneSeguro(v.db):null);};req.onerror=()=>resolve(null);tx.oncomplete=()=>{try{db.close();}catch(e){}};}catch(e){try{db.close();}catch(_e){}resolve(null);}
   });
 }
 let _yalogPersistQueue=Promise.resolve();
 let _yalogLastPersistPromise=Promise.resolve();
-async function _idbGravarDB(db,companyId=_companyIdLocalAtual){
+async function _idbGravarDB(db){
   if(!_idbDisponivel()||!db)return false;
   const clone=_cloneSeguro(db); if(!clone)return false;
-  const base={db:clone,company_id:companyId||null,salvoEm:new Date().toISOString(),build:YALOG_WMS_UPDATE||'023',schema:'YALOG-WMS-CANONICAL-002'};
+  const base={db:clone,salvoEm:new Date().toISOString(),build:YALOG_WMS_UPDATE||'018',schema:'YALOG-WMS-CANONICAL-001'};
   const conn=await _idbAbrir(); if(!conn)return false;
   return new Promise(resolve=>{
     try{
       const tx=conn.transaction(WMS_IDB_STORE,'readwrite');
-      tx.objectStore(WMS_IDB_STORE).put(base,_idbKeyEmpresa(companyId));
+      tx.objectStore(WMS_IDB_STORE).put(base,WMS_IDB_KEY);
       tx.oncomplete=()=>{try{conn.close();}catch(e){}resolve(true);};
       tx.onerror=()=>{try{conn.close();}catch(e){}resolve(false);};
       tx.onabort=()=>{try{conn.close();}catch(e){}resolve(false);};
     }catch(e){try{conn.close();}catch(_e){}resolve(false);}
   });
 }
-function _persistirDBCanonico(db,companyId=_companyIdLocalAtual){
+function _persistirDBCanonico(db){
   const snapshot=_cloneSeguro(db);
   if(!snapshot) return Promise.resolve(false);
-  // Serializa as gravações e fixa o tenant no envelope/chave física.
-  _yalogPersistQueue=_yalogPersistQueue.catch(()=>false).then(()=>_idbGravarDB(snapshot,companyId));
+  // Serializa as gravações: uma atualização nunca pode terminar depois
+  // de uma gravação mais nova e sobrescrever o estado canônico.
+  _yalogPersistQueue=_yalogPersistQueue.catch(()=>false).then(()=>_idbGravarDB(snapshot));
   _yalogLastPersistPromise=_yalogPersistQueue;
   return _yalogPersistQueue;
 }
@@ -5336,12 +5318,13 @@ function _mesclarLegacySemSobrescreverCanonico(canonico, legado){
   (Array.isArray(l.capacidadeArmazem)?l.capacidadeArmazem:[]).forEach(x=>{const id=_chaveRegistro(x,'capacidadeArmazem');if(!capIds.has(id)){out.capacidadeArmazem.push(_cloneSeguro(x));capIds.add(id);}});
   return out;
 }
-async function _recuperarMelhorBasePersistida(baseAtual,companyId=_companyIdLocalAtual){
+async function _recuperarMelhorBasePersistida(baseAtual){
   let melhor=_cloneSeguro(baseAtual)||{};
-  // BUILD 023: IndexedDB canônico é tenant-aware. Uma base vazia nunca
-  // vence uma base válida. A chave global anterior só participa como
-  // migração de continuidade quando a chave da empresa ainda não existe.
-  const idb=await _idbLerDB(companyId);
+  // BUILD 018: IndexedDB é a fonte canônica local. Quando existe um banco
+  // canônico válido, fontes antigas do localStorage só podem acrescentar
+  // registros que não existam nele; jamais podem sobrescrever estoque atual,
+  // quantidades, lotes ou históricos canônicos com uma cópia antiga.
+  const idb=await _idbLerDB();
   const temCanonico=idb && !_dbEhZeragemTotal(idb);
   if(temCanonico) melhor=_mesclarDBSemPerda(melhor,idb);
   const candidatos=_localStorageCandidatosDB();
@@ -5373,89 +5356,6 @@ function _dbEhZeragemTotal(d){
   const capVazia=!Array.isArray(d.capacidadeArmazem)||d.capacidadeArmazem.length===0;
   return campos.every(k=>Array.isArray(d[k])&&d[k].length===0) && matrVazia && capVazia;
 }
-
-function _dbOperacionalVazio(d){
-  if(!d || typeof d!=='object') return true;
-  const campos=['clientes','sites','enderecos','produtos','movimentos','tarefasRec','tarefasMov','tarefasSep','inventarios','paletes','transportadoras','docas','contratos','devolucoes','ajustes'];
-  const semColecoes=campos.every(k=>!Array.isArray(d[k])||d[k].length===0);
-  const semMatriz=!d.matrizCapacidade || !Object.values(d.matrizCapacidade).some(v=>Array.isArray(v)&&v.length>0);
-  const semCap=!Array.isArray(d.capacidadeArmazem)||d.capacidadeArmazem.length===0;
-  return semColecoes && semMatriz && semCap;
-}
-
-const WMS_DATA_SAFETY_KEY='wms_data_safety_state_v023';
-function _dataSafetyState(){
-  try{return JSON.parse(localStorage.getItem(WMS_DATA_SAFETY_KEY)||'null')||{};}catch(e){return {};}
-}
-function _dataSafetyRegistrar(patch={}){
-  try{
-    const atual=_dataSafetyState();
-    const estado={...atual,...patch,updated_at:new Date().toISOString(),build:'022-DATA-SAFETY'};
-    localStorage.setItem(WMS_DATA_SAFETY_KEY,JSON.stringify(estado));
-    return estado;
-  }catch(e){return null;}
-}
-function _dataSafetyResumo(d){
-  const c=_dbContagens(d||{});
-  return {score:_dbPontuacao(d||{}),contagens:c,checksum:_checksum(JSON.stringify(d||{}))};
-}
-async function _dataSafetyRecoverFromSupabase(companyId){
-  if(!companyId) return {ok:false,source:null,reason:'sem-company-id',remoteRows:0};
-  try{
-    const client=_obterClienteSupabase();
-    if(!client) return {ok:false,source:null,reason:'sem-cliente-supabase',remoteRows:0};
-    const resultado=await SupabaseProvider.buscarTudo();
-    if(!resultado.ok) return {ok:false,source:null,reason:resultado.motivo||'erro-select',remoteRows:0};
-    const rowDb=(resultado.dados||[]).find(r=>r.key===DBKEY && r.value && typeof r.value==='object');
-    if(!rowDb){
-      _dataSafetyRegistrar({company_id:companyId,remote_status:'EMPTY_OR_NO_DB_ROW',remote_rows:(resultado.dados||[]).length});
-      return {ok:true,source:null,reason:'remote-empty',remoteRows:(resultado.dados||[]).length};
-    }
-    const remoteDb=_cloneSeguro(rowDb.value)||{};
-    const localDb=_cloneSeguro(DB)||{};
-    if(_dbTemDadosProtegidos(localDb)) _salvarSnapshotGuard(localDb,'antes-recuperacao-supabase');
-    const merged=_mesclarDBSemPerda(localDb,remoteDb);
-    DB=merged;
-    _salvarSnapshotGuard(DB,'recuperacao-supabase-build023');
-    await _persistirDBCanonico(DB,companyId);
-    // O espelho local tenant-aware é atualizado sem habilitar escrita remota.
-    LocalStorageProvider.set(DBKEY,DB);
-    _dataSafetyRegistrar({company_id:companyId,remote_status:'RECOVERED',remote_rows:(resultado.dados||[]).length,source:'supabase',before:_dataSafetyResumo(localDb),remote:_dataSafetyResumo(remoteDb),after:_dataSafetyResumo(DB),last_known_good:true});
-    return {ok:true,source:'supabase',reason:'recovered',remoteRows:(resultado.dados||[]).length};
-  }catch(e){
-    _dataSafetyRegistrar({company_id:companyId,remote_status:'ERROR',reason:String(e)});
-    return {ok:false,source:null,reason:String(e),remoteRows:0};
-  }
-}
-
-async function _dataSafetyPrepareTenant(companyId){
-  if(!companyId) return {ok:false,source:'none',reason:'sem-company-id'};
-  _companyIdLocalAtual=companyId;
-  LocalStorageProvider._migrarParaEmpresa(companyId);
-  let local=await _recuperarMelhorBasePersistida(Core.get(DBKEY)||{},companyId);
-  if(local && !_dbEhZeragemTotal(local)){
-    DB=local;
-    _salvarSnapshotGuard(DB,'last-known-good-before-login');
-    await _persistirDBCanonico(DB,companyId);
-    LocalStorageProvider.set(DBKEY,DB);
-  }
-  const remoto=await _dataSafetyRecoverFromSupabase(companyId);
-  if(remoto.source==='supabase') return remoto;
-  // REMOTE EMPTY/ERROR: preserva a melhor base local. Nunca grava vazio remoto.
-  if(_dbTemDadosProtegidos(DB)){
-    _salvarSnapshotGuard(DB,'last-known-good-preservado');
-    _dataSafetyRegistrar({company_id:companyId,source:'local',remote_status:remoto.reason||'unknown',last_known_good:true,best_local:_dataSafetyResumo(DB)});
-    return {ok:true,source:'local',reason:remoto.reason||'local-preserved'};
-  }
-  return {ok:remoto.ok,source:'none',reason:remoto.reason||'sem-base'};
-}
-
-window.YALogDataSafety={
-  state:()=>_dataSafetyState(),
-  counts:()=>_dbContagens(DB||{}),
-  diagnose:async(companyId=_companyIdLocalAtual)=>({company_id:companyId,local:_dataSafetyResumo(DB||{}),idb:_dataSafetyResumo(await _idbLerDB(companyId)||{}),guard:_dataSafetyResumo(_dbSnapshotAtual()||{}),state:_dataSafetyState()}),
-  recover:async(companyId=_companyIdLocalAtual)=>_dataSafetyPrepareTenant(companyId)
-};
 function _dbContagens(d){
   const r={};
   if(!d||typeof d!=='object')return r;
@@ -6655,16 +6555,14 @@ function save(){
   // guards antigos continuam sendo lidos para recuperação, mas o banco
   // canônico novo fica somente no IndexedDB.
   if(!_idbDisponivel()) _produtoGuardSalvar(DB);
-  // REGRA DEFINITIVA: uma base operacional vazia OU parcialmente vazia
-  // nunca pode substituir uma LAST KNOWN GOOD BASE. Isso inclui o caso
-  // crítico do login: DB pode conter apenas o usuário recém-autenticado e,
-  // mesmo assim, continuar operacionalmente vazio.
-  if(!DB._estoqueLimpoEm && !DB._masterDataDeletion){
+  // REGRA DEFINITIVA: toda gravação válida gera snapshot integral antes do
+  // envio ao provider. Isso inclui clientes/cadastros, mesmo sem estoque.
+  // Uma publicação/refresh jamais deve depender do HTML para reconstruir dados.
+  if(_dbEhZeragemTotal(DB) && !DB._estoqueLimpoEm && !DB._masterDataDeletion){
     const guard=_dbSnapshotAtual();
-    if(_dbTemDadosProtegidos(guard) && _dbOperacionalVazio(DB) && !_dbOperacionalVazio(guard)){
-      console.warn('[WMS DATA GUARD 023] save() bloqueado: base operacional vazia/partial sem autorização Master.');
+    if(_dbTemDadosProtegidos(guard)){
+      console.warn('[WMS DATA GUARD] save() bloqueado: DB vazio sem autorização Master.');
       DB=_cloneSeguro(guard);
-      _dataSafetyRegistrar({event:'BLOCKED_PARTIAL_EMPTY_SAVE',reason:'local-empty-cannot-overwrite-last-known-good',company_id:_companyIdLocalAtual||'global'});
       return false;
     }
   }
@@ -6765,6 +6663,11 @@ function _applyLoadedData(parsed){
     inv.tarefas.forEach(t=>{
       if(!Array.isArray(t.itens)) t.itens=[];
       t.cancelStatus = t.cancelStatus||null;
+      t.contagemFisica = t.contagemFisica||{};
+      t.itens.forEach(i=>{
+        if(i.codCliente===undefined){const p=(DB.produtos||[]).find(x=>x.wmsId===i.wmsId);i.codCliente=p?.codCliente||'';}
+        if(i.barcode===undefined){const p=(DB.produtos||[]).find(x=>x.wmsId===i.wmsId);i.barcode=p?.barcode||'';}
+      });
     });
     return true;
   });
@@ -6959,7 +6862,7 @@ async function load(){
   // A fonte atual pode estar vazia ou incompleta; primeiro reunimos DB local,
   // snapshots antigos, vaults e IndexedDB. Só depois o WMS aplica migrações.
   let d=Core.get(DBKEY);
-  try{ d=await _recuperarMelhorBasePersistida(d||{},_companyIdLocalAtual); }catch(e){ console.warn('[WMS PERSISTENCE 017] recuperação pré-load falhou:',e); }
+  try{ d=await _recuperarMelhorBasePersistida(d||{}); }catch(e){ console.warn('[WMS PERSISTENCE 017] recuperação pré-load falhou:',e); }
   const guard=_dbSnapshotAtual();
   const temMasterDeletion=!!(d?._masterDataDeletion||d?._estoqueLimpoEm);
 
@@ -10376,10 +10279,9 @@ function injectDemo(){
 // critério de logout.
 // ══════════════════════════════════════════════════════════════
 const YALOG_WMS_VERSION = '2.1.2';
-const YALOG_WMS_BUILD = '023';
-const YALOG_WMS_UPDATE = '023';
+const YALOG_WMS_BUILD = '022';
+const YALOG_WMS_UPDATE = '022';
 const YALOG_WMS_RELEASE = `v${YALOG_WMS_VERSION} Build ${YALOG_WMS_BUILD}`;
-const YALOG_WMS_PERSISTENCE_HOTFIX='DATA-SAFETY-023';
 
 function aplicarVersaoWMS(){
   try{
@@ -10522,26 +10424,27 @@ async function _confirmarSessaoCarregada(usuario){
      ═══════════════════════════════════════════════════════════ */
   const companyId = usuario.company_id;
   if (companyId) {
-    // BUILD 023 — DATA SAFETY: identifica o tenant ANTES de qualquer save
-    // pós-login, recupera a melhor base local e consulta o Supabase em modo
-    // de recuperação. Uma resposta remota vazia/erro nunca sobrescreve a
-    // base local conhecida.
-    try {
-      const safety=await _dataSafetyPrepareTenant(companyId);
-      console.log('[WMS DATA SAFETY 023] preparação do tenant:',safety);
-      // Só habilita sincronização remota quando o Supabase efetivamente
-      // entregou uma base operacional. Remote EMPTY/ERROR permanece local,
-      // evitando criar/propagar uma base parcial.
-      if(safety.source==='supabase'){
-        CoreConfig.storageProvider='supabase';
-        await _registrarInstalacaoWms(companyId);
-        CacheManager.invalidarCache(DBKEY);
-      }
-    } catch(e) {
-      console.warn('[WMS DATA SAFETY 023] recuperação tenant falhou — preservando base local:',e);
-      _dataSafetyRegistrar({company_id:companyId,remote_status:'RECOVERY_EXCEPTION',reason:String(e)});
+    LocalStorageProvider._migrarParaEmpresa(companyId); // nunca apaga a chave antiga
+    _companyIdLocalAtual = companyId;
+    if (CoreConfig.storageProvider === 'supabase') {
+      await _registrarInstalacaoWms(companyId); // não bloqueia o login se falhar
+      // SPRINT YALOG-WMS-TENANT-HOTFIX-004: meta.checksums é compartilhado
+      // por chave lógica (não por empresa) — uma entrada antiga (boot,
+      // teste manual, sessão anterior) pode ter um timestamp local mais
+      // recente que o updated_at real do Supabase, fazendo
+      // _aplicarComResolucaoDeConflito descartar o valor recém-buscado
+      // mesmo com buscarTudo() correto. Invalidar aqui garante que o
+      // fetch pós-login seja sempre tratado como autoritativo para o DB
+      // operacional — reaproveita CacheManager.invalidarCache (já
+      // existente); CacheManager em si não foi alterado. Continua seguro:
+      // se houver uma escrita local pendente na fila, o próprio
+      // _aplicarComResolucaoDeConflito (via SyncQueue._pendentes) ainda
+      // a protege, independente desta invalidação.
+      CacheManager.invalidarCache(DBKEY);
+      try { await CacheManager.sincronizacaoInicial(); } // agora filtrado por company_id/module_id
+      catch(e) { console.warn('[WMS TENANT] sincronização pós-login falhou, seguindo com cache local:', e); }
     }
-    try { await load(); }
+    try { await load(); } // recarrega DB pela chave física já correta da empresa
     catch(e) { console.warn('[WMS TENANT] falha ao recarregar DB da empresa, mantendo estado em memória:', e); }
     renderLogo();
   } else {
@@ -10977,16 +10880,6 @@ async function fazerLogin(){
         id: authOperacional.usuario.id, nome: authOperacional.usuario.nome, login: authOperacional.usuario.login,
         perfil: authOperacional.usuario.perfil, company_id: companyId, platformRole: null, ativo: true,
       };
-      // BUILD 023 — recuperação tenant-aware ANTES do primeiro save pós-login.
-      // O usuário já foi autenticado; portanto podemos recuperar a base correta
-      // sem abrir dados operacionais antes da autenticação.
-      try {
-        const safety=await _dataSafetyPrepareTenant(companyId);
-        console.log('[WMS DATA SAFETY 023] recuperação antes do primeiro save:',safety);
-        if(safety.source==='supabase') CoreConfig.storageProvider='supabase';
-      } catch(e) {
-        console.warn('[WMS DATA SAFETY 023] recuperação pré-save falhou:',e);
-      }
       // DB.usuarios só é populado/atualizado DEPOIS de autenticar —
       // nunca antes, nunca como pré-condição. Aqui vira exclusivamente
       // cache de interface (telas, listas), nunca mais fonte de decisão.
@@ -11056,15 +10949,6 @@ async function fazerLogin(){
           errEl.textContent='Usuário não encontrado.';
           errEl.style.display='block';
           return;
-        }
-        // BUILD 023 — mesmo Data Safety Guard para o fluxo Master: a base
-        // operacional é recuperada antes de qualquer save local pós-login.
-        try {
-          const safety=await _dataSafetyPrepareTenant(companyId);
-          console.log('[WMS DATA SAFETY 023] recuperação Master antes do save:',safety);
-          if(safety.source==='supabase') CoreConfig.storageProvider='supabase';
-        } catch(e) {
-          console.warn('[WMS DATA SAFETY 023] recuperação Master pré-save falhou:',e);
         }
         // Item 7: o Master é espelhado localmente — é assim que aparece
         // (protegido, sem editar/excluir) na tela de Usuários do WMS.
@@ -18182,7 +18066,7 @@ function confirmarPlanejamento(){
         resp:null,pegoEm:null,concluidoEm:null,
         cancelSolicitadoPor:null,cancelMotivo:null,cancelStatus:null,
         itens:prodsRua.map(p=>({
-          wmsId:p.wmsId,endereco:p.endereco,descricao:p.descricao,
+          wmsId:p.wmsId,codCliente:p.codCliente||'',barcode:p.barcode||'',endereco:p.endereco,descricao:p.descricao,
           clienteId:p.clienteId,lote:p.lote||'',validade:p.validade||'',
           um:p.um||'UN',qtdSistema:p.qtd||0,
           qtd1C:null,resp1C:null,data1C:null,div1C:false,
@@ -18335,7 +18219,7 @@ function abrirTarefasInv(invId){
     if(t.status==="AGUARDANDO"&&can) bs.push('<button class="btn btn-p btn-xs" '+td+' onclick="_it_pegar(this)">Pegar</button>');
     bs.push('<button class="btn btn-o btn-xs" '+td+' onclick="_it_minuta(this)" title="Imprimir minuta em branco">🖨 Minuta</button>');
     if(t.status==="ANDAMENTO"&&can){
-      bs.push('<button class="btn btn-p btn-xs" '+td+' data-r="1" onclick="_it_exec(this)">&#9997; Lançar Manual</button>');
+      bs.push('<button class="btn btn-p btn-xs" '+td+' data-r="1" onclick="_it_exec(this)">📱 Contar Endereço</button>');
       bs.push('<button class="btn btn-b btn-xs" '+td+' onclick="_it_upload_toggle(this)" title="Upload Excel/CSV">&#128229; Upload</button>');
     }
     if(t.status==="AGUARDANDO_2C"&&can) bs.push('<button class="btn btn-b btn-xs" '+td+' data-r="2" onclick="_it_exec(this)">2&#170; Cont.</button>');
@@ -18396,107 +18280,90 @@ function pegarTarefaInv(invId,tarefaId){
 }
 
 // ── EXECUÇÃO DE CONTAGEM ──────────────────────────────────────────
+function _invNorm(v){return String(v??'').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');}
+function _invMasterDescricoes(){return [...new Set((DB.produtos||[]).map(p=>String(p.descricao||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));}
+function _invMasterUM(){return [...new Set((DB.produtos||[]).map(p=>String(p.um||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));}
+function _invEnderecosRodada(t,rodada){
+  const itens=(t.itens||[]).filter(i=>rodada===1?(i.qtd1C===null||i.qtd1C===undefined):rodada===2?i.div1C&&(i.qtd2C===null||i.qtd2C===undefined):rodada===3?i.div2C&&(i.qtd3C===null||i.qtd3C===undefined):false);
+  return [...new Set(itens.map(i=>String(i.endereco||'').trim()).filter(Boolean))];
+}
+function _invItensCandidatosEndereco(t,rodada,endereco){
+  return (t.itens||[]).filter(i=>String(i.endereco||'').trim()===String(endereco||'').trim() && (rodada===1?(i.qtd1C===null||i.qtd1C===undefined):rodada===2?i.div1C&&(i.qtd2C===null||i.qtd2C===undefined):rodada===3?i.div2C&&(i.qtd3C===null||i.qtd3C===undefined):false));
+}
+function _invMatchSku(item,sku){const a=_invNorm(sku),b=_invNorm(item.codCliente),c=_invNorm(item.wmsId);return !!a&&(a===b||a===c);}
+function _invGetRodadaBuffer(t,rodada){t.contagemFisica=t.contagemFisica||{};t.contagemFisica[rodada]=t.contagemFisica[rodada]||{};return t.contagemFisica[rodada];}
+function _invRenderRegistrados(t,rodada,endereco){
+  const buf=_invGetRodadaBuffer(t,rodada)[endereco]||[];const el=document.getElementById('invExecRegistrados');if(!el)return;
+  if(!buf.length){el.innerHTML='<div style="font:9px var(--mono);color:var(--w40);padding:8px 0;text-align:center;">Nenhum produto registrado neste endereço.</div>';return;}
+  el.innerHTML='<div style="font:9px var(--mono);color:var(--w40);margin-bottom:6px;">REGISTRADOS NESTE ENDEREÇO · '+buf.length+'</div><div class="tw"><table class="dt" style="font-size:10px;"><thead><tr><th>SKU</th><th>LOTE</th><th>DESCRIÇÃO</th><th>UM</th><th class="ct">QTD</th></tr></thead><tbody>'+buf.map(x=>'<tr><td class="mn">'+esc(x.sku)+'</td><td class="mn">'+esc(x.lote)+'</td><td>'+esc(x.descricao)+'</td><td class="mn">'+esc(x.um)+'</td><td class="ct"><b>'+fN(x.qtd)+'</b></td></tr>').join('')+'</tbody></table></div>';
+}
+function _invPrepararListasMaster(){
+  const ds=document.getElementById('invExecDesc'),us=document.getElementById('invExecUm');
+  if(ds){const cur=ds.value;ds.innerHTML='<option value="">SELECIONE A DESCRIÇÃO</option>'+_invMasterDescricoes().map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('');if(cur)ds.value=cur;}
+  if(us){const cur=us.value;us.innerHTML='<option value="">SELECIONE A UNIDADE</option>'+_invMasterUM().map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('');if(cur)us.value=cur;}
+}
+function _invAtualizarEnderecoUI(inv,t,rodada,enderecos,index){
+  const endereco=enderecos[index];if(!endereco){_invFecharRodada(t,rodada);return;}
+  document.getElementById('execEndereco').value=endereco;
+  document.getElementById('invExecEndereco').textContent=endereco;
+  document.getElementById('invExecEnderecoMeta').textContent='ENDEREÇO '+(index+1)+' DE '+enderecos.length+' · '+rodada+'ª RODADA · CONTAGEM CEGA';
+  document.getElementById('invExecRegistrados').innerHTML='';
+  ['invExecSku','invExecLote','invExecQtd'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  const ds=document.getElementById('invExecDesc');if(ds)ds.value='';
+  const us=document.getElementById('invExecUm');if(us)us.value='';
+  const a=document.getElementById('invExecAcoesEndereco');if(a)a.style.display='none';
+  const empty=document.getElementById('invExecEmptyAction');if(empty)empty.style.display='block';
+  _invPrepararListasMaster();
+  _invRenderRegistrados(t,rodada,endereco);
+  setTimeout(()=>document.getElementById('invExecSku')?.focus(),120);
+}
 function executarTarefaInv(invId,tarefaId,rodada){
-  const inv=DB.inventarios.find(x=>x.id===invId);
-  const t=inv?.tarefas.find(x=>x.id===tarefaId);
-  if(!t)return;
+  const inv=DB.inventarios.find(x=>x.id===invId),t=inv?.tarefas.find(x=>x.id===tarefaId);if(!t)return;
   if(rodada===3&&!_invCanAprovar()){showT('3ª contagem: requer Encarregado, Supervisor ou Master','err');return;}
-  const itensRodada=t.itens.filter(i=>{
-    // Item sem rodada definida = rodada 1 (compat. com inventários antigos)
-    const r=i.rodada||1;
-    if(rodada===1)return r===1&&(i.qtd1C===null||i.qtd1C===undefined);
-    if(rodada===2)return i.div1C&&(i.qtd2C===null||i.qtd2C===undefined);
-    if(rodada===3)return i.div2C&&(i.qtd3C===null||i.qtd3C===undefined);
-    return false;
-  });
-  if(!itensRodada.length){showT('Sem itens pendentes para esta rodada','ok');return;}
-  document.getElementById('execInvId').value=invId;
-  document.getElementById('execTarefaId').value=tarefaId;
-  document.getElementById('execRodada').value=rodada;
-  const titulo=['','1ª Contagem','2ª Contagem — Divergentes','3ª Contagem — Validação Final'][rodada]||'Contagem';
-  document.getElementById('mExecInvTitulo').textContent=titulo+' · '+tarefaId;
-  document.getElementById('mExecInvHeader').innerHTML=`
-    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:10px;font-family:var(--mono);background:var(--bg3);border:1px solid var(--border);padding:8px 12px;">
-      <span>Rua: <strong style="color:var(--orange2);">${t.rua}</strong></span>
-      <span>Rodada: <strong style="color:${rodada===1?'#4ade80':rodada===2?'#fbbf24':'#f87171'};">${rodada}ª</strong></span>
-      <span>Itens: <strong>${itensRodada.length}</strong></span>
-      <span>👤 ${usuarioAtual?.nome||'—'}</span>
-      ${rodada>1?`<span style="color:#fbbf24;">⚠ Somente itens com divergência na rodada anterior</span>`:''}
-    </div>`;
-  const thAnt=document.getElementById('thQtdAnterior');
-  if(thAnt)thAnt.style.display=rodada>1?'table-cell':'none';
-  if(thAnt)thAnt.textContent=rodada===2?'Qtd 1ª Contagem':'Qtd 2ª Contagem';
-  const tb=document.getElementById('tbExecInv');
-  if(tb)tb.innerHTML=itensRodada.map((item,i)=>`<tr>
-    <td class="mn" style="font-family:var(--mono);">${item.endereco||'—'}</td>
-    <td class="mn" style="color:var(--orange2);font-family:var(--mono);">${item.codCliente||item.wmsId||'—'}</td>
-    <td class="bd">${item.descricao||'—'}</td>
-    <td class="mn">${item.lote||'—'}</td>
-    <td class="ct">${fN(item.qtdSistema||0)}</td>
-    ${rodada>1?`<td class="ct" style="color:${rodada===2?'var(--b2)':'#fbbf24'};">${fN(rodada===2?item.qtd1C:item.qtd2C)}</td>`:''}
-    <td class="ct"><input type="number" id="cnt_${i}" min="0" style="width:72px;font-size:14px;font-weight:700;text-align:center;" placeholder="0" autocomplete="off"></td>
-  </tr>`).join('');
-  openM('mExecInv');
-  // Foca no primeiro input
-  setTimeout(()=>document.getElementById('cnt_0')?.focus(),200);
+  const enderecos=_invEnderecosRodada(t,rodada);if(!enderecos.length){showT('Sem endereços pendentes para esta rodada','ok');return;}
+  document.getElementById('execInvId').value=invId;document.getElementById('execTarefaId').value=tarefaId;document.getElementById('execRodada').value=rodada;document.getElementById('execEndereco').value=enderecos[0];
+  document.getElementById('mExecInvTitulo').textContent=['','1ª Contagem Cega','2ª Contagem Cega — Divergentes','3ª Contagem — Validação Final'][rodada]+' · '+tarefaId;
+  document.getElementById('mExecInvHeader').innerHTML='<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:10px;font-family:var(--mono);background:var(--bg3);border:1px solid var(--border);padding:8px 12px;"><span>RUA: <strong style="color:var(--orange2);">'+esc(t.rua||'—')+'</strong></span><span>RODADA: <strong style="color:'+(rodada===1?'#4ade80':rodada===2?'#fbbf24':'#f87171')+';">'+rodada+'ª</strong></span><span>ENDEREÇOS: <strong>'+enderecos.length+'</strong></span><span>👤 '+esc(usuarioAtual?.nome||'—')+'</span></div>';
+  openM('mExecInv');_invAtualizarEnderecoUI(inv,t,rodada,enderecos,0);
 }
-
-function concluirContagem(){
-  const invId=document.getElementById('execInvId').value;
-  const tarefaId=document.getElementById('execTarefaId').value;
-  const rodada=parseInt(document.getElementById('execRodada').value)||1;
-  const inv=DB.inventarios.find(x=>x.id===invId);
-  const t=inv?.tarefas.find(x=>x.id===tarefaId);
-  if(!t)return;
-  const itensRodada=t.itens.filter(i=>{
-    if(rodada===1)return i.rodada===1&&i.qtd1C===null;
-    if(rodada===2)return i.div1C&&i.qtd2C===null;
-    if(rodada===3)return i.div2C&&i.qtd3C===null;
-    return false;
-  });
-  let preenchidos=0;
-  itensRodada.forEach((item,i)=>{
-    const val=document.getElementById('cnt_'+i)?.value;
-    if(val===''||val===null)return;
-    const qtd=parseFloat(val)||0;
-    preenchidos++;
-    if(rodada===1){
-      item.qtd1C=qtd;item.resp1C=usuarioAtual?.nome||'—';item.data1C=now();
-      item.div1C=Math.abs(qtd-item.qtdSistema)>0;
-      if(!item.div1C){item.qtdAprovada=qtd;item.ajuste=qtd-item.qtdSistema;item.status='APROVADO';item.rodada=1;}
-      else{item.rodada=2;}
-    } else if(rodada===2){
-      item.qtd2C=qtd;item.resp2C=usuarioAtual?.nome||'—';item.data2C=now();
-      // Diverge da 1ª E do sistema?
-      item.div2C=Math.abs(qtd-item.qtd1C)>0&&Math.abs(qtd-item.qtdSistema)>0;
-      if(!item.div2C){item.qtdAprovada=qtd;item.ajuste=qtd-item.qtdSistema;item.status='APROVADO';item.rodada=2;}
-      else{item.rodada=3;}
-    } else if(rodada===3){
-      item.qtd3C=qtd;item.resp3C=usuarioAtual?.nome||'—';item.data3C=now();
-      // 3ª contagem: salva mas não aprova — aguarda validação do Encarregado+
-    }
-  });
-  if(!preenchidos){showT('Preencha ao menos uma quantidade','err');return;}
-  // Atualiza status da tarefa
-  const todosC1=t.itens.every(i=>i.qtd1C!==null);
-  const todosC2=t.itens.filter(i=>i.div1C).every(i=>i.qtd2C!==null);
-  const temDiv1=t.itens.some(i=>i.div1C);
-  const temDiv2=t.itens.some(i=>i.div2C);
-  if(rodada===1&&todosC1){
-    t.status=temDiv1?'AGUARDANDO_2C':'CONCLUIDO';
-    if(!temDiv1)t.concluidoEm=now();
-  } else if(rodada===2&&todosC2){
-    t.status=temDiv2?'AGUARDANDO_3C':'CONCLUIDO';
-    if(!temDiv2)t.concluidoEm=now();
-  } else if(rodada===3){
-    t.status='AGUARDANDO_APROV';
-  }
-  // Atualiza progresso do inventário
-  _atualizarProgressoInv(inv);
-  save();closeM('mExecInv');renderInvList();
-  const nDiv=t.itens.filter(i=>i.div1C||i.div2C).length;
-  showT('Contagem '+(rodada)+'ª rodada registrada! '+(nDiv>0?nDiv+' divergência(s) — aguarda nova contagem.':'✓ Sem divergências.'),'ok');
+function registrarProdutoInvCego(){
+  const invId=document.getElementById('execInvId').value,tarefaId=document.getElementById('execTarefaId').value,rodada=parseInt(document.getElementById('execRodada').value)||1,endereco=document.getElementById('execEndereco').value.trim();
+  const inv=DB.inventarios.find(x=>x.id===invId),t=inv?.tarefas.find(x=>x.id===tarefaId);if(!t||!endereco)return;
+  const sku=document.getElementById('invExecSku')?.value.trim(),lote=document.getElementById('invExecLote')?.value.trim(),descricao=document.getElementById('invExecDesc')?.value.trim(),um=document.getElementById('invExecUm')?.value.trim(),q=parseFloat(document.getElementById('invExecQtd')?.value);
+  if(!sku||!lote||!descricao||!um||isNaN(q)||q<0){showT('Preencha SKU, lote, descrição, unidade e quantidade.','err');return;}
+  const buf=_invGetRodadaBuffer(t,rodada);buf[endereco]=buf[endereco]||[];buf[endereco].push({sku,lote,descricao,um,qtd:q,resp:usuarioAtual?.nome||'—',data:now(),ms:Date.now()});
+  save();_invRenderRegistrados(t,rodada,endereco);document.getElementById('invExecAcoesEndereco').style.display='flex';document.getElementById('invExecEmptyAction').style.display='none';
+  ['invExecSku','invExecLote','invExecQtd'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});document.getElementById('invExecDesc').value='';document.getElementById('invExecUm').value='';
+  setTimeout(()=>document.getElementById('invExecSku')?.focus(),80);showT('Produto registrado no endereço '+endereco,'ok');
 }
+function continuarMesmoEnderecoInv(){
+  const invId=document.getElementById('execInvId').value,tarefaId=document.getElementById('execTarefaId').value,rodada=parseInt(document.getElementById('execRodada').value)||1,endereco=document.getElementById('execEndereco').value.trim();const inv=DB.inventarios.find(x=>x.id===invId),t=inv?.tarefas.find(x=>x.id===tarefaId);if(!t)return;_invRenderRegistrados(t,rodada,endereco);document.getElementById('invExecAcoesEndereco').style.display='none';document.getElementById('invExecEmptyAction').style.display='block';setTimeout(()=>document.getElementById('invExecSku')?.focus(),80);
+}
+function registrarEnderecoVazioInv(){
+  const invId=document.getElementById('execInvId').value,tarefaId=document.getElementById('execTarefaId').value,rodada=parseInt(document.getElementById('execRodada').value)||1,endereco=document.getElementById('execEndereco').value.trim();const inv=DB.inventarios.find(x=>x.id===invId),t=inv?.tarefas.find(x=>x.id===tarefaId);if(!t)return;const buf=_invGetRodadaBuffer(t,rodada);buf[endereco]=[];save();proximoEnderecoInv();
+}
+function _invAplicarBufferEndereco(t,rodada,endereco){
+  const candidatos=_invItensCandidatosEndereco(t,rodada,endereco),buf=_invGetRodadaBuffer(t,rodada)[endereco]||[],usados=new Set();
+  const agreg={};buf.forEach(x=>{const k=_invNorm(x.sku)+'||'+_invNorm(x.lote);agreg[k]=(agreg[k]||0)+Number(x.qtd||0);});
+  candidatos.forEach(item=>{
+    const sku=item.codCliente||item.wmsId||'',k1=_invNorm(sku)+'||'+_invNorm(item.lote),k2=_invNorm(item.wmsId)+'||'+_invNorm(item.lote);let k=Object.prototype.hasOwnProperty.call(agreg,k1)?k1:k2;const qtd=Object.prototype.hasOwnProperty.call(agreg,k)?agreg[k]:0;if(k)usados.add(k);_aplicarContagem(item,qtd,rodada,usuarioAtual?.nome||'—');item._contagemCegaEndereco=endereco;item._contagemCegaRodada=rodada;item._contagemCegaRegistradaEm=now();});
+  // Produto físico não previsto: cria item de divergência com saldo sistêmico 0.
+  buf.forEach(x=>{const k=_invNorm(x.sku)+'||'+_invNorm(x.lote);if(usados.has(k))return;const existente=t.itens.find(i=>String(i.endereco||'').trim()===endereco&&_invNorm(i.codCliente||i.wmsId)===_invNorm(x.sku)&&_invNorm(i.lote)===_invNorm(x.lote));if(existente)return;const item={wmsId:null,codCliente:x.sku,barcode:'',endereco,descricao:x.descricao,clienteId:t.itens[0]?.clienteId||null,lote:x.lote,validade:null,um:x.um,qtdSistema:0,qtd1C:null,resp1C:null,data1C:null,div1C:false,qtd2C:null,resp2C:null,data2C:null,div2C:false,qtd3C:null,resp3C:null,data3C:null,qtdAprovada:null,aprovadoPor:null,aprovadoEm:null,ajuste:0,rodada:1,status:'PENDENTE',contagemFisicaExtra:true};t.itens.push(item);_aplicarContagem(item,x.qtd,rodada,usuarioAtual?.nome||'—');item._contagemCegaEndereco=endereco;item._contagemCegaRodada=rodada;});
+}
+function _invFecharEnderecoAtual(t,rodada,endereco){_invAplicarBufferEndereco(t,rodada,endereco);save();}
+function _invFecharRodada(t,rodada){
+  const invId=document.getElementById('execInvId').value,inv=DB.inventarios.find(x=>x.id===invId);if(!inv)return;
+  const temDiv1=t.itens.some(i=>i.div1C),temDiv2=t.itens.some(i=>i.div2C),todosC1=t.itens.filter(i=>i.rodada===1||i.rodada===undefined).every(i=>i.qtd1C!==null),todosC2=t.itens.filter(i=>i.div1C).every(i=>i.qtd2C!==null),todosC3=t.itens.filter(i=>i.div2C).every(i=>i.qtd3C!==null);
+  if(rodada===1&&todosC1){t.status=temDiv1?'AGUARDANDO_2C':'CONCLUIDO';if(!temDiv1)t.concluidoEm=now();}
+  else if(rodada===2&&todosC2){t.status=temDiv2?'AGUARDANDO_3C':'CONCLUIDO';if(!temDiv2)t.concluidoEm=now();}
+  else if(rodada===3&&todosC3)t.status='AGUARDANDO_APROV';
+  _atualizarProgressoInv(inv);save();closeM('mExecInv');renderInvList();_atualizarKpisInv(inv);
+  const nDiv=t.itens.filter(i=>i.div1C||i.div2C).length;showT('Rodada '+rodada+' encerrada · '+(nDiv?nDiv+' divergência(s) para tratamento.':'sem divergências.'),'ok');
+}
+function proximoEnderecoInv(){
+  const invId=document.getElementById('execInvId').value,tarefaId=document.getElementById('execTarefaId').value,rodada=parseInt(document.getElementById('execRodada').value)||1,endereco=document.getElementById('execEndereco').value.trim();const inv=DB.inventarios.find(x=>x.id===invId),t=inv?.tarefas.find(x=>x.id===tarefaId);if(!t||!endereco)return;_invFecharEnderecoAtual(t,rodada,endereco);const enderecos=_invEnderecosRodada(t,rodada);const idx=enderecos.indexOf(endereco);if(idx<0||idx===enderecos.length-1){_invFecharRodada(t,rodada);return;}_invAtualizarEnderecoUI(inv,t,rodada,enderecos,idx+1);
+}
+function concluirContagem(){proximoEnderecoInv();}
 
 function _atualizarProgressoInv(inv){
   const total=inv.tarefas.length;
@@ -18527,8 +18394,8 @@ function abrirAprovacaoDiv(invId,rodada){
     <tbody>${divergentes.map((item,i)=>{
       const sugestao=rodada===3?item.qtd3C:rodada===2?item.qtd2C:item.qtd1C;
       return`<tr>
-        <td class="mn" style="color:var(--orange2);font-family:var(--mono);">${item.wmsId}</td>
-        <td>${item.descricao.substring(0,20)}</td>
+        <td class="mn" style="color:var(--orange2);font-family:var(--mono);">${item.wmsId||item.codCliente||'EXTRA'}</td>
+        <td>${String(item.descricao||'').substring(0,20)}</td>
         <td class="mn" style="font-family:var(--mono);">${item.endereco}</td>
         <td class="ct">${fN(item.qtdSistema)}</td>
         ${rodada>=1?`<td class="ct" style="color:${item.div1C?'#fbbf24':'#4ade80'};">${fN(item.qtd1C)}</td>`:''}
