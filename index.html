@@ -4800,7 +4800,7 @@ async function _autenticarUsuarioNaPlatform(companyId, login, senha) {
       throw new Error('falha ao consultar usuarios na Platform');
     }
     const usuario = data?.[0] ?? null;
-    console.log('[LOGIN DIAGNÓSTICO] usuarios — company_id recebido:', companyId, '| login recebido:', login, '| linhas retornadas:', data?.length ?? 0, '| resultado bruto:', JSON.stringify(data));
+    console.log('[LOGIN DIAGNÓSTICO] consulta de usuarios concluída; quantidade de registros retornados:', data?.length ?? 0);
     if (!usuario) return {ok:false, motivo:'usuario-nao-encontrado'};
     if (usuario.ativo === false) return {ok:false, motivo:'usuario-inativo'};
     if (usuario.senha_hash !== senhaHash) return {ok:false, motivo:'senha-invalida'};
