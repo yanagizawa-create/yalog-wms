@@ -4432,8 +4432,13 @@ const LocalStorageProvider = {
     catch(e) { return false; }
   },
   clear() {
-    try { localStorage.clear(); return true; }
-    catch(e) { console.warn('[LocalStorageProvider.clear] falha ao limpar', e); return false; }
+    // YALOG DATA SAFETY PATCH 2026-10-16:
+    // Nunca limpar o armazenamento inteiro do navegador por uma chamada
+    // genérica do provider. Isso poderia apagar dados de outros módulos,
+    // sessão, snapshots de recuperação e metadados da plataforma.
+    // Limpezas operacionais devem usar uma ação específica e autorizada.
+    console.error('[LocalStorageProvider.clear] bloqueado: limpeza global do navegador não é permitida.');
+    return false;
   }
 };
 
