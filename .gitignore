@@ -1,0 +1,3 @@
+tests/browser/vendor/
+tests/browser/__pycache__/
+tests/sql/node_modules/
