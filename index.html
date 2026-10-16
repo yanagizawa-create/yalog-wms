@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,500;0,600;0,700;0,800;1,600;1,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://unpkg.com/lucide@1.58.0/dist/umd/lucide.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -4184,6 +4184,9 @@ let DB={
   seqInv:1
 };
 const DBKEY='wms_3cs_v2026';
+// BUILD 023 — estrutura vazia de referência, usada somente quando a base em
+// memória precisa ser trocada por outra empresa (nunca grava nada sozinha).
+const _WMS_DB_PADRAO=JSON.parse(JSON.stringify(DB));
 
 /* ═══════════════════════════════════════════════════════════════
    MÓDULO
@@ -4391,6 +4394,16 @@ const LocalStorageProvider = {
       if (!antigoRaw && !novoRaw) return;
       const antigo = antigoRaw ? JSON.parse(antigoRaw) : null;
       const novo = novoRaw ? JSON.parse(novoRaw) : null;
+      // BUILD 023 — ISOLAMENTO: a base global só pode ser copiada/mesclada
+      // para a chave desta empresa quando pertence a ela (ou ainda não tem
+      // dono identificável). Nunca copia dados de outra empresa.
+      if (antigo) {
+        const dono = _wmsDonoDaBase(antigo);
+        if (dono && dono !== '__AMBIGUO__' && dono !== String(companyId).toUpperCase()) {
+          console.warn('[WMS TENANT] base local global pertence a outra empresa — não copiada para ' + companyId + '.');
+          return;
+        }
+      }
       // Se a chave tenant já existir, nunca a trata como autoridade cega:
       // preserva o estado mais rico e faz merge com o legado/global.
       if(antigo && novo){
@@ -5226,39 +5239,180 @@ function _idbAbrir(){
     }catch(e){resolve(null);}
   });
 }
-async function _idbLerDB(){
-  const db=await _idbAbrir(); if(!db)return null;
+// ═══════════════════════════════════════════════════════════════
+// BUILD 023 — PERSISTÊNCIA DETERMINÍSTICA (correção da perda de dados)
+// Causas-raiz confirmadas e reproduzidas em navegador:
+//  (1) save()/beforeunload executados ANTES do load() terminar gravavam o DB
+//      ainda vazio por cima do db-canonico (F5 durante o carregamento).
+//  (2) Cofre/snapshots antigos (builds 014-017) eram mesclados com prioridade
+//      de campo a cada save() e a cada load(), revertendo edições recentes,
+//      reabrindo exclusões e regredindo sequências (seqWMS etc.).
+//  (3) Bases de outras empresas no mesmo navegador eram mescladas na base
+//      da empresa logada.
+// Regras desta build:
+//  • Nenhuma gravação local acontece antes da hidratação da empresa ativa.
+//  • A base canônica (IndexedDB) e o espelho (localStorage) carregam um
+//    _persistMeta {rev, companyId, schema}; a mais nova (rev) é a base.
+//  • Fontes legadas só são usadas para RECUPERAR quando não existe base
+//    canônica, e apenas acrescentam registros (nunca sobrescrevem campos).
+//  • Cada empresa só enxerga a própria base. A base principal permanece da
+//    empresa dona; outra empresa no mesmo navegador usa chave própria.
+//  • Falha de leitura do IndexedDB nunca autoriza sobrescrever o canônico.
+// ═══════════════════════════════════════════════════════════════
+const WMS_SCHEMA_CANONICO='YALOG-WMS-CANONICAL-023';
+let _wmsHidratado=false;            // true após o primeiro load() concluído
+let _wmsTenantDoDB=undefined;       // empresa cuja base está em memória (null = sem empresa)
+let _wmsTenantPendente=null;        // empresa autenticando — gravações aguardam a base dela
+let _wmsIdbLeituraFalhou=false;     // leitura do canônico falhou: gravação canônica suspensa
+let _wmsSavePendente=false;         // houve save() antes da hidratação
+let _wmsChaveCanonicaAtiva=WMS_IDB_KEY;
+let _wmsChaveEspelhoAtiva=DBKEY;
+let _wmsUltimaPontuacaoPersistida=0;
+let _wmsBackupSessaoGravado=false;
+let _wmsLoadChain=Promise.resolve();
+function _wmsTenantNorm(c){return c?String(c).trim().toUpperCase():null;}
+function _wmsDonoDaBase(db){
+  if(!db||typeof db!=='object')return null;
+  const m=db._persistMeta; if(m&&m.companyId)return _wmsTenantNorm(m.companyId);
+  const ids=new Set((Array.isArray(db.usuarios)?db.usuarios:[]).map(u=>u&&u.company_id?_wmsTenantNorm(u.company_id):null).filter(Boolean));
+  if(ids.size===1)return [...ids][0];
+  return ids.size>1?'__AMBIGUO__':null;
+}
+function _wmsBasePertenceA(db,tenant){
+  if(!tenant)return true;
+  const dono=_wmsDonoDaBase(db);
+  return !dono||dono==='__AMBIGUO__'||dono===tenant;
+}
+function _wmsRev(db){return Number(db&&db._persistMeta&&db._persistMeta.rev)||0;}
+function _wmsTenantDaSessaoPersistida(){
+  try{const s=Core.sessionGet(SESSAO_KEY);return s&&s.company_id?_wmsTenantNorm(s.company_id):null;}catch(e){return null;}
+}
+function _wmsBuildAtual(){try{return YALOG_WMS_BUILD;}catch(e){return '023';}}
+async function _idbLerRegistro(chave){
+  // Distingue "não existe" (ok:true, valor:null) de "falhou" (ok:false).
+  if(!_idbDisponivel())return {ok:true,valor:null};
+  const conn=await _idbAbrir(); if(!conn)return {ok:false,erro:'open'};
   return new Promise(resolve=>{
-    try{const tx=db.transaction(WMS_IDB_STORE,'readonly');const req=tx.objectStore(WMS_IDB_STORE).get(WMS_IDB_KEY);req.onsuccess=()=>{const v=req.result;resolve(v&&v.db?_cloneSeguro(v.db):null);};req.onerror=()=>resolve(null);tx.oncomplete=()=>{try{db.close();}catch(e){}};}catch(e){try{db.close();}catch(_e){}resolve(null);}
+    try{
+      const tx=conn.transaction(WMS_IDB_STORE,'readonly');
+      const req=tx.objectStore(WMS_IDB_STORE).get(chave);
+      req.onsuccess=()=>{const v=req.result;resolve({ok:true,valor:v&&v.db?_cloneSeguro(v.db):null});};
+      req.onerror=()=>resolve({ok:false,erro:String(req.error&&req.error.name||'get')});
+      tx.oncomplete=()=>{try{conn.close();}catch(e){}};
+      tx.onabort=()=>{try{conn.close();}catch(e){}};
+    }catch(e){try{conn.close();}catch(_e){}resolve({ok:false,erro:String(e&&e.name||e)});}
   });
+}
+async function _idbLerDB(){
+  const r=await _idbLerRegistro(_wmsChaveCanonicaAtiva);
+  return r.ok?r.valor:null;
 }
 let _yalogPersistQueue=Promise.resolve();
 let _yalogLastPersistPromise=Promise.resolve();
-async function _idbGravarDB(db){
+async function _idbGravarDB(db,opcoes){
   if(!_idbDisponivel()||!db)return false;
   const clone=_cloneSeguro(db); if(!clone)return false;
-  const base={db:clone,salvoEm:new Date().toISOString(),build:YALOG_WMS_UPDATE||'018',schema:'YALOG-WMS-CANONICAL-001'};
+  const chave=(opcoes&&opcoes.chave)||_wmsChaveCanonicaAtiva;
+  const base={db:clone,salvoEm:new Date().toISOString(),build:_wmsBuildAtual(),schema:WMS_SCHEMA_CANONICO};
   const conn=await _idbAbrir(); if(!conn)return false;
   return new Promise(resolve=>{
     try{
       const tx=conn.transaction(WMS_IDB_STORE,'readwrite');
-      tx.objectStore(WMS_IDB_STORE).put(base,WMS_IDB_KEY);
+      const store=tx.objectStore(WMS_IDB_STORE);
+      if(opcoes&&opcoes.versionado){
+        // CONCORRÊNCIA ENTRE ABAS: na mesma transação, confere a versão
+        // gravada. Se outra aba já gravou uma versão igual/mais nova, esta
+        // gravação não a sobrescreve: incorpora os registros que só existem
+        // lá (mantendo as alterações desta aba) e grava com versão seguinte.
+        const meta=store.get(chave+':meta');
+        meta.onsuccess=()=>{
+          const m=meta.result||null, revNova=_wmsRev(clone);
+          const outraAba=m && Number(m.rev)>=revNova && m.tab!==_wmsTabIdPersist;
+          const finalizar=(dbFinal,mesclado)=>{
+            const registro={...base,db:dbFinal};
+            if(opcoes.preservarAnterior){ const g=store.get(chave); g.onsuccess=()=>{ if(g.result) store.put(g.result,chave+':anterior'); store.put(registro,chave); }; }
+            else store.put(registro,chave);
+            store.put({rev:_wmsRev(dbFinal),tab:_wmsTabIdPersist,salvoEm:base.salvoEm},chave+':meta');
+            tx.oncomplete=()=>{try{conn.close();}catch(e){}resolve(mesclado?{ok:true,mesclado:true,rev:_wmsRev(dbFinal)}:true);};
+          };
+          if(!outraAba) return finalizar(clone,false);
+          const atual=store.get(chave);
+          atual.onsuccess=()=>{
+            const armazenado=atual.result&&atual.result.db?atual.result.db:null;
+            if(!armazenado) return finalizar(clone,false);
+            const mesclado=opcoes.base?_wmsMesclar3Vias(clone,armazenado,opcoes.base):_mesclarLegacySemSobrescreverCanonico(clone,armazenado);
+            mesclado._persistMeta={...(clone._persistMeta||{}),rev:Math.max(Number(m.rev)||0,_wmsRev(armazenado))+1};
+            console.warn('[WMS PERSISTENCE 023] outra aba gravou a base (rev '+m.rev+'); registros dela incorporados sem sobrescrever.');
+            finalizar(mesclado,true);
+          };
+        };
+        tx.onerror=()=>{try{conn.close();}catch(e){}resolve(false);};
+        tx.onabort=()=>{try{conn.close();}catch(e){}resolve(false);};
+        return;
+      }
+      if(opcoes&&opcoes.preservarAnterior){
+        // Ponto de restauração na MESMA transação: a versão anterior é
+        // copiada para <chave>:anterior antes de ser substituída.
+        const g=store.get(chave);
+        g.onsuccess=()=>{ if(g.result) store.put(g.result,chave+':anterior'); store.put(base,chave); };
+      }else{
+        store.put(base,chave);
+      }
       tx.oncomplete=()=>{try{conn.close();}catch(e){}resolve(true);};
       tx.onerror=()=>{try{conn.close();}catch(e){}resolve(false);};
       tx.onabort=()=>{try{conn.close();}catch(e){}resolve(false);};
     }catch(e){try{conn.close();}catch(_e){}resolve(false);}
   });
 }
-function _persistirDBCanonico(db){
+function _persistirDBCanonico(db,opcoes){
+  // BUILD 023: portão único de gravação canônica.
+  if(!_wmsHidratado){console.warn('[WMS PERSISTENCE 023] gravação canônica ignorada: base ainda não carregada.');return Promise.resolve(false);}
+  if(_wmsIdbLeituraFalhou){console.warn('[WMS PERSISTENCE 023] gravação canônica suspensa: a leitura do IndexedDB falhou nesta sessão.');return Promise.resolve(false);}
   const snapshot=_cloneSeguro(db);
   if(!snapshot) return Promise.resolve(false);
-  // Serializa as gravações: uma atualização nunca pode terminar depois
-  // de uma gravação mais nova e sobrescrever o estado canônico.
-  _yalogPersistQueue=_yalogPersistQueue.catch(()=>false).then(()=>_idbGravarDB(snapshot));
+  const chave=_wmsChaveCanonicaAtiva;
+  _yalogPersistQueue=_yalogPersistQueue.catch(()=>false).then(()=>_idbGravarDB(snapshot,{...(opcoes||{}),chave,versionado:true,base:_wmsBaseCarregada})).then(r=>{
+    if(r===true) _wmsBaseCarregada=snapshot;
+    if(r && r.mesclado){
+      // A base gravada agora contém também o que outra aba salvou: a memória
+      // desta aba é recarregada para refletir o estado completo.
+      setTimeout(()=>{ load().then(()=>{ try{ if(typeof InternalEventBus!=='undefined') InternalEventBus.emit('onDataChanged',Object.keys(SMART_SYNC_MODULE_MAP)); }catch(e){} }).catch(()=>{}); },0);
+      try{ if(typeof showT==='function') showT('Alterações feitas em outra aba foram incorporadas.','ok'); }catch(e){}
+    }
+    return r;
+  });
   _yalogLastPersistPromise=_yalogPersistQueue;
   return _yalogPersistQueue;
 }
-
+const _wmsTabIdPersist='aba-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
+let _wmsBaseCarregada=null; // última versão que esta aba leu/gravou (base da mesclagem de 3 vias)
+// Mesclagem de 3 vias por registro: 'nosso' (esta aba), 'armazenado' (outra
+// aba gravou depois) e 'base' (o que esta aba tinha carregado/gravado).
+//  • registro alterado só por uma das abas → vale a alteração dela;
+//  • criado em qualquer aba → mantido; excluído por uma aba e intocado na
+//    outra → excluído; alterado nas duas → vale esta aba (última ação).
+function _wmsMesclar3Vias(nosso,armazenado,base){
+  const n=nosso||{}, a=armazenado||{}, b=base||{}, out={...a,...n};
+  const J=v=>{try{return JSON.stringify(v);}catch(e){return '';}};
+  const colecoes=['clientes','sites','enderecos','produtos','movimentos','tarefasRec','tarefasMov','tarefasSep','inventarios','paletes','transportadoras','docas','contratos','devolucoes','usuarios','ajustes','auditoria','capacidadeArmazem'];
+  const mesclarLista=(ln,la,lb,chaveFn)=>{
+    const mapa=l=>{const m=new Map();(Array.isArray(l)?l:[]).forEach((x,i)=>{m.set(chaveFn(x)??('#'+J(x)),x);});return m;};
+    const mn=mapa(ln), ma=mapa(la), mb=mapa(lb), res=[], vistos=new Set();
+    mn.forEach((x,k)=>{
+      vistos.add(k);
+      if(ma.has(k)){ res.push(mb.has(k)&&J(x)===J(mb.get(k))?ma.get(k):x); }
+      else if(!mb.has(k) || J(x)!==J(mb.get(k))) res.push(x); // criado aqui, ou alterado aqui após exclusão lá
+    });
+    ma.forEach((x,k)=>{ if(vistos.has(k))return; if(!mb.has(k) || J(x)!==J(mb.get(k))) res.push(x); });
+    return res;
+  };
+  colecoes.forEach(c=>{ out[c]=mesclarLista(n[c],a[c],b[c],x=>_chaveRegistro(x,c)); });
+  const mz={}; new Set([...Object.keys(n.matrizCapacidade||{}),...Object.keys(a.matrizCapacidade||{})]).forEach(cli=>{
+    mz[cli]=mesclarLista((n.matrizCapacidade||{})[cli],(a.matrizCapacidade||{})[cli],(b.matrizCapacidade||{})[cli],x=>_matrizKey(x?.sku,_matrizItemUM(x)));
+  }); out.matrizCapacidade=mz;
+  ['seqWMS','seqRec','seqSep','seqInv','seqMov'].forEach(k=>{const v=Math.max(Number(n[k])||0,Number(a[k])||0);if(v)out[k]=v;});
+  return out;
+}
 // BUILD 019 — SESSÃO PERSISTENTE CANÔNICA
 // A sessão do WMS não pode depender exclusivamente de sessionStorage/localStorage.
 // Publicação/refresh não é logout. O IndexedDB guarda uma cópia independente
@@ -5305,25 +5459,41 @@ async function _idbRemoverSessaoWms(){
 }
 
 if(typeof window!=='undefined' && window.addEventListener){
-  window.addEventListener('beforeunload',()=>{try{_persistirDBCanonico(DB);}catch(e){}});
+  // BUILD 023: só persiste no fechamento se a base já foi carregada (o portão
+  // está dentro de _persistirDBCanonico). Antes, um F5 durante o carregamento
+  // gravava o DB vazio por cima da base canônica.
+  window.addEventListener('beforeunload',()=>{try{if(_wmsHidratado&&!_wmsSavePendente)_persistirDBCanonico(DB);}catch(e){}});
 }
-function _localStorageCandidatosDB(){
+function _localStorageCandidatosDB(tenant){
+  // BUILD 023: somente fontes legadas DESTA empresa (ou sem empresa
+  // identificável). Chaves/snapshots de outra empresa são ignorados e
+  // permanecem intocados.
   const out=[];
+  const t=_wmsTenantNorm(tenant);
   try{
     for(let i=0;i<localStorage.length;i++){
       const k=localStorage.key(i)||'';
       // Só examina chaves que podem conter a base operacional ou uma proteção
       // criada por builds anteriores. Não altera nenhuma delas.
-      const relevante=k===DBKEY || k.startsWith('wms:') && k.endsWith(':'+DBKEY) ||
+      const tenantKey=k.startsWith('wms:') && k.endsWith(':'+DBKEY);
+      const relevante=k===DBKEY || tenantKey ||
         k===DB_GUARD_SNAPSHOT_KEY || k.startsWith(DB_GUARD_SNAPSHOT_KEY+':') ||
         k===DATA_VAULT_KEY || k.startsWith(DATA_VAULT_KEY+':') ||
         k===PRODUCT_GUARD_KEY || k.startsWith(PRODUCT_GUARD_KEY+':');
       if(!relevante)continue;
+      if(t){
+        if(tenantKey && _wmsTenantNorm(k.slice(4,k.length-DBKEY.length-1))!==t)continue;
+        const sufixo=k.includes(':')&&!tenantKey?k.slice(k.indexOf(':')+1):null;
+        if(sufixo && sufixo!=='global' && _wmsTenantNorm(sufixo)!==t)continue;
+      }
       try{
         const raw=localStorage.getItem(k); if(!raw)continue;
         const v=JSON.parse(raw);
         const db=v?.db&&typeof v.db==='object'?v.db:(v&&typeof v==='object'&&Array.isArray(v.produtos)?v:null);
-        if(db)out.push({key:k,db:_cloneSeguro(db)});
+        if(!db)continue;
+        if(t && v && v.companyId && _wmsTenantNorm(v.companyId)!==t)continue;
+        if(t && !_wmsBasePertenceA(db,t))continue;
+        out.push({key:k,db:_cloneSeguro(db)});
       }catch(e){}
     }
   }catch(e){}
@@ -5343,25 +5513,67 @@ function _mesclarLegacySemSobrescreverCanonico(canonico, legado){
   if(!Array.isArray(out.capacidadeArmazem))out.capacidadeArmazem=[];
   const capIds=new Set(out.capacidadeArmazem.map(x=>_chaveRegistro(x,'capacidadeArmazem')));
   (Array.isArray(l.capacidadeArmazem)?l.capacidadeArmazem:[]).forEach(x=>{const id=_chaveRegistro(x,'capacidadeArmazem');if(!capIds.has(id)){out.capacidadeArmazem.push(_cloneSeguro(x));capIds.add(id);}});
+  // BUILD 023: sequências nunca regridem (evita IDs repetidos como WMS-0001).
+  ['seqWMS','seqRec','seqSep','seqInv','seqMov'].forEach(k=>{const a=Number(c[k])||0,b=Number(l[k])||0;if(a||b)out[k]=Math.max(a,b);});
   return out;
 }
-async function _recuperarMelhorBasePersistida(baseAtual){
-  let melhor=_cloneSeguro(baseAtual)||{};
-  // BUILD 018: IndexedDB é a fonte canônica local. Quando existe um banco
-  // canônico válido, fontes antigas do localStorage só podem acrescentar
-  // registros que não existam nele; jamais podem sobrescrever estoque atual,
-  // quantidades, lotes ou históricos canônicos com uma cópia antiga.
-  const idb=await _idbLerDB();
-  const temCanonico=idb && !_dbEhZeragemTotal(idb);
-  if(temCanonico) melhor=_mesclarDBSemPerda(melhor,idb);
-  const candidatos=_localStorageCandidatosDB();
-  for(const c of candidatos){
-    try{
-      if(c.db?._estoqueLimpoEm||c.db?._masterDataDeletion)continue;
-      melhor=temCanonico?_mesclarLegacySemSobrescreverCanonico(melhor,c.db):_mesclarDBSemPerda(melhor,c.db);
-    }catch(e){}
+// BUILD 023 — seleção determinística da base da empresa ativa.
+// Retorna {db, origem, chaveCanonica, chaveEspelho, leituraFalhou}.
+async function _recuperarMelhorBasePersistida(tenant){
+  const t=_wmsTenantNorm(tenant);
+  // 1) Aguarda gravações canônicas em andamento: uma leitura nunca pode
+  //    ocorrer antes de um save() já disparado terminar (evita reverter).
+  try{await _yalogPersistQueue;}catch(e){}
+  // 2) Lê a base canônica principal, com novas tentativas em falha.
+  let leitura={ok:false};
+  for(let i=0;i<3;i++){
+    leitura=await _idbLerRegistro(WMS_IDB_KEY);
+    if(leitura.ok)break;
+    await new Promise(r=>setTimeout(r,250*(i+1)));
   }
-  return melhor;
+  let chaveCanonica=WMS_IDB_KEY, chaveEspelho=DBKEY, canonico=leitura.ok?leitura.valor:null;
+  // 3) Isolamento: a base principal pertence a outra empresa → usa a chave
+  //    própria desta empresa. A base da outra empresa não é tocada.
+  if(t && leitura.ok && canonico && !_wmsBasePertenceA(canonico,t)){
+    chaveCanonica=WMS_IDB_KEY+'@'+t; chaveEspelho='wms:'+t+':'+DBKEY;
+    leitura={ok:false};
+    for(let i=0;i<3;i++){ leitura=await _idbLerRegistro(chaveCanonica); if(leitura.ok)break; await new Promise(r=>setTimeout(r,250*(i+1))); }
+    canonico=leitura.ok?leitura.valor:null;
+    console.warn('[WMS TENANT 023] base principal deste navegador pertence a outra empresa; usando base isolada de '+t+'.');
+  }
+  // 4) Espelho síncrono (localStorage) da mesma empresa.
+  let espelho=null;
+  try{const raw=localStorage.getItem(chaveEspelho); espelho=raw?JSON.parse(raw):null;}catch(e){espelho=null;}
+  if(espelho && (typeof espelho!=='object' || (t && !_wmsBasePertenceA(espelho,t)))) espelho=null;
+  // Base canônica legítima: tem dados, tem metadado da build 023 ou marcador
+  // de limpeza Master (vazia por decisão autorizada).
+  const canonicoValido=canonico && (!_dbEhZeragemTotal(canonico) || canonico._persistMeta || canonico._estoqueLimpoEm || canonico._masterDataDeletion);
+  let db=null, origem='vazia';
+  if(canonicoValido && espelho && _wmsRev(espelho)>_wmsRev(canonico)){
+    // Espelho é uma versão posterior completa da mesma base (o IndexedDB não
+    // concluiu a última gravação antes do fechamento): ele é a base.
+    db=_wmsRev(canonico)>0?espelho:_mesclarLegacySemSobrescreverCanonico(espelho,canonico); origem='espelho-mais-recente';
+  }else if(canonicoValido){
+    // Bases sem versionamento (anteriores à 023): mantém o comportamento
+    // aditivo anterior para não perder registro que só exista no espelho.
+    db=(espelho && !_wmsRev(canonico) && !_wmsRev(espelho))?_mesclarLegacySemSobrescreverCanonico(canonico,espelho):canonico; origem='canonico';
+  }else if(espelho && (!_dbEhZeragemTotal(espelho) || espelho._persistMeta)){
+    db=espelho; origem='espelho';
+  }
+  // 5) Recuperação legada SOMENTE quando não há base desta empresa
+  //    (primeira execução após builds antigas). Só acrescenta registros.
+  //    Se a leitura do canônico falhou, não se presume ausência.
+  if(!db && leitura.ok){
+    let rec=null;
+    for(const c of _localStorageCandidatosDB(t)){
+      try{
+        if(c.db?._estoqueLimpoEm||c.db?._masterDataDeletion)continue;
+        rec=rec?_mesclarLegacySemSobrescreverCanonico(rec,c.db):_cloneSeguro(c.db);
+      }catch(e){}
+    }
+    if(rec && !_dbEhZeragemTotal(rec)){db=rec;origem='recuperacao-legada';}
+  }
+  return {db:db||{}, origem, chaveCanonica, chaveEspelho, leituraFalhou:!leitura.ok};
 }
 function _dbTemDadosProtegidos(d){
   if(!d || typeof d!=='object') return false;
@@ -6572,70 +6784,54 @@ function save(){
     delete DB._masterDataDeletion;
     window._wmsMasterDeletionPending=false;
   }
-  // COFRE DE CONTINUIDADE: recupera qualquer registro que exista no
-  // histórico protegido e tenha desaparecido da memória sem autorização Master.
-  if(!(DB?._masterDataDeletion||DB?._estoqueLimpoEm)) DB=_dataVaultMesclar(DB);
-  _protegerBaseCompletaAntesDePersistir();
-  _protegerProdutosAntesDePersistir();
-  // BUILD 018: com IndexedDB disponível, não replica o estoque inteiro em
-  // localStorage (isso triplicava o consumo e podia atingir a quota). Os
-  // guards antigos continuam sendo lidos para recuperação, mas o banco
-  // canônico novo fica somente no IndexedDB.
-  if(!_idbDisponivel()) _produtoGuardSalvar(DB);
-  // REGRA DEFINITIVA: toda gravação válida gera snapshot integral antes do
-  // envio ao provider. Isso inclui clientes/cadastros, mesmo sem estoque.
-  // Uma publicação/refresh jamais deve depender do HTML para reconstruir dados.
-  if(_dbEhZeragemTotal(DB) && !DB._estoqueLimpoEm && !DB._masterDataDeletion){
-    const guard=_dbSnapshotAtual();
-    if(_dbTemDadosProtegidos(guard)){
-      console.warn('[WMS DATA GUARD] save() bloqueado: DB vazio sem autorização Master.');
-      DB=_cloneSeguro(guard);
-      return false;
-    }
+  // BUILD 023 — PORTÃO DE HIDRATAÇÃO: antes de a base da empresa ativa ser
+  // carregada, nada é gravado (o DB em memória ainda é a estrutura vazia ou
+  // a base de outra empresa). A alteração fica pendente e é aplicada logo
+  // após o carregamento, sem sobrescrever nada.
+  if(!_wmsHidratado || (_wmsTenantPendente && _wmsTenantPendente!==_wmsTenantDoDB)){
+    _wmsSavePendente=true;
+    console.warn('[WMS PERSISTENCE 023] save() adiado até o carregamento da base'+(_wmsTenantPendente?(' da empresa '+_wmsTenantPendente):'')+'.');
+    return true;
   }
-  // BUILD 016 — INVARIANTE DE ESTOQUE: nenhuma gravação comum pode
-  // reduzir produtos ou históricos protegidos. Se houver redução e não
-  // existir autorização explícita do Master, a gravação é bloqueada.
-  if(!(DB?._masterDataDeletion||DB?._estoqueLimpoEm)){
-    const guardNow=_dbSnapshotAtual();
-    if(guardNow && _dbTemDadosProtegidos(guardNow)){
-      const mergedNow=_mesclarDBSemPerda(DB,guardNow);
-      const atualOp=_dbContagens(DB), guardOp=_dbContagens(guardNow), mergedOp=_dbContagens(mergedNow);
-      const colecoesProtegidas=['produtos','movimentos','paletes','tarefasRec','tarefasMov','tarefasSep','inventarios','ajustes','auditoria','clientes','sites','enderecos'];
-      const reduziu=colecoesProtegidas.some(k=>(Number(atualOp[k])||0)<(Number(guardOp[k])||0));
-      if(reduziu){
-        const antesScore=_dbPontuacao(DB), depoisScore=_dbPontuacao(mergedNow);
-        if(depoisScore>=antesScore){
-          console.warn('[WMS DATA GUARD 016] gravação bloqueada/reconciliada: redução não autorizada detectada.');
-          DB=mergedNow;
-        }
-      }
-    }
+  // BUILD 023: cofre/snapshots legados NÃO são mais mesclados aqui. Eles
+  // sobrescreviam campos atuais (quantidades, status), reabriam exclusões e
+  // regrediam sequências a cada gravação. A proteção agora é estrutural
+  // (portão de hidratação, leitura confirmada, versão e ponto de restauração).
+  if(_dbEhZeragemTotal(DB) && !DB._estoqueLimpoEm && !DB._masterDataDeletion && _wmsUltimaPontuacaoPersistida>0){
+    console.warn('[WMS DATA GUARD 023] save() bloqueado: base vazia sem autorização Master. Recarregando a base persistida.');
+    try{load().catch(()=>{});}catch(e){}
+    return false;
   }
+  const pontuacaoAtual=_dbPontuacao(DB);
+  // Redução grande (>50% e ≥20 registros) em uma única gravação: permitida
+  // (exclusões são ações legítimas), mas a versão anterior é preservada em
+  // <chave>:anterior na mesma transação, para rollback manual.
+  const reducaoGrande=_wmsUltimaPontuacaoPersistida>0 && pontuacaoAtual<_wmsUltimaPontuacaoPersistida*0.5 && (_wmsUltimaPontuacaoPersistida-pontuacaoAtual)>=20;
+  if(reducaoGrande) console.warn('[WMS DATA GUARD 023] redução grande detectada ('+_wmsUltimaPontuacaoPersistida+' → '+pontuacaoAtual+'); versão anterior preservada para rollback.');
+  const metaAnterior=DB._persistMeta||{};
+  DB._persistMeta={
+    schema:WMS_SCHEMA_CANONICO, rev:(Number(metaAnterior.rev)||0)+1, salvoEm:new Date().toISOString(),
+    companyId:_wmsTenantDoDB||metaAnterior.companyId||null, build:_wmsBuildAtual()
+  };
   // BUILD 018 — PERSISTÊNCIA CANÔNICA: IndexedDB recebe o estado completo.
-  // localStorage deixa de ser a única fonte e pode falhar por limite de quota
-  // sem invalidar a gravação operacional. O snapshot/vault antigos continuam
-  // sendo lidos para compatibilidade, mas não são mais necessários para que
-  // o estoque seja preservado.
-  const persistPromise=_persistirDBCanonico(DB);
-  const localOk=Core.set(DBKEY, DB); // espelho compatível; pode falhar por quota
+  const persistPromise=_persistirDBCanonico(DB,reducaoGrande?{preservarAnterior:true}:null);
+  const localOk=Core.set(_wmsChaveEspelhoAtiva, DB); // espelho compatível da MESMA empresa; pode falhar por quota
+  _wmsUltimaPontuacaoPersistida=pontuacaoAtual;
   const exclusao=DB && DB._masterDataDeletion ? DB._masterDataDeletion : null;
   const limpeza=DB && DB._estoqueLimpoEm ? DB._estoqueLimpoEm : null;
-  // BUILD 018: não grava o DB completo novamente no localStorage quando
-  // IndexedDB está disponível. Isso elimina a principal causa de quota cheia.
-  if(!_idbDisponivel() && !(exclusao||limpeza)) _dataVaultAtualizarComDB(DB);
-  // Não bloqueia a UI; a fila canônica é aguardada por operações críticas
-  // (como carga inicial) através de _yalogLastPersistPromise.
-  persistPromise.catch(e=>console.warn('[WMS PERSISTENCE 018] falha IndexedDB:',e));
+  // Sem IndexedDB (navegador sem suporte), mantém as cópias de segurança
+  // legadas — agora como espelho do estado atual, não como união histórica.
+  if(!_idbDisponivel()){ _dataVaultSalvar(DB); _produtoGuardSalvar(DB); }
+  persistPromise.catch(e=>console.warn('[WMS PERSISTENCE 023] falha IndexedDB:',e));
   if(localOk || _idbDisponivel()){
     // Autorização Master é transacional, não um estado permanente que
     // desliga a proteção para todas as gravações futuras.
     if(window._wmsMasterDeletionPending && exclusao && exclusao.scope!=='estoque-total'){
       delete DB._masterDataDeletion;
       window._wmsMasterDeletionPending=false;
-      _dataVaultAtualizarComDB(DB);
+      if(!_idbDisponivel()) _dataVaultSalvar(DB);
       _persistirDBCanonico(DB).catch(()=>{});
-      Core.set(DBKEY,DB);
+      Core.set(_wmsChaveEspelhoAtiva,DB);
     }
     // Após uma limpeza total, o marcador fica até o primeiro novo estoque.
     // Isso impede a recuperação automática do estoque antigo que o Master
@@ -6879,39 +7075,89 @@ async function _validarPersistenciaCanonica(){
   }catch(e){console.warn('[WMS PERSISTENCE 018] validação canônica:',e);}
 }
 
-async function load(){
-  // BUILD 018 — recuperação ANTES de qualquer normalização/migração.
-  // A fonte atual pode estar vazia ou incompleta; primeiro reunimos DB local,
-  // snapshots antigos, vaults e IndexedDB. Só depois o WMS aplica migrações.
-  let d=Core.get(DBKEY);
-  try{ d=await _recuperarMelhorBasePersistida(d||{}); }catch(e){ console.warn('[WMS PERSISTENCE 017] recuperação pré-load falhou:',e); }
-  const guard=_dbSnapshotAtual();
-  const temMasterDeletion=!!(d?._masterDataDeletion||d?._estoqueLimpoEm);
-
-  if(!temMasterDeletion){
-    const vault=_dataVaultLer();
-    if(vault)d=_mesclarDBSemPerda(d||{},vault);
-    if(guard)d=_mesclarDBSemPerda(d||{},guard);
-    d=_recuperarProdutosAntesDoLoad(d);
+// BUILD 023 — ROLLBACK DE DADOS (procedimento técnico, via console, Master).
+// tipo: 'anterior' (versão antes da última redução grande) ou
+//       'inicio-sessao' (base como estava ao abrir a página).
+// O estado atual é guardado em <chave>:antes-restauracao antes da troca.
+async function wmsRestaurarPontoDeRestauracao(tipo){
+  if(typeof isMaster==='function' && !isMaster()){ console.warn('[WMS ROLLBACK 023] somente o Master pode restaurar.'); return false; }
+  if(!_wmsHidratado || _wmsIdbLeituraFalhou){ console.warn('[WMS ROLLBACK 023] base não carregada nesta sessão.'); return false; }
+  const sufixo=tipo==='inicio-sessao'?'inicio-sessao':'anterior';
+  const chave=_wmsChaveCanonicaAtiva+':'+sufixo;
+  try{await _yalogPersistQueue;}catch(e){}
+  const r=await _idbLerRegistro(chave);
+  if(!r.ok||!r.valor){ console.warn('[WMS ROLLBACK 023] ponto de restauração inexistente:',chave); return false; }
+  const dono=_wmsDonoDaBase(r.valor);
+  if(_wmsTenantDoDB && dono && dono!=='__AMBIGUO__' && dono!==_wmsTenantDoDB){ console.error('[WMS ROLLBACK 023] ponto de restauração pertence a outra empresa — recusado.'); return false; }
+  await _idbGravarDB(DB,{chave:_wmsChaveCanonicaAtiva+':antes-restauracao'});
+  const revAtual=_wmsRev(DB);
+  const usuariosMem=DB.usuarios;
+  DB=_cloneSeguro(_WMS_DB_PADRAO); DB.usuarios=usuariosMem||[];
+  _applyLoadedData(r.valor);
+  DB._persistMeta={...(DB._persistMeta||{}),rev:revAtual};
+  _wmsUltimaPontuacaoPersistida=_dbPontuacao(DB);
+  save();
+  try{await _yalogPersistQueue;}catch(e){}
+  console.log('[WMS ROLLBACK 023] base restaurada de '+chave+' · registros: '+_dbPontuacao(DB)+'. Estado anterior em '+_wmsChaveCanonicaAtiva+':antes-restauracao.');
+  try{ if(typeof logAuditoria==='function') logAuditoria('ROLLBACK_DE_DADOS', chave); }catch(e){}
+  return true;
+}
+// BUILD 023 — load() serializado: chamadas concorrentes (boot + restauração
+// de sessão + login + "Atualizar") executam uma após a outra, nunca em
+// paralelo sobre o mesmo DB global.
+function load(){
+  _wmsLoadChain=_wmsLoadChain.catch(()=>{}).then(()=>_loadInterno());
+  return _wmsLoadChain;
+}
+// Garante que a base em memória é a da empresa indicada, sem recarregar à toa.
+async function _wmsGarantirBaseDaEmpresa(companyId){
+  const t=_wmsTenantNorm(companyId);
+  try{await _wmsLoadChain;}catch(e){}
+  if(!_wmsHidratado || _wmsTenantDoDB!==t || _wmsIdbLeituraFalhou) await load();
+}
+async function _loadInterno(){
+  const tenant=_wmsTenantNorm(_companyIdLocalAtual)||_wmsTenantDaSessaoPersistida();
+  const trocaDeEmpresa=_wmsTenantDoDB!==undefined && _wmsTenantDoDB!==tenant;
+  let r;
+  try{ r=await _recuperarMelhorBasePersistida(tenant); }
+  catch(e){ console.warn('[WMS PERSISTENCE 023] seleção da base falhou:',e); r={db:{},origem:'erro',chaveCanonica:_wmsChaveCanonicaAtiva,chaveEspelho:_wmsChaveEspelhoAtiva,leituraFalhou:true}; }
+  // Alterações feitas antes da primeira hidratação (ex.: registro de login)
+  // são acrescentadas à base carregada — nunca a substituem.
+  const memoriaPre=(!_wmsHidratado && _wmsSavePendente)?_cloneSeguro(DB):null;
+  if(trocaDeEmpresa){
+    // Troca de empresa no mesmo navegador: a base anterior sai da memória
+    // (já está persistida na chave dela). Usuários seguem a regra própria.
+    const usuariosMem=DB.usuarios;
+    DB=_cloneSeguro(_WMS_DB_PADRAO);
+    DB.usuarios=(usuariosMem||[]).filter(u=>!u||!u.company_id||_wmsTenantNorm(u.company_id)===tenant);
   }
-
-  if(d && Object.keys(d).length>0){
-    _applyLoadedData(d);
-  }else{
-    _applyLoadedData({});
+  let d=r.db||{};
+  if(memoriaPre && _dbTemDadosProtegidos(memoriaPre)) d=_mesclarLegacySemSobrescreverCanonico(d,memoriaPre);
+  _wmsChaveCanonicaAtiva=r.chaveCanonica; _wmsChaveEspelhoAtiva=r.chaveEspelho;
+  _wmsIdbLeituraFalhou=!!r.leituraFalhou && _idbDisponivel();
+  _applyLoadedData(d && Object.keys(d).length>0 ? d : {});
+  if(_wmsIdbLeituraFalhou){
+    console.error('[WMS PERSISTENCE 023] leitura do IndexedDB falhou; gravação na base canônica suspensa nesta sessão para não sobrescrevê-la.');
+    try{ if(typeof showT==='function') showT('Atenção: a base local não pôde ser lida por completo. Recarregue a página antes de continuar operando.','err'); }catch(e){}
   }
-
-  if(_restaurarSnapshotGuardSeNecessario()){}
-  if(_dbTemDadosProtegidos(DB)){
-    await _validarPersistenciaCanonica();
-    if(!_idbDisponivel()) _salvarSnapshotGuard(DB,'load-build-018');
-    // BUILD 018: com IndexedDB disponível, não replica o estoque inteiro em
-  // localStorage (isso triplicava o consumo e podia atingir a quota). Os
-  // guards antigos continuam sendo lidos para recuperação, mas o banco
-  // canônico novo fica somente no IndexedDB.
-  if(!_idbDisponivel()) _produtoGuardSalvar(DB);
-    // Reescreve o estado canônico depois da migração/normalização.
-    try{await _persistirDBCanonico(DB);}catch(e){}
+  _wmsTenantDoDB=tenant;
+  if(_wmsTenantPendente===tenant) _wmsTenantPendente=null;
+  _wmsBaseCarregada=_cloneSeguro(DB);
+  _wmsHidratado=true;
+  _wmsUltimaPontuacaoPersistida=_dbPontuacao(DB);
+  console.log('[WMS PERSISTENCE 023] base carregada · empresa: '+(tenant||'—')+' · origem: '+r.origem+' · chave: '+r.chaveCanonica+' · rev: '+_wmsRev(DB)+' · registros: '+_wmsUltimaPontuacaoPersistida);
+  // Ponto de restauração da sessão: cópia do que foi carregado, uma vez por
+  // abertura de página e por empresa, antes de qualquer alteração.
+  if(!_wmsBackupSessaoGravado && !_wmsIdbLeituraFalhou && _idbDisponivel() && _dbTemDadosProtegidos(DB)){
+    _wmsBackupSessaoGravado=true;
+    _yalogPersistQueue=_yalogPersistQueue.catch(()=>false).then(()=>_idbGravarDB(DB,{chave:r.chaveCanonica+':inicio-sessao'}));
+  }
+  if(_wmsSavePendente){
+    _wmsSavePendente=false;
+    save();
+  }else if(_dbTemDadosProtegidos(DB) && !_wmsIdbLeituraFalhou && (r.origem!=='canonico' || !DB._persistMeta)){
+    // Reescreve a base canônica após recuperação/migração/normalização.
+    save();
   }
 }
 
@@ -8036,6 +8282,9 @@ function renderHome(){
   const pctVert=totalRuaEnd?Math.min(100,Math.round(ppVert/totalRuaEnd*100)):0;
   const pctChao=totalLimChao?Math.min(100,Math.round(ppChao/totalLimChao*100)):null;
   const chaoColor=pctChao===null?'var(--w40)':pctChao>=90?'#f87171':pctChao>=70?'#fbbf24':'#4ade80';
+  // BUILD 023: vertColor era usado abaixo sem ter sido declarado (ReferenceError
+  // interrompia o Dashboard). Mesma regra/paleta de chaoColor e capColor.
+  const vertColor=pctVert>=90?'#f87171':pctVert>=70?'#fbbf24':'#4ade80';
   document.getElementById('homeCapacidade').innerHTML=totalEnd?`
     <div class="card" style="padding:20px;">
       <div class="clbl" style="margin-bottom:14px;">Capacidade do Armazém</div>
@@ -10300,13 +10549,14 @@ function injectDemo(){
 // ══════════════════════════════════════════════════════════════
 // YALOG WMS · VERSIONAMENTO CENTRALIZADO
 // Atualização 021 — Dropdowns sobrepostos ao conteúdo; barra horizontal removida sem alterar navegação ou persistência.
+// Atualização 023 — Persistência determinística (portão de hidratação, versão, isolamento por empresa) e sessão revalidada após F5.
 // Atualize SOMENTE estes valores a cada publicação. O refresh da
 // página preserva a sessão autenticada; a versão não é usada como
 // critério de logout.
 // ══════════════════════════════════════════════════════════════
-const YALOG_WMS_VERSION = '2.1.2';
-const YALOG_WMS_BUILD = '022';
-const YALOG_WMS_UPDATE = '022';
+const YALOG_WMS_VERSION = '2.1.3';
+const YALOG_WMS_BUILD = '023';
+const YALOG_WMS_UPDATE = '023';
 const YALOG_WMS_RELEASE = `v${YALOG_WMS_VERSION} Build ${YALOG_WMS_BUILD}`;
 
 function aplicarVersaoWMS(){
@@ -10332,7 +10582,9 @@ function aplicarVersaoWMS(){
   // ANTES de load() rodar — load() em si continua 100% inalterado.
   try{ await CacheManager.sincronizacaoInicial(); }
   catch(e){ console.warn('[WMS Boot] falha na sincronização inicial, seguindo com cache local:',e); }
-  try{await load();}catch(e){console.warn('[WMS Boot]',e);}
+  // BUILD 023: carrega a base da empresa da sessão persistida (F5) — ou a base
+  // padrão, sem sessão. Não recarrega se a restauração de sessão já o fez.
+  try{await _wmsGarantirBaseDaEmpresa(_wmsTenantNorm(_companyIdLocalAtual)||_wmsTenantDaSessaoPersistida());}catch(e){console.warn('[WMS Boot]',e);}
   garantirLicencaDemoPadrao();
   aplicarVersaoWMS();
   renderLogo();updateDate();checkResp();
@@ -10450,7 +10702,10 @@ async function _confirmarSessaoCarregada(usuario){
      ═══════════════════════════════════════════════════════════ */
   const companyId = usuario.company_id;
   if (companyId) {
-    LocalStorageProvider._migrarParaEmpresa(companyId); // nunca apaga a chave antiga
+    // BUILD 023: a cópia global→empresa só é feita sem IndexedDB (navegador
+    // legado); com IndexedDB ela duplicava a base inteira no localStorage
+    // (pressão de quota) e podia copiar dados de outra empresa.
+    if (!_idbDisponivel()) LocalStorageProvider._migrarParaEmpresa(companyId); // nunca apaga a chave antiga
     _companyIdLocalAtual = companyId;
     if (CoreConfig.storageProvider === 'supabase') {
       await _registrarInstalacaoWms(companyId); // não bloqueia o login se falhar
@@ -10470,8 +10725,11 @@ async function _confirmarSessaoCarregada(usuario){
       try { await CacheManager.sincronizacaoInicial(); } // agora filtrado por company_id/module_id
       catch(e) { console.warn('[WMS TENANT] sincronização pós-login falhou, seguindo com cache local:', e); }
     }
-    try { await load(); } // recarrega DB pela chave física já correta da empresa
+    // BUILD 023: garante a base DESTA empresa em memória (aguarda o load do
+    // boot em andamento e só recarrega se a empresa for outra).
+    try { if (CoreConfig.storageProvider === 'supabase') await load(); else await _wmsGarantirBaseDaEmpresa(companyId); }
     catch(e) { console.warn('[WMS TENANT] falha ao recarregar DB da empresa, mantendo estado em memória:', e); }
+    if (_wmsTenantDoDB === _wmsTenantNorm(companyId)) _wmsTenantPendente = null;
     renderLogo();
   } else {
     console.warn('[WMS TENANT] usuário sem company_id — sequência tenant-aware pulada (fluxo legado de primeiro acesso).');
@@ -10517,31 +10775,38 @@ function _limparSessaoCarregada(){
 // agora só verifica a sessão compartilhada da Platform, valida a
 // licença/módulo e entra automaticamente, ou redireciona.
 // ════════════════════════════════════════
-async function _validarSessaoModuloYalog(token){
-  if(!token) return null;
+// BUILD 023: distingue resposta autoritativa do servidor de falha transitória.
+//   {status:'valida', identidade} — sessão ativa
+//   {status:'invalida'}           — servidor respondeu: expirada/revogada/sem acesso
+//   {status:'indisponivel'}       — rede/cliente/erro: não se conclui nada
+async function _consultarSessaoModuloYalog(token){
+  if(!token) return {status:'invalida'};
   try{
     const client=_obterClienteSupabase();
-    if(!client) return null;
+    if(!client) return {status:'indisponivel'};
     const {data,error}=await client.rpc('validar_sessao_modulo', {
       p_token: token,
       p_modulo: 'wms'
     });
     if(error){
-      console.error('[SSO ERROR]', error.message||error);
-      console.warn('[WMS SSO] falha ao validar sessão do módulo:', error.message||error);
-      return null;
+      console.warn('[WMS SSO] validação da sessão do módulo indisponível:', error.message||error);
+      return {status:'indisponivel'};
     }
     const identidade = Array.isArray(data) ? (data[0]||null) : null;
     if(identidade){
       console.log('[SSO] module session revalidada — usuário carregado:', identidade.login);
       console.log('[SSO] tenant carregado:', identidade.company_id);
+      return {status:'valida', identidade};
     }
-    return identidade;
+    return Array.isArray(data) ? {status:'invalida'} : {status:'indisponivel'};
   }catch(e){
-    console.error('[SSO ERROR]', e);
     console.warn('[WMS SSO] exceção ao validar sessão do módulo:', e);
-    return null;
+    return {status:'indisponivel'};
   }
+}
+async function _validarSessaoModuloYalog(token){
+  const r=await _consultarSessaoModuloYalog(token);
+  return r.status==='valida'?r.identidade:null;
 }
 
 async function _entrarWmsPorIdentidadeSSO(identidade, moduleSessionToken){
@@ -10691,15 +10956,27 @@ async function _tentarRestaurarSessaoWms(){
   // 1) Sessão SSO: se houver token, tenta revalidar no backend.
   if(salva.module_session_token){
     for(let tentativa=1;tentativa<=3;tentativa++){
-      const identidade=await _validarSessaoModuloYalog(salva.module_session_token);
-      if(identidade){
+      const consulta=await _consultarSessaoModuloYalog(salva.module_session_token);
+      if(consulta.status==='valida'){
         try{
-          const entrou=await _entrarWmsPorIdentidadeSSO(identidade,salva.module_session_token);
+          const entrou=await _entrarWmsPorIdentidadeSSO(consulta.identidade,salva.module_session_token);
           if(entrou) return true;
         }catch(e){
           console.warn('[WMS SSO] falha ao reidratar sessão SSO; usando sessão local persistida:',e);
         }
+        break;
       }
+      if(consulta.status==='invalida'){
+        // BUILD 023: o servidor respondeu que a sessão expirou/foi revogada
+        // ou o usuário perdeu acesso. Isso é invalidação REAL — a sessão local
+        // não pode mais ser usada (antes era restaurada mesmo assim).
+        console.warn('[WMS SESSION 023] sessão do módulo expirada/revogada no servidor — novo login necessário.');
+        Core.sessionRemove(SESSAO_KEY);
+        _wmsMotivoLoginForcado='Sua sessão expirou ou foi encerrada. Entre novamente.';
+        return false;
+      }
+      // 'indisponivel' = falha transitória: tenta de novo e, persistindo,
+      // mantém a sessão local (F5 sem rede não é logout).
       if(tentativa<3) await new Promise(r=>setTimeout(r,800*tentativa));
     }
   }
@@ -10760,7 +11037,47 @@ async function _tentarRestaurarSessaoWms(){
   }
   requestAnimationFrame(()=>requestAnimationFrame(()=>{_abrirInicioPorPerfil();}));
   console.log('[WMS SESSION] sessão local restaurada após refresh/publicação:',usuarioAtual.login);
+  // BUILD 023: autorização continua obrigatória após F5. A revalidação roda
+  // em segundo plano: só encerra a sessão diante de resposta autoritativa
+  // (empresa/licença/módulo bloqueados, usuário inativo/removido). Falha de
+  // rede nunca derruba a sessão.
+  setTimeout(()=>{_revalidarSessaoRestaurada(identidadeLocal).catch(e=>console.warn('[WMS SESSION 023] revalidação adiada:',e));},0);
   return true;
+}
+let _wmsMotivoLoginForcado=null;
+async function _revalidarSessaoRestaurada(identidade){
+  if(!identidade||!identidade.company_id) return;
+  if(typeof ConnectionMonitor!=='undefined' && !ConnectionMonitor.estaOnline()) return;
+  const companyId=identidade.company_id, login=String(identidade.login||'').toLowerCase();
+  const lic=await _validarLicencaNaPlatform(companyId);
+  const motivosBloqueio={'empresa-inativa':'Empresa inativa.','licenca-inativa':'Licença inativa para esta empresa.','licenca-vencida':'Licença vencida para esta empresa.','modulo-bloqueado':'Módulo WMS não liberado para esta empresa.'};
+  if(!lic.ok && motivosBloqueio[lic.motivo]) return _encerrarSessaoPorInvalidacao(motivosBloqueio[lic.motivo]);
+  const client=_obterClientePlatform(); if(!client) return;
+  try{
+    const tabela=identidade.perfil==='master'?'usuarios':'usuarios_operacionais';
+    const {data,error}=await client.from(tabela).select('login,ativo').eq('company_id',companyId);
+    if(error||!Array.isArray(data)) return; // indisponível: mantém a sessão
+    const reg=data.find(u=>String(u.login||'').trim().toLowerCase()===login);
+    // Master pode autenticar localmente sem registro remoto visível (WMS-013):
+    // só encerra se o registro existir e estiver inativo.
+    if(identidade.perfil==='master'){ if(reg && reg.ativo===false) return _encerrarSessaoPorInvalidacao('Usuário inativo.'); return; }
+    if(!reg) return _encerrarSessaoPorInvalidacao('Usuário não encontrado para esta empresa.');
+    if(reg.ativo===false) return _encerrarSessaoPorInvalidacao('Usuário desativado. Contate o administrador da empresa.');
+  }catch(e){ /* indisponível: mantém a sessão */ }
+}
+function _encerrarSessaoPorInvalidacao(motivo){
+  // Encerra apenas a SESSÃO — nenhum dado operacional é removido.
+  console.warn('[WMS SESSION 023] sessão encerrada por invalidação:',motivo);
+  try{Core.sessionRemove(SESSAO_KEY);}catch(e){}
+  usuarioAtual=null; masterSession=false;
+  try{_limparSessaoCarregada();}catch(e){}
+  _companyIdLocalAtual=null; _wmsTenantPendente=null;
+  try{updateNavByPerfil();}catch(e){}
+  const err=document.getElementById('loginErro');
+  if(err){err.textContent=motivo;err.style.display='block';}
+  const n=document.getElementById('loginBoxNormal'); if(n) n.style.display='block';
+  const f=document.getElementById('loginBoxFirstAccess'); if(f) f.style.display='none';
+  const ov=document.getElementById('loginOverlay'); if(ov) ov.style.display='flex';
 }
 
 // SSO + persistência definitiva da sessão do WMS.
@@ -10777,7 +11094,15 @@ async function initLogin(){
   // (se vier um na URL, ele simplesmente expira sem uso — 2 minutos —
   // sem risco, e a URL ainda é limpa pelo próprio handoff se chegar a
   // ser consumido depois; aqui nem chega a esse ponto).
-  if(await _tentarRestaurarSessaoWms()){
+  let restaurou=false;
+  try{ restaurou=await _tentarRestaurarSessaoWms(); }
+  catch(e){
+    // BUILD 023: erro inesperado na restauração não é logout — a sessão
+    // persistida é mantida; se o usuário já foi reconstruído, segue no WMS.
+    console.error('[WMS SESSION 023] erro ao restaurar sessão (sessão preservada):',e);
+    restaurou=!!usuarioAtual;
+  }
+  if(restaurou){
     if(overlay) overlay.style.display='none';
     return;
   }
@@ -10806,6 +11131,11 @@ async function initLogin(){
   document.getElementById('loginBoxFirstAccess').style.display='none';
   document.getElementById('loginBoxNormal').style.display='block';
   document.getElementById('loginOverlay').style.display='flex';
+  if(_wmsMotivoLoginForcado){
+    const err=document.getElementById('loginErro');
+    if(err){err.textContent=_wmsMotivoLoginForcado;err.style.display='block';}
+    _wmsMotivoLoginForcado=null;
+  }
 }
 
 function renderLoginUsers(){
@@ -10902,6 +11232,8 @@ async function fazerLogin(){
     // permanece com a mesma lógica/condições/mensagens de sempre.
     const authOperacional=await wmsAutenticarUsuarioOperacional(companyId, login, senha);
     if(authOperacional.ok){
+      // BUILD 023: a partir daqui as gravações aguardam a base desta empresa.
+      _wmsTenantPendente=_wmsTenantNorm(companyId);
       usuario={
         id: authOperacional.usuario.id, nome: authOperacional.usuario.nome, login: authOperacional.usuario.login,
         perfil: authOperacional.usuario.perfil, company_id: companyId, platformRole: null, ativo: true,
@@ -10982,6 +11314,7 @@ async function fazerLogin(){
         // senha está correta — cacheia o hash local (mesma hashSenha() de
         // sempre) pra os próximos logins do Master funcionarem 100% pelo
         // WMS, sem depender mais da Platform (item 3/objetivo da Sprint).
+        _wmsTenantPendente=_wmsTenantNorm(companyId); // BUILD 023
         let masterLocal=masterLocalExistente;
         if(masterLocal){
           masterLocal.nome=auth.usuario.nome; masterLocal.login=login;
@@ -11007,6 +11340,7 @@ async function fazerLogin(){
     }
 
     usuarioAtual=usuario;
+    _wmsTenantPendente=_wmsTenantNorm(companyId); // BUILD 023
     // Sprint YALOG-WMS-013, item 5: função independente, chamada só
     // depois do login concluído — nunca interfere na autenticação.
     registrarUltimoLogin(usuario);
@@ -13967,6 +14301,9 @@ async function fazerLogoff(){
   }catch(e){ console.warn('[WMS SSO] falha ao revogar sessão remota:',e); }
   Core.sessionRemove(SESSAO_KEY);
   _limparSessaoCarregada();
+  // BUILD 023: a empresa deixa de estar autenticada. A base dela continua
+  // persistida; o próximo login recarrega a base da empresa que entrar.
+  _companyIdLocalAtual=null; _wmsTenantPendente=null;
   updateNavByPerfil();
   document.getElementById('loginCompanyId').value='';
   document.getElementById('loginUsuario').value='';
